@@ -39,6 +39,24 @@ The TutoringService provides two main RPCs:
 - protobuf==6.33.2 - Protocol Buffers library
 - asyncpg==0.31.0 - Async PostgreSQL driver for Python
 
+## Database Setup
+The `db.py` module expects a `sessions` table. Create it with:
+
+```sql
+create table sessions (
+    session_id text primary key,
+    student_id text not null,
+    state text not null,
+    attempt_count integer default 0,
+    frustration_counter integer default 0,
+    question text,
+    created_at timestamp default now(),
+    updated_at timestamp default now()
+);
+```
+
+Set `DATABASE_URL` environment variable (format: `postgresql://user:password@host/dbname`)
+
 ## Running the Project
 
 ### Start the Server

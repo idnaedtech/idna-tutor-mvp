@@ -1,56 +1,40 @@
-import asyncpg
 import os
+import asyncpg
 
+_pool = None
 
-# Database connection pool
-pool = None
+async def init_pool():
+    global _pool
+    if _pool is None:
+        _pool = await asyncpg.create_pool(
+            dsn=os.environ["DATABASE_URL"],
+            min_size=1,
+            max_size=5
+        )
 
+def pool():
+    assert _pool is not None, "DB pool not initialized"
+    return _pool
 
-async def init_db():
-    """Initialize database connection pool."""
-    global pool
-    db_url = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/tutoring")
-    pool = await asyncpg.create_pool(db_url)
+async def create_session(session_id: str, student_id: str):
+    q = """
+    insert into sessions(session_id, student_id, state, attempt_count, frustration_counter, question)
+    values($1,$2,'EXPLAIN',0,0,'What is 2 + 2?')
+    """
+    async with pool().acquire() as c:
+        await c.execute(q, session_id, student_id)
 
+async def get_session(session_id: str):
+    q = "select * from sessions where session_id=$1"
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, session_id)
 
-async def close_db():
-    """Close database connection pool."""
-    global pool
-    if pool:
-        await pool.close()
-
-
-async def get_connection():
-    """Get a connection from the pool."""
-    global pool
-    if not pool:
-        await init_db()
-    return pool
-
-
-async def execute(query, *args):
-    """Execute a query and return results."""
-    pool_conn = await get_connection()
-    async with pool_conn.acquire() as conn:
-        return await conn.fetch(query, *args)
-
-
-async def execute_one(query, *args):
-    """Execute a query and return a single row."""
-    pool_conn = await get_connection()
-    async with pool_conn.acquire() as conn:
-        return await conn.fetchrow(query, *args)
-
-
-async def execute_scalar(query, *args):
-    """Execute a query and return a scalar value."""
-    pool_conn = await get_connection()
-    async with pool_conn.acquire() as conn:
-        return await conn.fetchval(query, *args)
-
-
-async def execute_many(query, *args_list):
-    """Execute a query multiple times."""
-    pool_conn = await get_connection()
-    async with pool_conn.acquire() as conn:
-        return await conn.executemany(query, args_list)
+async def update_session(session_id: str, **fields):
+    keys = list(fields.keys())
+    if not keys:
+        return
+    set_clause = ", ".join([f"{k}=${i+2}" for i, k in enumerate(keys)])
+    q = f"update sessions set {set_clause}, updated_at=now() where session_id=$1"
+    values = [fields[k] for k in keys]
+    async with pool().acquire() as c:
+        await c.execute(q, session_id, *values)
