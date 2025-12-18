@@ -163,7 +163,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     request.session_id,
                     state="QUIZ",
                     attempt_count=0,
-                    current_question_id=qrow["question_id"]
+                    current_question_id=str(qrow["question_id"])
                 ))
                 # Fetch topic info for progress signal
                 topic = _run_async(pick_topic(6, "math", "en"))
@@ -174,9 +174,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     attempt_count=0,
                     frustration_counter=s["frustration_counter"],
                     intent="ask_question",
-                    topic_id=topic_id,
-                    question_id=qrow["question_id"],
-                    title=topic["title"] if topic else ""
+                    topic_id=str(topic_id) if topic_id else "",
+                    question_id=str(qrow["question_id"]),
+                    title=str(topic["title"]) if topic and topic["title"] else ""
                 )
 
             topic_id = s["topic_id"]
@@ -228,7 +228,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     state="QUIZ",
                     attempt_count=0,
                     frustration_counter=0,
-                    current_question_id=new_q["question_id"]
+                    current_question_id=str(new_q["question_id"])
                 ))
                 topic = _run_async(pick_topic(6, "math", "en"))
                 return tutoring_pb2.TurnResponse(
@@ -238,9 +238,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     attempt_count=0,
                     frustration_counter=0,
                     intent="correct",
-                    topic_id=topic_id,
-                    question_id=new_q["question_id"],
-                    title=topic["title"] if topic else ""
+                    topic_id=str(topic_id) if topic_id else "",
+                    question_id=str(new_q["question_id"]),
+                    title=str(topic["title"]) if topic and topic["title"] else ""
                 )
             else:
                 attempt_count = s["attempt_count"] + 1
