@@ -28,3 +28,8 @@ outputType = "console"
 [nix]
 channel = "stable-25_05"
 packages = ["c-ares", "grpc", "openssl", "pkg-config", "zlib"]
+
+[userenv]
+
+[userenv.shared]
+DATABASE_URL = "psql -h db.edbstiagplztpjcslczq.supabase.co -p 5432 -d postgres -U postgres"
