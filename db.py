@@ -26,8 +26,8 @@ def pool():
 
 async def create_session(session_id: str, student_id: str):
     q = """
-    insert into sessions(session_id, student_id, state, attempt_count, frustration_counter, question)
-    values($1,$2,'EXPLAIN',0,0,'What is 2 + 2?')
+    insert into sessions(session_id, student_id, state, attempt_count, frustration_counter)
+    values($1,$2,'EXPLAIN',0,0)
     """
     async with pool().acquire() as c:
         await c.execute(q, session_id, student_id)
@@ -46,3 +46,34 @@ async def update_session(session_id: str, **fields):
     values = [fields[k] for k in keys]
     async with pool().acquire() as c:
         await c.execute(q, session_id, *values)
+
+async def pick_topic(grade: int, subject: str, language: str = "en"):
+    q = """
+    select topic_id, title, explain_text
+    from concepts
+    where grade=$1 and subject=$2 and language=$3
+    order by created_at asc
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, grade, subject, language)
+
+async def pick_question(topic_id: str):
+    q = """
+    select question_id, prompt, answer_key, hint1, hint2, reveal_explain
+    from questions
+    where topic_id=$1
+    order by random()
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, topic_id)
+
+async def get_question(question_id: str):
+    q = """
+    select question_id, prompt, answer_key, hint1, hint2, reveal_explain
+    from questions
+    where question_id=$1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, question_id)

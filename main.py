@@ -8,7 +8,7 @@ from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool, create_session, get_session, update_session
+from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question
 
 # Global async runner
 _async_queue = Queue()
@@ -63,8 +63,14 @@ def classify_intent(text: str) -> str:
 def understood_signal(text: str) -> bool:
     return classify_intent(text) in {"command_next", "silent"}
 
+def normalize(s: str) -> str:
+    return (s or "").strip().lower()
+
+def is_correct(user_text: str, answer_key: str) -> bool:
+    return normalize(user_text) == normalize(answer_key)
+
 def grade_answer(text: str) -> bool:
-    t = (text or "").strip().lower()
+    t = normalize(text)
     return t == "4" or t == "four"
 
 def state_to_int(state_str: str) -> int:
@@ -92,10 +98,21 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
     def StartSession(self, request, context):
         session_id = str(uuid.uuid4())
         _run_async(create_session(session_id, request.student_id))
+        
+        # Pick a topic from DB (hardcoded: grade 6, math, english for MVP)
+        topic = _run_async(pick_topic(6, "math", "en"))
+        if not topic:
+            return tutoring_pb2.StartSessionResponse(
+                session_id=session_id,
+                state=tutoring_pb2.EXPLAIN,
+                tutor_text="No content found. Please add concepts/questions in database."
+            )
+        
+        _run_async(update_session(session_id, topic_id=topic["topic_id"], state="EXPLAIN", attempt_count=0, frustration_counter=0))
         return tutoring_pb2.StartSessionResponse(
             session_id=session_id,
             state=tutoring_pb2.EXPLAIN,
-            tutor_text="Today we learn addition. When ready, say 'next' or explain it back in one line."
+            tutor_text=topic["explain_text"]
         )
 
     def Turn(self, request, context):
@@ -138,12 +155,18 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 )
 
             if understood_signal(user_text) or intent == "command_next":
-                _run_async(update_session(request.session_id, state="QUIZ", attempt_count=0))
-                tutor_text = f"Question: {s['question']}"
+                topic_id = s["topic_id"]
+                qrow = _run_async(pick_question(topic_id))
+                _run_async(update_session(
+                    request.session_id,
+                    state="QUIZ",
+                    attempt_count=0,
+                    current_question_id=qrow["question_id"]
+                ))
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
                     next_state=tutoring_pb2.QUIZ,
-                    tutor_text=tutor_text,
+                    tutor_text=f"Question: {qrow['prompt']}",
                     attempt_count=0,
                     frustration_counter=s["frustration_counter"],
                     intent="ask_question"
@@ -173,7 +196,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
         # --- EVALUATE ---
         if state == tutoring_pb2.EVALUATE:
-            correct = grade_answer(user_text)
+            qid = s["current_question_id"]
+            q = _run_async(get_question(qid))
+            correct = is_correct(user_text, q["answer_key"])
             if correct:
                 _run_async(update_session(
                     request.session_id,
@@ -195,7 +220,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 frustration = s["frustration_counter"] + 1
                 if attempt_count >= 2 or frustration >= 3:
                     _run_async(update_session(request.session_id, state="EXPLAIN", attempt_count=0, frustration_counter=0))
-                    tutor_text = "Not quite. The answer is 4 because 2+2 means two groups of two. Moving on."
+                    tutor_text = f"Not quite. {q['reveal_explain']} Moving on."
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.EXPLAIN,
@@ -205,12 +230,12 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         intent="reveal"
                     )
                 else:
+                    hint_text = q["hint1"] if attempt_count == 1 else q["hint2"]
                     _run_async(update_session(request.session_id, state="HINT", attempt_count=attempt_count, frustration_counter=frustration))
-                    tutor_text = "Hint: count 2, then count 2 more."
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.HINT,
-                        tutor_text=tutor_text,
+                        tutor_text=f"Hint: {hint_text}",
                         attempt_count=attempt_count,
                         frustration_counter=frustration,
                         intent="hint"
@@ -219,11 +244,12 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         # --- HINT -> QUIZ again ---
         if state == tutoring_pb2.HINT:
             _run_async(update_session(request.session_id, state="QUIZ"))
-            tutor_text = f"Try again: {s['question']}"
+            qid = s["current_question_id"]
+            q = _run_async(get_question(qid))
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
                 next_state=tutoring_pb2.QUIZ,
-                tutor_text=tutor_text,
+                tutor_text=f"Try again: {q['prompt']}",
                 attempt_count=attempt_count,
                 frustration_counter=frustration,
                 intent="retry"
