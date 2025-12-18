@@ -3,43 +3,71 @@ import grpc
 from concurrent import futures
 import asyncio
 import os
+import threading
+from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
 from db import init_pool, create_session, get_session, update_session
 
+# Global async runner
+_async_queue = Queue()
+_async_thread = None
+
+def _async_worker():
+    """Worker thread that runs async operations with its own event loop."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    while True:
+        coro, result_queue = _async_queue.get()
+        if coro is None:
+            break
+        try:
+            result = loop.run_until_complete(coro)
+            result_queue.put(("success", result))
+        except Exception as e:
+            result_queue.put(("error", e))
+
+def _start_async_worker():
+    """Start the async worker thread."""
+    global _async_thread
+    if _async_thread is None:
+        _async_thread = threading.Thread(target=_async_worker, daemon=True)
+        _async_thread.start()
+
+def _run_async(coro):
+    """Run async code in the worker thread."""
+    _start_async_worker()
+    result_queue = Queue()
+    _async_queue.put((coro, result_queue))
+    status, result = result_queue.get()
+    if status == "error":
+        raise result
+    return result
+
 def classify_intent(text: str) -> str:
     t = (text or "").strip().lower()
     if t == "" or t in {"...", "hmm"}:
-        return "silence"
-    if t in {"next", "ok", "okay", "continue"}:
-        return "command_next"
-    if t in {"repeat", "again"}:
+        return "silent"
+    if t in {"i don't know", "idk", "not sure", "confused"}:
+        return "confused"
+    if t in {"explain", "tell me", "teach", "explain more", "again"}:
         return "command_repeat"
-    if "don't know" in t or "dont know" in t or t in {"idk"}:
-        return "dont_know"
-    if any(x in t for x in ["stop", "wait"]):
+    if t in {"next", "ok", "good", "got it", "i understand"}:
+        return "command_next"
+    if t in {"stop", "wait", "pause", "i'm stuck", "help"}:
         return "interrupt"
-    if len(t) < 2:
-        return "nonsense"
-    return "content"
+    return "answer"
 
 def understood_signal(text: str) -> bool:
-    t = (text or "").strip().lower()
-    if t in {"next", "ask me a question", "question", "quiz"}:
-        return True
-    # simple paraphrase heuristic
-    return len(t.split()) >= 4
+    return classify_intent(text) in {"command_next", "silent"}
 
-def grade_answer(user_text: str) -> bool:
-    # MVP: fixed question with fixed answer for now
-    # Question: "What is 2 + 2?"
-    # Answer: "4"
-    t = (user_text or "").strip().lower()
-    return t in {"4", "four"}
+def grade_answer(text: str) -> bool:
+    t = (text or "").strip().lower()
+    return t == "4" or t == "four"
 
 def state_to_int(state_str: str) -> int:
-    """Convert state string from DB to protobuf enum."""
     state_map = {
         "EXPLAIN": tutoring_pb2.EXPLAIN,
         "QUIZ": tutoring_pb2.QUIZ,
@@ -63,7 +91,7 @@ def int_to_state(state_int: int) -> str:
 class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
     def StartSession(self, request, context):
         session_id = str(uuid.uuid4())
-        asyncio.run(create_session(session_id, request.student_id))
+        _run_async(create_session(session_id, request.student_id))
         return tutoring_pb2.StartSessionResponse(
             session_id=session_id,
             state=tutoring_pb2.EXPLAIN,
@@ -71,7 +99,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         )
 
     def Turn(self, request, context):
-        s = asyncio.run(get_session(request.session_id))
+        s = _run_async(get_session(request.session_id))
         
         if not s:
             context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -110,7 +138,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 )
 
             if understood_signal(user_text) or intent == "command_next":
-                asyncio.run(update_session(request.session_id, state="QUIZ", attempt_count=0))
+                _run_async(update_session(request.session_id, state="QUIZ", attempt_count=0))
                 tutor_text = f"Question: {s['question']}"
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
@@ -133,7 +161,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
         # --- QUIZ -> EVALUATE ---
         if state == tutoring_pb2.QUIZ:
-            asyncio.run(update_session(request.session_id, state="EVALUATE"))
+            _run_async(update_session(request.session_id, state="EVALUATE"))
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
                 next_state=tutoring_pb2.EVALUATE,
@@ -147,7 +175,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         if state == tutoring_pb2.EVALUATE:
             correct = grade_answer(user_text)
             if correct:
-                asyncio.run(update_session(
+                _run_async(update_session(
                     request.session_id,
                     state="EXPLAIN",
                     attempt_count=0,
@@ -166,7 +194,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 attempt_count = s["attempt_count"] + 1
                 frustration = s["frustration_counter"] + 1
                 if attempt_count >= 2 or frustration >= 3:
-                    asyncio.run(update_session(request.session_id, state="EXPLAIN", attempt_count=0, frustration_counter=0))
+                    _run_async(update_session(request.session_id, state="EXPLAIN", attempt_count=0, frustration_counter=0))
                     tutor_text = "Not quite. The answer is 4 because 2+2 means two groups of two. Moving on."
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
@@ -177,7 +205,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         intent="reveal"
                     )
                 else:
-                    asyncio.run(update_session(request.session_id, state="HINT", attempt_count=attempt_count, frustration_counter=frustration))
+                    _run_async(update_session(request.session_id, state="HINT", attempt_count=attempt_count, frustration_counter=frustration))
                     tutor_text = "Hint: count 2, then count 2 more."
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
@@ -190,7 +218,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
         # --- HINT -> QUIZ again ---
         if state == tutoring_pb2.HINT:
-            asyncio.run(update_session(request.session_id, state="QUIZ"))
+            _run_async(update_session(request.session_id, state="QUIZ"))
             tutor_text = f"Try again: {s['question']}"
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
@@ -202,7 +230,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             )
 
         # fallback
-        asyncio.run(update_session(request.session_id, state="EXPLAIN"))
+        _run_async(update_session(request.session_id, state="EXPLAIN"))
         return tutoring_pb2.TurnResponse(
             session_id=request.session_id,
             next_state=tutoring_pb2.EXPLAIN,
@@ -213,7 +241,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         )
 
 def serve():
-    asyncio.run(init_pool())
+    _run_async(init_pool())
     
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(TutoringServicer(), server)

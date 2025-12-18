@@ -6,8 +6,17 @@ _pool = None
 async def init_pool():
     global _pool
     if _pool is None:
+        # Build connection string from individual Postgres env vars
+        user = os.environ.get("PGUSER", "postgres")
+        password = os.environ.get("PGPASSWORD", "password")
+        host = os.environ.get("PGHOST", "localhost")
+        port = os.environ.get("PGPORT", "5432")
+        database = os.environ.get("PGDATABASE", "postgres")
+        
+        dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
+        
         _pool = await asyncpg.create_pool(
-            dsn=os.environ["DATABASE_URL"],
+            dsn=dsn,
             min_size=1,
             max_size=5
         )
