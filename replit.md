@@ -6,6 +6,7 @@ A plain Python workspace for general Python development. No web frameworks or ex
 ## Project Structure
 - `main.py` - gRPC server with sophisticated FSM tutoring logic (runs in workflow)
 - `client.py` - Test client that connects to the gRPC server
+- `test_db.py` - Test script for database operations
 - `db.py` - Async PostgreSQL database helpers using asyncpg
 - `tutoring.proto` - gRPC service definition with FSM states
 - `tutoring_pb2.py` - Generated Protocol Buffers Python code
@@ -65,7 +66,7 @@ The server runs automatically in the workflow on `:50051`:
 python main.py
 ```
 
-### Test with Client
+### Test with gRPC Client
 In a separate terminal or shell, run:
 ```bash
 python client.py
@@ -77,6 +78,14 @@ This will:
 3. Send "5" (wrong answer)
 4. Send "anything" (wrong) to trigger HINT
 5. Send "4" (correct answer)
+
+### Test Database Operations
+To test the database module directly (requires DATABASE_URL configured):
+```bash
+python test_db.py
+```
+
+This will test creating, retrieving, and updating sessions in the database.
 
 ## Recent Changes
 - 2025-12-18: Added db.py with async PostgreSQL connection helpers
