@@ -110,19 +110,14 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 )
 
             if understood_signal(user_text) or intent == "command_next":
-                next_state = tutoring_pb2.QUIZ
-                asyncio.run(update_session(
-                    request.session_id,
-                    state="QUIZ",
-                    attempt_count=0
-                ))
+                asyncio.run(update_session(request.session_id, state="QUIZ", attempt_count=0))
                 tutor_text = f"Question: {s['question']}"
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
-                    next_state=next_state,
+                    next_state=tutoring_pb2.QUIZ,
                     tutor_text=tutor_text,
                     attempt_count=0,
-                    frustration_counter=frustration,
+                    frustration_counter=s["frustration_counter"],
                     intent="ask_question"
                 )
 
@@ -168,15 +163,10 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     intent="correct"
                 )
             else:
-                attempt_count += 1
-                frustration += 1
+                attempt_count = s["attempt_count"] + 1
+                frustration = s["frustration_counter"] + 1
                 if attempt_count >= 2 or frustration >= 3:
-                    asyncio.run(update_session(
-                        request.session_id,
-                        state="EXPLAIN",
-                        attempt_count=0,
-                        frustration_counter=0
-                    ))
+                    asyncio.run(update_session(request.session_id, state="EXPLAIN", attempt_count=0, frustration_counter=0))
                     tutor_text = "Not quite. The answer is 4 because 2+2 means two groups of two. Moving on."
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
@@ -187,12 +177,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         intent="reveal"
                     )
                 else:
-                    asyncio.run(update_session(
-                        request.session_id,
-                        state="HINT",
-                        attempt_count=attempt_count,
-                        frustration_counter=frustration
-                    ))
+                    asyncio.run(update_session(request.session_id, state="HINT", attempt_count=attempt_count, frustration_counter=frustration))
                     tutor_text = "Hint: count 2, then count 2 more."
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
