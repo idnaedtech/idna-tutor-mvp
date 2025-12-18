@@ -4,7 +4,8 @@
 A plain Python workspace for general Python development. No web frameworks or external dependencies - just pure Python.
 
 ## Project Structure
-- `main.py` - gRPC server with sophisticated FSM tutoring logic
+- `main.py` - gRPC server with sophisticated FSM tutoring logic (runs in workflow)
+- `client.py` - Test client that connects to the gRPC server
 - `tutoring.proto` - gRPC service definition with FSM states
 - `tutoring_pb2.py` - Generated Protocol Buffers Python code
 - `tutoring_pb2_grpc.py` - Generated gRPC service Python code
@@ -36,10 +37,25 @@ The TutoringService provides two main RPCs:
 - protobuf==6.33.2 - Protocol Buffers library
 
 ## Running the Project
-Run the application using:
+
+### Start the Server
+The server runs automatically in the workflow on `:50051`:
 ```bash
 python main.py
 ```
+
+### Test with Client
+In a separate terminal or shell, run:
+```bash
+python client.py
+```
+
+This will:
+1. Start a tutoring session
+2. Send "next" to transition to QUIZ
+3. Send "5" (wrong answer)
+4. Send "anything" (wrong) to trigger HINT
+5. Send "4" (correct answer)
 
 ## Recent Changes
 - 2025-12-18: Added grpcio, grpcio-tools, and protobuf packages
