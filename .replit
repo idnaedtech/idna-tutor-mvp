@@ -24,3 +24,7 @@ args = "python main.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[nix]
+channel = "stable-25_05"
+packages = ["c-ares", "grpc", "openssl", "pkg-config", "zlib"]
