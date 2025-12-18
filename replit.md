@@ -6,9 +6,11 @@ A plain Python workspace for general Python development. No web frameworks or ex
 ## Project Structure
 - `main.py` - gRPC server with sophisticated FSM tutoring logic (runs in workflow)
 - `client.py` - Test client that connects to the gRPC server
+- `db.py` - Async PostgreSQL database helpers using asyncpg
 - `tutoring.proto` - gRPC service definition with FSM states
 - `tutoring_pb2.py` - Generated Protocol Buffers Python code
 - `tutoring_pb2_grpc.py` - Generated gRPC service Python code
+- `requirements.txt` - Project dependencies
 - `protos/` - Legacy proto files (can be cleaned up)
 
 ## gRPC Service API
@@ -35,6 +37,7 @@ The TutoringService provides two main RPCs:
 - grpcio==1.76.0 - gRPC Python library
 - grpcio-tools==1.76.0 - Protocol buffer compiler and gRPC code generator
 - protobuf==6.33.2 - Protocol Buffers library
+- asyncpg==0.31.0 - Async PostgreSQL driver for Python
 
 ## Running the Project
 
@@ -58,8 +61,11 @@ This will:
 5. Send "4" (correct answer)
 
 ## Recent Changes
-- 2025-12-18: Added grpcio, grpcio-tools, and protobuf packages
-- 2025-12-18: Initial project setup with main.py
+- 2025-12-18: Added db.py with async PostgreSQL connection helpers
+- 2025-12-18: Added asyncpg for async database operations
+- 2025-12-18: Enhanced tutoring service with advanced FSM and intent classification
+- 2025-12-18: Created gRPC server with tutoring session management
+- 2025-12-18: Initial project setup with grpcio packages
 
 ## User Preferences
 - Plain Python without frameworks
