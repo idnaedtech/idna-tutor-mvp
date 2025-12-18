@@ -27,7 +27,7 @@ outputType = "console"
 
 [nix]
 channel = "stable-25_05"
-packages = ["c-ares", "grpc", "openssl", "pkg-config", "zlib"]
+packages = ["c-ares", "grpc", "openssl", "pkg-config", "postgresql", "zlib"]
 
 [userenv]
 
