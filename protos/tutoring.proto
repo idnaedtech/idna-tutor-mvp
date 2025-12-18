@@ -1,0 +1,9 @@
+syntax = "proto3";
+package idna.v1;
+
+service TutoringService {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest { string msg = 1; }
+message PingResponse { string msg = 1; }

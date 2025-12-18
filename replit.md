@@ -5,6 +5,10 @@ A plain Python workspace for general Python development. No web frameworks or ex
 
 ## Project Structure
 - `main.py` - Main entry point for the application
+- `protos/` - Protocol Buffer definitions
+  - `tutoring.proto` - gRPC service definition for TutoringService
+  - `tutoring_pb2.py` - Generated Protocol Buffers Python code
+  - `tutoring_pb2_grpc.py` - Generated gRPC service Python code
 
 ## Dependencies
 - grpcio==1.76.0 - gRPC Python library
