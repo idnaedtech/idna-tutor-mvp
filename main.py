@@ -6,7 +6,7 @@ import os
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-import db
+from db import init_pool
 
 def classify_intent(text: str) -> str:
     t = (text or "").strip().lower()
@@ -238,16 +238,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         )
 
 def serve():
-    # Initialize database pool
-    if "DATABASE_URL" in os.environ:
-        try:
-            asyncio.run(db.init_pool())
-            print("Database pool initialized")
-        except Exception as e:
-            print(f"WARNING: Failed to initialize database: {e}")
-            print("Continuing with in-memory sessions only.")
-    else:
-        print("INFO: DATABASE_URL not set. Using in-memory sessions only.")
+    asyncio.run(init_pool())
     
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(TutoringServicer(), server)
