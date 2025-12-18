@@ -24,17 +24,23 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0etutoring.proto\x12\x07idna.v1\"\x1a\n\x0bPingRequest\x12\x0b\n\x03msg\x18\x01 \x01(\t\"\x1b\n\x0cPingResponse\x12\x0b\n\x03msg\x18\x01 \x01(\t2F\n\x0fTutoringService\x12\x33\n\x04Ping\x12\x14.idna.v1.PingRequest\x1a\x15.idna.v1.PingResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0etutoring.proto\x12\x07idna.v1\")\n\x13StartSessionRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\"`\n\x14StartSessionResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12 \n\x05state\x18\x02 \x01(\x0e\x32\x11.idna.v1.FsmState\x12\x12\n\ntutor_text\x18\x03 \x01(\t\"H\n\x0bTurnRequest\x12\x12\n\nstudent_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x11\n\tuser_text\x18\x03 \x01(\t\"\xa1\x01\n\x0cTurnResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12%\n\nnext_state\x18\x02 \x01(\x0e\x32\x11.idna.v1.FsmState\x12\x12\n\ntutor_text\x18\x03 \x01(\t\x12\x15\n\rattempt_count\x18\x04 \x01(\x05\x12\x1b\n\x13\x66rustration_counter\x18\x05 \x01(\x05\x12\x0e\n\x06intent\x18\x06 \x01(\t*Z\n\x08\x46smState\x12\x13\n\x0f\x46SM_UNSPECIFIED\x10\x00\x12\x0b\n\x07\x45XPLAIN\x10\x01\x12\x08\n\x04QUIZ\x10\x02\x12\x0c\n\x08\x45VALUATE\x10\x03\x12\x08\n\x04HINT\x10\x04\x12\n\n\x06REVEAL\x10\x05\x32\x93\x01\n\x0fTutoringService\x12K\n\x0cStartSession\x12\x1c.idna.v1.StartSessionRequest\x1a\x1d.idna.v1.StartSessionResponse\x12\x33\n\x04Turn\x12\x14.idna.v1.TurnRequest\x1a\x15.idna.v1.TurnResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tutoring_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_PINGREQUEST']._serialized_start=27
-  _globals['_PINGREQUEST']._serialized_end=53
-  _globals['_PINGRESPONSE']._serialized_start=55
-  _globals['_PINGRESPONSE']._serialized_end=82
-  _globals['_TUTORINGSERVICE']._serialized_start=84
-  _globals['_TUTORINGSERVICE']._serialized_end=154
+  _globals['_FSMSTATE']._serialized_start=406
+  _globals['_FSMSTATE']._serialized_end=496
+  _globals['_STARTSESSIONREQUEST']._serialized_start=27
+  _globals['_STARTSESSIONREQUEST']._serialized_end=68
+  _globals['_STARTSESSIONRESPONSE']._serialized_start=70
+  _globals['_STARTSESSIONRESPONSE']._serialized_end=166
+  _globals['_TURNREQUEST']._serialized_start=168
+  _globals['_TURNREQUEST']._serialized_end=240
+  _globals['_TURNRESPONSE']._serialized_start=243
+  _globals['_TURNRESPONSE']._serialized_end=404
+  _globals['_TUTORINGSERVICE']._serialized_start=499
+  _globals['_TUTORINGSERVICE']._serialized_end=646
 # @@protoc_insertion_point(module_scope)

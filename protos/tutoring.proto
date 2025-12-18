@@ -1,9 +1,41 @@
 syntax = "proto3";
 package idna.v1;
 
-service TutoringService {
-  rpc Ping(PingRequest) returns (PingResponse);
+enum FsmState {
+  FSM_UNSPECIFIED = 0;
+  EXPLAIN = 1;
+  QUIZ = 2;
+  EVALUATE = 3;
+  HINT = 4;
+  REVEAL = 5;
 }
 
-message PingRequest { string msg = 1; }
-message PingResponse { string msg = 1; }
+message StartSessionRequest {
+  string student_id = 1;
+}
+
+message StartSessionResponse {
+  string session_id = 1;
+  FsmState state = 2;
+  string tutor_text = 3;
+}
+
+message TurnRequest {
+  string student_id = 1;
+  string session_id = 2;
+  string user_text = 3;
+}
+
+message TurnResponse {
+  string session_id = 1;
+  FsmState next_state = 2;
+  string tutor_text = 3;
+  int32 attempt_count = 4;
+  int32 frustration_counter = 5;
+  string intent = 6;
+}
+
+service TutoringService {
+  rpc StartSession(StartSessionRequest) returns (StartSessionResponse);
+  rpc Turn(TurnRequest) returns (TurnResponse);
+}

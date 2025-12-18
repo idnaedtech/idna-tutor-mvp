@@ -34,17 +34,28 @@ class TutoringServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Ping = channel.unary_unary(
-                '/idna.v1.TutoringService/Ping',
-                request_serializer=tutoring__pb2.PingRequest.SerializeToString,
-                response_deserializer=tutoring__pb2.PingResponse.FromString,
+        self.StartSession = channel.unary_unary(
+                '/idna.v1.TutoringService/StartSession',
+                request_serializer=tutoring__pb2.StartSessionRequest.SerializeToString,
+                response_deserializer=tutoring__pb2.StartSessionResponse.FromString,
+                _registered_method=True)
+        self.Turn = channel.unary_unary(
+                '/idna.v1.TutoringService/Turn',
+                request_serializer=tutoring__pb2.TurnRequest.SerializeToString,
+                response_deserializer=tutoring__pb2.TurnResponse.FromString,
                 _registered_method=True)
 
 
 class TutoringServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def Ping(self, request, context):
+    def StartSession(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Turn(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -53,10 +64,15 @@ class TutoringServiceServicer(object):
 
 def add_TutoringServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Ping': grpc.unary_unary_rpc_method_handler(
-                    servicer.Ping,
-                    request_deserializer=tutoring__pb2.PingRequest.FromString,
-                    response_serializer=tutoring__pb2.PingResponse.SerializeToString,
+            'StartSession': grpc.unary_unary_rpc_method_handler(
+                    servicer.StartSession,
+                    request_deserializer=tutoring__pb2.StartSessionRequest.FromString,
+                    response_serializer=tutoring__pb2.StartSessionResponse.SerializeToString,
+            ),
+            'Turn': grpc.unary_unary_rpc_method_handler(
+                    servicer.Turn,
+                    request_deserializer=tutoring__pb2.TurnRequest.FromString,
+                    response_serializer=tutoring__pb2.TurnResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -70,7 +86,7 @@ class TutoringService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def Ping(request,
+    def StartSession(request,
             target,
             options=(),
             channel_credentials=None,
@@ -83,9 +99,36 @@ class TutoringService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/idna.v1.TutoringService/Ping',
-            tutoring__pb2.PingRequest.SerializeToString,
-            tutoring__pb2.PingResponse.FromString,
+            '/idna.v1.TutoringService/StartSession',
+            tutoring__pb2.StartSessionRequest.SerializeToString,
+            tutoring__pb2.StartSessionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Turn(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/idna.v1.TutoringService/Turn',
+            tutoring__pb2.TurnRequest.SerializeToString,
+            tutoring__pb2.TurnResponse.FromString,
             options,
             channel_credentials,
             insecure,
