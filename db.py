@@ -13,7 +13,6 @@ async def init_pool():
         )
 
 def pool():
-    assert _pool is not None, "DB pool not initialized"
     return _pool
 
 async def create_session(session_id: str, student_id: str):
