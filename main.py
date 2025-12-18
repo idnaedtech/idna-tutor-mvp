@@ -6,7 +6,7 @@ import os
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool
+from db import init_pool, create_session, get_session, update_session
 
 def classify_intent(text: str) -> str:
     t = (text or "").strip().lower()
@@ -63,12 +63,7 @@ def int_to_state(state_int: int) -> str:
 class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
     def StartSession(self, request, context):
         session_id = str(uuid.uuid4())
-        if db.pool() is not None:
-            try:
-                asyncio.run(db.create_session(session_id, request.student_id))
-            except Exception as e:
-                print(f"DB error (non-fatal): {e}")
-        
+        asyncio.run(create_session(session_id, request.student_id))
         return tutoring_pb2.StartSessionResponse(
             session_id=session_id,
             state=tutoring_pb2.EXPLAIN,
@@ -76,12 +71,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         )
 
     def Turn(self, request, context):
-        s = None
-        if db.pool() is not None:
-            try:
-                s = asyncio.run(db.get_session(request.session_id))
-            except Exception as e:
-                print(f"DB error: {e}")
+        s = asyncio.run(get_session(request.session_id))
         
         if not s:
             context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -121,7 +111,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
             if understood_signal(user_text) or intent == "command_next":
                 next_state = tutoring_pb2.QUIZ
-                asyncio.run(db.update_session(
+                asyncio.run(update_session(
                     request.session_id,
                     state="QUIZ",
                     attempt_count=0
@@ -148,7 +138,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
         # --- QUIZ -> EVALUATE ---
         if state == tutoring_pb2.QUIZ:
-            asyncio.run(db.update_session(request.session_id, state="EVALUATE"))
+            asyncio.run(update_session(request.session_id, state="EVALUATE"))
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
                 next_state=tutoring_pb2.EVALUATE,
@@ -162,7 +152,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         if state == tutoring_pb2.EVALUATE:
             correct = grade_answer(user_text)
             if correct:
-                asyncio.run(db.update_session(
+                asyncio.run(update_session(
                     request.session_id,
                     state="EXPLAIN",
                     attempt_count=0,
@@ -181,7 +171,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 attempt_count += 1
                 frustration += 1
                 if attempt_count >= 2 or frustration >= 3:
-                    asyncio.run(db.update_session(
+                    asyncio.run(update_session(
                         request.session_id,
                         state="EXPLAIN",
                         attempt_count=0,
@@ -197,7 +187,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         intent="reveal"
                     )
                 else:
-                    asyncio.run(db.update_session(
+                    asyncio.run(update_session(
                         request.session_id,
                         state="HINT",
                         attempt_count=attempt_count,
@@ -215,7 +205,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
         # --- HINT -> QUIZ again ---
         if state == tutoring_pb2.HINT:
-            asyncio.run(db.update_session(request.session_id, state="QUIZ"))
+            asyncio.run(update_session(request.session_id, state="QUIZ"))
             tutor_text = f"Try again: {s['question']}"
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
@@ -227,7 +217,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             )
 
         # fallback
-        asyncio.run(db.update_session(request.session_id, state="EXPLAIN"))
+        asyncio.run(update_session(request.session_id, state="EXPLAIN"))
         return tutoring_pb2.TurnResponse(
             session_id=request.session_id,
             next_state=tutoring_pb2.EXPLAIN,
