@@ -4,12 +4,11 @@
 A plain Python workspace for general Python development. No web frameworks or external dependencies - just pure Python.
 
 ## Project Structure
-- `main.py` - gRPC server implementation with session management
-- `protos/` - Protocol Buffer definitions
-  - `tutoring.proto` - gRPC service with FSM state management
-  - `tutoring_pb2.py` - Generated Protocol Buffers Python code
-  - `tutoring_pb2_grpc.py` - Generated gRPC service Python code
-  - `__init__.py` - Package initialization
+- `main.py` - gRPC server with sophisticated FSM tutoring logic
+- `tutoring.proto` - gRPC service definition with FSM states
+- `tutoring_pb2.py` - Generated Protocol Buffers Python code
+- `tutoring_pb2_grpc.py` - Generated gRPC service Python code
+- `protos/` - Legacy proto files (can be cleaned up)
 
 ## gRPC Service API
 The TutoringService provides two main RPCs:
