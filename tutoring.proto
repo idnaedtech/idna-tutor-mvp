@@ -33,6 +33,9 @@ message TurnResponse {
   int32 attempt_count = 4;
   int32 frustration_counter = 5;
   string intent = 6;
+  string topic_id = 7;
+  string question_id = 8;
+  string title = 9;
 }
 
 service TutoringService {

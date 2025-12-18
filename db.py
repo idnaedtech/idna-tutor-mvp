@@ -77,3 +77,26 @@ async def get_question(question_id: str):
     """
     async with pool().acquire() as c:
         return await c.fetchrow(q, question_id)
+
+async def pick_question_unseen(session_id: str, topic_id: str):
+    """Pick a question not yet seen in this session."""
+    q = """
+    select question_id, prompt, answer_key, hint1, hint2, reveal_explain
+    from questions
+    where topic_id=$1
+    and question_id not in (select question_id from seen_questions where session_id=$2)
+    order by random()
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, topic_id, session_id)
+
+async def mark_question_seen(session_id: str, question_id: str):
+    """Mark a question as seen in this session."""
+    q = """
+    insert into seen_questions(session_id, question_id)
+    values($1, $2)
+    on conflict do nothing
+    """
+    async with pool().acquire() as c:
+        await c.execute(q, session_id, question_id)
