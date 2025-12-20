@@ -6,9 +6,13 @@ import asyncio
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import get_topics
+from db import get_topics, init_pool
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup():
+    await init_pool()
 
 # gRPC channel to your existing server
 CHANNEL = grpc.insecure_channel("localhost:50051")

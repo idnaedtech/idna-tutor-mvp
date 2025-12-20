@@ -15,7 +15,7 @@
   <h2>IDNA Tutor MVP (Text)</h2>
 
   <div style="margin-bottom:10px;">
-    <input id="topicId" placeholder="topic_id (e.g., g6_math_add_01)" value="g6_math_add_01" style="width: 400px;" />
+    <select id="topicSelect" style="width: 400px; padding: 10px;"></select>
     <button onclick="start()">Start Session</button>
   </div>
   <div class="meta" id="meta"></div>
@@ -37,26 +37,46 @@ function add(role, text) {
   log.scrollTop = log.scrollHeight;
 }
 
+async function loadTopics() {
+  const res = await fetch("/api/topics");
+  const topics = await res.json();
+
+  const sel = document.getElementById("topicSelect");
+  sel.innerHTML = "";
+
+  topics.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.topic_id;
+    opt.textContent = t.topic_id;
+    sel.appendChild(opt);
+  });
+}
+
+loadTopics();
+
 async function start() {
-  const topicId = document.getElementById("topicId").value.trim();
-  if (!topicId) { alert("Enter topic_id"); return; }
+  const topic_id = document.getElementById("topicSelect").value;
+  if (!topic_id) { alert("Select a topic"); return; }
   
   try {
-    const r = await fetch("/start", {
+    const res = await fetch("/start", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({student_id: studentId, topic_id: topicId})
+      body: JSON.stringify({
+        student_id: studentId,
+        topic_id: topic_id
+      })
     });
     
-    if (!r.ok) {
-      const errText = await r.text();
-      add("Error", `API error ${r.status}: ${errText.substring(0, 200)}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      add("Error", `API error ${res.status}: ${errText.substring(0, 200)}`);
       return;
     }
     
-    const data = await r.json();
+    const data = await res.json();
     sessionId = data.session_id;
-    document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topicId}`;
+    document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topic_id}`;
     add("Tutor", data.tutor_text);
   } catch (e) {
     add("Error", `Failed to start session: ${e.message}`);
