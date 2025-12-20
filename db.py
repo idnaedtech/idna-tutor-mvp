@@ -185,12 +185,11 @@ async def insert_attempt(student_id: str, session_id: str, topic_id: str, questi
         await c.execute(q, student_id, session_id, topic_id, question_id, user_answer, is_correct)
 
 async def get_topics():
-    """Get all topics from the database."""
     q = """
-    select topic_id, title, explain_text
-    from concepts
-    order by created_at asc
+    select distinct topic_id
+    from questions
+    order by topic_id
     """
     async with pool().acquire() as c:
         rows = await c.fetch(q)
-        return [dict(row) for row in rows]
+        return [dict(r) for r in rows]
