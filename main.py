@@ -8,7 +8,7 @@ from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, pick_question_unseen, mark_question_seen, get_topic, get_next_question
+from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, pick_question_unseen, mark_question_seen, get_topic, get_next_question, mark_seen
 
 # Global async runner
 _async_queue = Queue()
@@ -241,7 +241,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             
             if correct:
                 # Mark question as seen
-                _run_async(mark_question_seen(request.session_id, qid))
+                _run_async(mark_seen(request.student_id, topic_id, request.session_id, qid))
                 
                 # Get next question
                 next_q = _run_async(get_next_question(request.student_id, topic_id))

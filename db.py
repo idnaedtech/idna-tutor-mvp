@@ -114,6 +114,16 @@ async def mark_question_seen(session_id: str, question_id: str):
     async with pool().acquire() as c:
         await c.execute(q, session_id, question_id)
 
+async def mark_seen(student_id: str, topic_id: str, session_id: str, question_id: str):
+    """Mark a question as seen for this student in the topic."""
+    q = """
+    insert into seen_questions(student_id, topic_id, session_id, question_id)
+    values ($1, $2, $3, $4)
+    on conflict do nothing
+    """
+    async with pool().acquire() as c:
+        await c.execute(q, student_id, topic_id, session_id, question_id)
+
 async def get_next_question(student_id: str, topic_id: str):
     """Get next unseen question for this student in the topic."""
     q = """
