@@ -8,7 +8,7 @@ from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, mark_question_seen, get_topic, get_next_question, mark_seen
+from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, mark_question_seen, get_topic, get_next_question, mark_seen, insert_attempt
 
 # Global async runner
 _async_queue = Queue()
@@ -109,17 +109,28 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             context.set_details("topic_id is required")
             return tutoring_pb2.StartSessionResponse()
 
-        # Create session in DB (store student_id + topic_id, set state to QUIZ)
+        # Get first question
+        qrow = _run_async(get_next_question(student_id, topic_id))
+        if not qrow:
+            qrow = _run_async(pick_question(topic_id))
+        
+        if not qrow:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("No questions found for this topic")
+            return tutoring_pb2.StartSessionResponse()
+
+        # Create session in DB with first question already loaded
         session_id = _run_async(create_session(
             student_id=student_id,
             topic_id=topic_id,
-            state="QUIZ"
+            state="QUIZ",
+            current_question_id=str(qrow["question_id"])
         ))
 
         return tutoring_pb2.StartSessionResponse(
             session_id=session_id,
             state=tutoring_pb2.FsmState.QUIZ,
-            tutor_text="Session started. Ready to begin."
+            tutor_text=f"Question: {qrow['prompt']}"
         )
 
     def Turn(self, request, context):
@@ -240,6 +251,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             correct = is_correct(user_answer, q["answer_key"])
             
             if correct:
+                # Record attempt
+                _run_async(insert_attempt(request.student_id, request.session_id, topic_id, qid, user_answer, True))
+                
                 # Mark question as seen
                 _run_async(mark_seen(request.student_id, topic_id, request.session_id, qid))
                 
@@ -282,6 +296,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     title=next_q.get("title", "")
                 )
             else:
+                # Record attempt
+                _run_async(insert_attempt(request.student_id, request.session_id, topic_id, qid, user_answer, False))
+                
                 # Wrong answer: give hint
                 new_attempts = attempt_count + 1
                 new_frustration = frustration + 1

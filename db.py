@@ -20,19 +20,40 @@ async def init_pool():
             min_size=1,
             max_size=5
         )
+        
+        # Create attempts table if it doesn't exist
+        async with _pool.acquire() as c:
+            await c.execute("""
+            CREATE TABLE IF NOT EXISTS attempts (
+              id SERIAL PRIMARY KEY,
+              student_id VARCHAR(36) NOT NULL,
+              session_id VARCHAR(36) NOT NULL,
+              topic_id VARCHAR(100) NOT NULL,
+              question_id VARCHAR(100) NOT NULL,
+              user_answer TEXT NOT NULL,
+              is_correct BOOLEAN NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW()
+            );
+            """)
+            await c.execute("""
+            CREATE INDEX IF NOT EXISTS idx_attempts_student_topic ON attempts(student_id, topic_id);
+            """)
+            await c.execute("""
+            CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id);
+            """)
 
 def pool():
     return _pool
 
-async def create_session(student_id: str, topic_id: str = "", state: str = "QUIZ"):
+async def create_session(student_id: str, topic_id: str = "", state: str = "QUIZ", current_question_id: str = None):
     import uuid
     session_id = str(uuid.uuid4())
     q = """
-    insert into sessions(session_id, student_id, topic_id, state, attempt_count, frustration_counter)
-    values($1,$2,$3,$4,0,0)
+    insert into sessions(session_id, student_id, topic_id, state, attempt_count, frustration_counter, current_question_id)
+    values($1,$2,$3,$4,0,0,$5)
     """
     async with pool().acquire() as c:
-        await c.execute(q, session_id, student_id, topic_id, state)
+        await c.execute(q, session_id, student_id, topic_id, state, current_question_id)
     return session_id
 
 async def get_session(session_id: str):
@@ -142,3 +163,12 @@ async def get_next_question(student_id: str, topic_id: str):
     """
     async with pool().acquire() as c:
         return await c.fetchrow(q, topic_id, student_id)
+
+async def insert_attempt(student_id: str, session_id: str, topic_id: str, question_id: str, user_answer: str, is_correct: bool):
+    """Record an answer attempt."""
+    q = """
+    insert into attempts(student_id, session_id, topic_id, question_id, user_answer, is_correct, created_at)
+    values($1, $2, $3, $4, $5, $6, now())
+    """
+    async with pool().acquire() as c:
+        await c.execute(q, student_id, session_id, topic_id, question_id, user_answer, is_correct)
