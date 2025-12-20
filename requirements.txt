@@ -1,5 +1,4 @@
 grpcio==1.76.0
 grpcio-tools==1.76.0
 protobuf==6.33.2
-asyncpg
-asyncpg
+asyncpg==0.29.0
