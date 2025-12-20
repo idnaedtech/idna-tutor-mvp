@@ -8,7 +8,7 @@ from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, pick_question_unseen, mark_question_seen, get_topic, get_next_question, mark_seen
+from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, mark_question_seen, get_topic, get_next_question, mark_seen
 
 # Global async runner
 _async_queue = Queue()
@@ -163,7 +163,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
             if understood_signal(user_text) or intent == "command_next":
                 topic_id = s["topic_id"]
-                qrow = _run_async(pick_question_unseen(request.session_id, topic_id))
+                qrow = _run_async(get_next_question(request.student_id, topic_id))
                 if not qrow:
                     qrow = _run_async(pick_question(topic_id))
                 _run_async(update_session(
@@ -312,9 +312,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             q = _run_async(get_question(qid))
             correct = is_correct(user_text, q["answer_key"])
             if correct:
-                _run_async(mark_question_seen(request.session_id, qid))
+                _run_async(mark_seen(request.student_id, s["topic_id"], request.session_id, qid))
                 topic_id = s["topic_id"]
-                new_q = _run_async(pick_question_unseen(request.session_id, topic_id))
+                new_q = _run_async(get_next_question(request.student_id, topic_id))
                 if not new_q:
                     new_q = _run_async(pick_question(topic_id))
                 _run_async(update_session(
