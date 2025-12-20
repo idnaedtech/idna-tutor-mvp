@@ -97,7 +97,6 @@ def int_to_state(state_int: int) -> str:
 class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
     def StartSession(self, request, context):
         session_id = str(uuid.uuid4())
-        _run_async(create_session(session_id, request.student_id))
         
         # Get topic from request, or pick first available if not provided
         topic_id = request.topic_id.strip() if request.topic_id else None
@@ -116,11 +115,33 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 tutor_text="No content found. Please add concepts/questions in database."
             )
         
-        _run_async(update_session(session_id, topic_id=topic["topic_id"], state="EXPLAIN", attempt_count=0, frustration_counter=0))
+        topic_id = topic["topic_id"]
+        
+        # Create session with topic_id and QUIZ state
+        _run_async(create_session(session_id, request.student_id, topic_id))
+        
+        # Pick first question
+        qrow = _run_async(pick_question_unseen(session_id, topic_id))
+        if not qrow:
+            qrow = _run_async(pick_question(topic_id))
+        
+        if not qrow:
+            return tutoring_pb2.StartSessionResponse(
+                session_id=session_id,
+                state=tutoring_pb2.EXPLAIN,
+                tutor_text="No questions found for this topic."
+            )
+        
+        # Update session with question
+        _run_async(update_session(
+            session_id,
+            current_question_id=str(qrow["question_id"])
+        ))
+        
         return tutoring_pb2.StartSessionResponse(
             session_id=session_id,
-            state=tutoring_pb2.EXPLAIN,
-            tutor_text=f"{topic['title']}: {topic['explain_text']}"
+            state=tutoring_pb2.QUIZ,
+            tutor_text=f"Question: {qrow['prompt']}"
         )
 
     def Turn(self, request, context):
