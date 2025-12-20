@@ -2,9 +2,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import grpc
+import asyncio
 
 import tutoring_pb2
 import tutoring_pb2_grpc
+from db import get_topics
 
 app = FastAPI()
 
@@ -55,6 +57,11 @@ def turn(req: TurnReq):
         "concept_title": getattr(resp, "concept_title", None),
     }
     return out
+
+@app.get("/api/topics")
+async def api_topics():
+    topics = await get_topics()
+    return topics
 
 # Serve static files (HTML, CSS, JS)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
