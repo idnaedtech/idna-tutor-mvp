@@ -80,6 +80,7 @@ def state_to_int(state_str: str) -> int:
         "EVALUATE": tutoring_pb2.FsmState.EVALUATE,
         "HINT": tutoring_pb2.FsmState.HINT,
         "REVEAL": tutoring_pb2.FsmState.REVEAL,
+        "COMPLETED": tutoring_pb2.FsmState.QUIZ,
     }
     return state_map.get(state_str, tutoring_pb2.FsmState.EXPLAIN)
 
@@ -147,6 +148,15 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         state = state_to_int(s["state"])
         attempt_count = s["attempt_count"]
         frustration = s["frustration_counter"]
+
+        # --- COMPLETED ---
+        if s["state"] == "COMPLETED":
+            return tutoring_pb2.TurnResponse(
+                session_id=request.session_id,
+                next_state=tutoring_pb2.FsmState.QUIZ,
+                tutor_text="This topic is finished. Please select a new topic and click Start Session.",
+                intent="completed"
+            )
 
         # universal interrupt
         if intent == "interrupt":
@@ -262,7 +272,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 
                 if not next_q:
                     # No more questions in this topic
-                    _run_async(update_session(request.session_id, state="COMPLETE", current_question_id=None))
+                    _run_async(update_session(request.session_id, state="COMPLETED", current_question_id=None))
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.FsmState.QUIZ,
