@@ -113,3 +113,16 @@ async def mark_question_seen(session_id: str, question_id: str):
     """
     async with pool().acquire() as c:
         await c.execute(q, session_id, question_id)
+
+async def get_next_question(student_id: str, topic_id: str, session_id: str):
+    """Get next unseen question for this student in the topic."""
+    q = """
+    select question_id, prompt, answer_key, hint1, hint2, reveal_explain
+    from questions
+    where topic_id=$1
+    and question_id not in (select question_id from seen_questions where session_id=$2)
+    order by random()
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, topic_id, session_id)

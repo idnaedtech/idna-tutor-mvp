@@ -8,7 +8,7 @@ from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, pick_question_unseen, mark_question_seen, get_topic
+from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, pick_question_unseen, mark_question_seen, get_topic, get_next_question
 
 # Global async runner
 _async_queue = Queue()
@@ -201,23 +201,110 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 title=topic["title"] if topic else ""
             )
 
-        # --- QUIZ -> EVALUATE ---
+        # --- QUIZ: grade immediately and continue ---
         if state == tutoring_pb2.FsmState.QUIZ:
-            _run_async(update_session(request.session_id, state="EVALUATE"))
             topic_id = s["topic_id"]
             qid = s["current_question_id"]
-            topic = _run_async(pick_topic(6, "math", "en"))
-            return tutoring_pb2.TurnResponse(
-                session_id=request.session_id,
-                next_state=tutoring_pb2.FsmState.EVALUATE,
-                tutor_text="Got it. Let me check.",
-                attempt_count=attempt_count,
-                frustration_counter=frustration,
-                intent="evaluate",
-                topic_id=topic_id or "",
-                question_id=qid or "",
-                title=topic["title"] if topic else ""
-            )
+            user_answer = (request.user_text or "").strip()
+            
+            # Safety: must have topic + current question
+            if not topic_id or not qid:
+                return tutoring_pb2.TurnResponse(
+                    session_id=request.session_id,
+                    next_state=tutoring_pb2.FsmState.QUIZ,
+                    tutor_text="Error: no question loaded. Start a new session.",
+                    attempt_count=attempt_count,
+                    frustration_counter=frustration,
+                    intent="error",
+                    topic_id=topic_id or "",
+                    question_id=qid or "",
+                    title=""
+                )
+            
+            # Load question from DB
+            q = _run_async(get_question(qid))
+            if not q:
+                return tutoring_pb2.TurnResponse(
+                    session_id=request.session_id,
+                    next_state=tutoring_pb2.FsmState.QUIZ,
+                    tutor_text="Error: question not found.",
+                    attempt_count=attempt_count,
+                    frustration_counter=frustration,
+                    intent="error",
+                    topic_id=topic_id or "",
+                    question_id=qid or "",
+                    title=""
+                )
+            
+            # Grade the answer
+            correct = is_correct(user_answer, q["answer_key"])
+            
+            if correct:
+                # Mark question as seen
+                _run_async(mark_question_seen(request.session_id, qid))
+                
+                # Get next question
+                next_q = _run_async(get_next_question(request.student_id, topic_id, request.session_id))
+                
+                if not next_q:
+                    # No more questions in this topic
+                    _run_async(update_session(request.session_id, state="COMPLETE", current_question_id=None))
+                    return tutoring_pb2.TurnResponse(
+                        session_id=request.session_id,
+                        next_state=tutoring_pb2.FsmState.QUIZ,
+                        tutor_text="✅ Correct! You've completed all questions in this topic.",
+                        attempt_count=0,
+                        frustration_counter=0,
+                        intent="complete",
+                        topic_id=topic_id,
+                        question_id="",
+                        title=""
+                    )
+                
+                # Update session with next question
+                _run_async(update_session(
+                    request.session_id,
+                    state="QUIZ",
+                    current_question_id=str(next_q["question_id"]),
+                    attempt_count=0,
+                    frustration_counter=frustration
+                ))
+                
+                return tutoring_pb2.TurnResponse(
+                    session_id=request.session_id,
+                    next_state=tutoring_pb2.FsmState.QUIZ,
+                    tutor_text=f"✅ Correct! Next question: {next_q['prompt']}",
+                    attempt_count=0,
+                    frustration_counter=frustration,
+                    intent="next_question",
+                    topic_id=topic_id,
+                    question_id=str(next_q["question_id"]),
+                    title=next_q.get("title", "")
+                )
+            else:
+                # Wrong answer: give hint
+                new_attempts = attempt_count + 1
+                new_frustration = frustration + 1
+                
+                # Update session
+                _run_async(update_session(
+                    request.session_id,
+                    state="HINT",
+                    attempt_count=new_attempts,
+                    frustration_counter=new_frustration
+                ))
+                
+                return tutoring_pb2.TurnResponse(
+                    session_id=request.session_id,
+                    next_state=tutoring_pb2.FsmState.HINT,
+                    tutor_text=f"❌ Not quite. Hint: {q.get('hint1', 'Try again.')}",
+                    attempt_count=new_attempts,
+                    frustration_counter=new_frustration,
+                    intent="hint",
+                    topic_id=topic_id,
+                    question_id=qid,
+                    title=q.get("title", "")
+                )
 
         # --- EVALUATE ---
         if state == tutoring_pb2.FsmState.EVALUATE:
