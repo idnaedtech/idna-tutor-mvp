@@ -14,7 +14,7 @@ STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
 class StartReq(BaseModel):
     student_id: str = "00000000-0000-0000-0000-000000000001"
-    topic_id: str = ""
+    topic_id: str
 
 class TurnReq(BaseModel):
     student_id: str

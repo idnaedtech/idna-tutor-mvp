@@ -14,7 +14,10 @@
 <body>
   <h2>IDNA Tutor MVP (Text)</h2>
 
-  <button onclick="start()">Start Session</button>
+  <div style="margin-bottom:10px;">
+    <input id="topicId" placeholder="topic_id (e.g., g6_math_add_01)" value="g6_math_add_01" style="width: 400px;" />
+    <button onclick="start()">Start Session</button>
+  </div>
   <div class="meta" id="meta"></div>
 
   <div id="log"></div>
@@ -35,14 +38,17 @@ function add(role, text) {
 }
 
 async function start() {
+  const topicId = document.getElementById("topicId").value.trim();
+  if (!topicId) { alert("Enter topic_id"); return; }
+  
   const r = await fetch("/start", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({student_id: studentId})
+    body: JSON.stringify({student_id: studentId, topic_id: topicId})
   });
   const data = await r.json();
   sessionId = data.session_id;
-  document.getElementById("meta").textContent = `session_id: ${sessionId}`;
+  document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topicId}`;
   add("Tutor", data.tutor_text);
 }
 
