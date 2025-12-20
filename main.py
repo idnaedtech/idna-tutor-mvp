@@ -75,22 +75,22 @@ def grade_answer(text: str) -> bool:
 
 def state_to_int(state_str: str) -> int:
     state_map = {
-        "EXPLAIN": tutoring_pb2.EXPLAIN,
-        "QUIZ": tutoring_pb2.QUIZ,
-        "EVALUATE": tutoring_pb2.EVALUATE,
-        "HINT": tutoring_pb2.HINT,
-        "REVEAL": tutoring_pb2.REVEAL,
+        "EXPLAIN": tutoring_pb2.FsmState.EXPLAIN,
+        "QUIZ": tutoring_pb2.FsmState.QUIZ,
+        "EVALUATE": tutoring_pb2.FsmState.EVALUATE,
+        "HINT": tutoring_pb2.FsmState.HINT,
+        "REVEAL": tutoring_pb2.FsmState.REVEAL,
     }
-    return state_map.get(state_str, tutoring_pb2.EXPLAIN)
+    return state_map.get(state_str, tutoring_pb2.FsmState.EXPLAIN)
 
 def int_to_state(state_int: int) -> str:
     """Convert protobuf enum to state string for DB."""
     state_map = {
-        tutoring_pb2.EXPLAIN: "EXPLAIN",
-        tutoring_pb2.QUIZ: "QUIZ",
-        tutoring_pb2.EVALUATE: "EVALUATE",
-        tutoring_pb2.HINT: "HINT",
-        tutoring_pb2.REVEAL: "REVEAL",
+        tutoring_pb2.FsmState.EXPLAIN: "EXPLAIN",
+        tutoring_pb2.FsmState.QUIZ: "QUIZ",
+        tutoring_pb2.FsmState.EVALUATE: "EVALUATE",
+        tutoring_pb2.FsmState.HINT: "HINT",
+        tutoring_pb2.FsmState.REVEAL: "REVEAL",
     }
     return state_map.get(state_int, "EXPLAIN")
 
@@ -104,7 +104,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         
         return tutoring_pb2.StartSessionResponse(
             session_id=session_id,
-            state=tutoring_pb2.QUIZ,
+            state=tutoring_pb2.FsmState.QUIZ,
             tutor_text="Session started. Ready to begin."
         )
 
@@ -135,12 +135,12 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             )
 
         # --- EXPLAIN ---
-        if state == tutoring_pb2.EXPLAIN:
+        if state == tutoring_pb2.FsmState.EXPLAIN:
             if intent == "command_repeat":
                 tutor_text = "Addition means combining numbers. Example: 2 + 2 = 4. Say 'next' when ready."
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
-                    next_state=tutoring_pb2.EXPLAIN,
+                    next_state=tutoring_pb2.FsmState.EXPLAIN,
                     tutor_text=tutor_text,
                     attempt_count=attempt_count,
                     frustration_counter=frustration,
@@ -162,7 +162,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 topic = _run_async(pick_topic(6, "math", "en"))
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
-                    next_state=tutoring_pb2.QUIZ,
+                    next_state=tutoring_pb2.FsmState.QUIZ,
                     tutor_text=f"Question: {qrow['prompt']}",
                     attempt_count=0,
                     frustration_counter=s["frustration_counter"],
@@ -177,7 +177,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             tutor_text = "Addition means combining numbers. Say 'next' when ready, or explain in one line."
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
-                next_state=tutoring_pb2.EXPLAIN,
+                next_state=tutoring_pb2.FsmState.EXPLAIN,
                 tutor_text=tutor_text,
                 attempt_count=attempt_count,
                 frustration_counter=frustration,
@@ -188,14 +188,14 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             )
 
         # --- QUIZ -> EVALUATE ---
-        if state == tutoring_pb2.QUIZ:
+        if state == tutoring_pb2.FsmState.QUIZ:
             _run_async(update_session(request.session_id, state="EVALUATE"))
             topic_id = s["topic_id"]
             qid = s["current_question_id"]
             topic = _run_async(pick_topic(6, "math", "en"))
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
-                next_state=tutoring_pb2.EVALUATE,
+                next_state=tutoring_pb2.FsmState.EVALUATE,
                 tutor_text="Got it. Let me check.",
                 attempt_count=attempt_count,
                 frustration_counter=frustration,
@@ -206,7 +206,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             )
 
         # --- EVALUATE ---
-        if state == tutoring_pb2.EVALUATE:
+        if state == tutoring_pb2.FsmState.EVALUATE:
             qid = s["current_question_id"]
             q = _run_async(get_question(qid))
             correct = is_correct(user_text, q["answer_key"])
@@ -226,7 +226,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 topic = _run_async(pick_topic(6, "math", "en"))
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
-                    next_state=tutoring_pb2.QUIZ,
+                    next_state=tutoring_pb2.FsmState.QUIZ,
                     tutor_text=f"Correct! Next question: {new_q['prompt']}",
                     attempt_count=0,
                     frustration_counter=0,
@@ -245,7 +245,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     topic = _run_async(pick_topic(6, "math", "en"))
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
-                        next_state=tutoring_pb2.EXPLAIN,
+                        next_state=tutoring_pb2.FsmState.EXPLAIN,
                         tutor_text=tutor_text,
                         attempt_count=0,
                         frustration_counter=0,
@@ -261,7 +261,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     topic = _run_async(pick_topic(6, "math", "en"))
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
-                        next_state=tutoring_pb2.HINT,
+                        next_state=tutoring_pb2.FsmState.HINT,
                         tutor_text=f"Hint: {hint_text}",
                         attempt_count=attempt_count,
                         frustration_counter=frustration,
@@ -272,7 +272,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     )
 
         # --- HINT -> QUIZ again ---
-        if state == tutoring_pb2.HINT:
+        if state == tutoring_pb2.FsmState.HINT:
             _run_async(update_session(request.session_id, state="QUIZ"))
             qid = s["current_question_id"]
             q = _run_async(get_question(qid))
@@ -280,7 +280,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             topic = _run_async(pick_topic(6, "math", "en"))
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
-                next_state=tutoring_pb2.QUIZ,
+                next_state=tutoring_pb2.FsmState.QUIZ,
                 tutor_text=f"Try again: {q['prompt']}",
                 attempt_count=attempt_count,
                 frustration_counter=frustration,
@@ -296,7 +296,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         topic = _run_async(pick_topic(6, "math", "en"))
         return tutoring_pb2.TurnResponse(
             session_id=request.session_id,
-            next_state=tutoring_pb2.EXPLAIN,
+            next_state=tutoring_pb2.FsmState.EXPLAIN,
             tutor_text="Reset. Let's continue.",
             attempt_count=attempt_count,
             frustration_counter=frustration,
