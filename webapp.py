@@ -6,7 +6,7 @@ import asyncio
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import get_topics, init_pool, pool
+from db import get_topics, init_pool, pool, get_latest_session
 import db
 
 app = FastAPI()
@@ -90,6 +90,20 @@ async def api_progress(student_id: str, topic_id: str):
         
     pct = int((correct / total * 100)) if total > 0 else 0
     return {"correct": correct, "total": total, "pct": pct}
+
+@app.get("/api/resume")
+async def resume_session(student_id: str):
+    row = await get_latest_session(student_id)
+
+    if not row:
+        return {"status": "none"}
+
+    return {
+        "status": "ok",
+        "session_id": row["session_id"],
+        "topic_id": row["topic_id"],
+        "state": row["state"]
+    }
 
 # Serve static files (HTML, CSS, JS)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

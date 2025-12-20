@@ -193,3 +193,14 @@ async def get_topics():
     async with pool().acquire() as c:
         rows = await c.fetch(q)
         return [dict(r) for r in rows]
+
+async def get_latest_session(student_id: str):
+    q = """
+    select session_id, student_id, topic_id, state
+    from sessions
+    where student_id = $1
+    order by created_at desc
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, student_id)
