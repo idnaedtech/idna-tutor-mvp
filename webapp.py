@@ -14,6 +14,7 @@ STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
 class StartReq(BaseModel):
     student_id: str = "00000000-0000-0000-0000-000000000001"
+    topic_id: str = ""
 
 class TurnReq(BaseModel):
     student_id: str
@@ -22,7 +23,11 @@ class TurnReq(BaseModel):
 
 @app.post("/start")
 def start(req: StartReq):
-    resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(student_id=req.student_id))
+    # topic_id is optional
+    resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
+        student_id=req.student_id,
+        topic_id=getattr(req, 'topic_id', '')
+    ))
     return {
         "session_id": resp.session_id,
         "state": int(resp.state),

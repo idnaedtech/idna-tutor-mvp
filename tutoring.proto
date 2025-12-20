@@ -12,6 +12,7 @@ enum FsmState {
 
 message StartSessionRequest {
   string student_id = 1;
+  string topic_id   = 2;
 }
 
 message StartSessionResponse {

@@ -8,7 +8,7 @@ from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, pick_question_unseen, mark_question_seen
+from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, pick_question_unseen, mark_question_seen, get_topic
 
 # Global async runner
 _async_queue = Queue()
@@ -99,8 +99,16 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         session_id = str(uuid.uuid4())
         _run_async(create_session(session_id, request.student_id))
         
-        # Pick a topic from DB (hardcoded: grade 6, math, english for MVP)
-        topic = _run_async(pick_topic(6, "math", "en"))
+        # Get topic from request, or pick first available if not provided
+        topic_id = request.topic_id.strip() if request.topic_id else None
+        
+        if topic_id:
+            # Fetch specific topic by ID
+            topic = _run_async(get_topic(topic_id))
+        else:
+            # Pick a topic from DB (default: grade 6, math, english for MVP)
+            topic = _run_async(pick_topic(6, "math", "en"))
+        
         if not topic:
             return tutoring_pb2.StartSessionResponse(
                 session_id=session_id,

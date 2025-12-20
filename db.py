@@ -47,6 +47,16 @@ async def update_session(session_id: str, **fields):
     async with pool().acquire() as c:
         await c.execute(q, session_id, *values)
 
+async def get_topic(topic_id: str):
+    """Get a specific topic by ID."""
+    q = """
+    select topic_id, title, explain_text
+    from concepts
+    where topic_id=$1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, topic_id)
+
 async def pick_topic(grade: int, subject: str, language: str = "en"):
     q = """
     select topic_id, title, explain_text
