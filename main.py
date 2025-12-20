@@ -99,6 +99,17 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         student_id = request.student_id
         topic_id = request.topic_id
         
+        # Validate inputs
+        if not student_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("student_id is required")
+            return tutoring_pb2.StartSessionResponse()
+        
+        if not topic_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("topic_id is required")
+            return tutoring_pb2.StartSessionResponse()
+        
         # Create session in DB (store student_id + topic_id, set state to QUIZ)
         session_id = _run_async(create_session(student_id=student_id, topic_id=topic_id, state="QUIZ"))
         
