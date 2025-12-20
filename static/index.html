@@ -1,12 +1,76 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tutoring Service</title>
+  <meta charset="utf-8" />
+  <title>IDNA Tutor MVP</title>
+  <style>
+    body { font-family: Arial; max-width: 900px; margin: 30px auto; }
+    #log { border: 1px solid #ddd; padding: 12px; height: 420px; overflow: auto; white-space: pre-wrap; }
+    input { width: 78%; padding: 10px; }
+    button { padding: 10px 14px; }
+    .meta { color: #666; font-size: 12px; margin-top: 8px; }
+  </style>
 </head>
 <body>
-    <h1>Tutoring Service</h1>
-    <p>Web interface for the gRPC tutoring service.</p>
+  <h2>IDNA Tutor MVP (Text)</h2>
+
+  <button onclick="start()">Start Session</button>
+  <div class="meta" id="meta"></div>
+
+  <div id="log"></div>
+
+  <div style="margin-top:10px;">
+    <input id="msg" placeholder="type: next / repeat / 4 / 10 / 15 ..." />
+    <button onclick="send()">Send</button>
+  </div>
+
+<script>
+let sessionId = null;
+let studentId = "00000000-0000-0000-0000-000000000001";
+
+function add(role, text) {
+  const log = document.getElementById("log");
+  log.textContent += `${role}: ${text}\n\n`;
+  log.scrollTop = log.scrollHeight;
+}
+
+async function start() {
+  const r = await fetch("/start", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({student_id: studentId})
+  });
+  const data = await r.json();
+  sessionId = data.session_id;
+  document.getElementById("meta").textContent = `session_id: ${sessionId}`;
+  add("Tutor", data.tutor_text);
+}
+
+async function send() {
+  if (!sessionId) { alert("Start session first"); return; }
+  const msg = document.getElementById("msg").value.trim();
+  if (!msg) return;
+  document.getElementById("msg").value = "";
+  add("You", msg);
+
+  const r = await fetch("/turn", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({student_id: studentId, session_id: sessionId, user_text: msg})
+  });
+  const data = await r.json();
+  add("Tutor", data.tutor_text);
+
+  // show progress metadata if available
+  if (data.question_id || data.topic_id) {
+    document.getElementById("meta").textContent =
+      `session_id: ${sessionId} | topic_id: ${data.topic_id || "-"} | question_id: ${data.question_id || "-"}`;
+  }
+}
+
+document.getElementById("msg").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") send();
+});
+</script>
 </body>
 </html>

@@ -18,9 +18,13 @@ args = "Run Python"
 name = "Run Python"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python main.py"
+args = "python run_servers.py"
+waitForPort = 5000
 
 [nix]
 channel = "stable-25_05"
@@ -30,3 +34,7 @@ packages = ["c-ares", "grpc", "openssl", "pkg-config", "postgresql", "zlib"]
 
 [userenv.shared]
 DATABASE_URL = "psql -h db.edbstiagplztpjcslczq.supabase.co -p 5432 -d postgres -U postgres"
+
+[[ports]]
+localPort = 5000
+externalPort = 80

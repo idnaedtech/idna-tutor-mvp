@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import grpc
 
@@ -50,3 +51,6 @@ def turn(req: TurnReq):
         "concept_title": getattr(resp, "concept_title", None),
     }
     return out
+
+# Serve static files (HTML, CSS, JS)
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
