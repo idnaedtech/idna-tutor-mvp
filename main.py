@@ -244,7 +244,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 _run_async(mark_question_seen(request.session_id, qid))
                 
                 # Get next question
-                next_q = _run_async(get_next_question(request.student_id, topic_id, request.session_id))
+                next_q = _run_async(get_next_question(request.student_id, topic_id))
                 
                 if not next_q:
                     # No more questions in this topic
