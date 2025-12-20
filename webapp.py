@@ -6,7 +6,8 @@ import asyncio
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import get_topics, init_pool
+from db import get_topics, init_pool, pool
+import db
 
 app = FastAPI()
 
@@ -66,6 +67,29 @@ def turn(req: TurnReq):
 async def api_topics():
     topics = await get_topics()
     return topics
+
+@app.get("/api/progress")
+async def api_progress(student_id: str, topic_id: str):
+    """Get progress for a student on a topic: correct, total, percentage."""
+    p = db.pool()
+    async with p.acquire() as c:
+        # Total questions in topic
+        total_result = await c.fetchval(
+            "SELECT COUNT(*) FROM questions WHERE topic_id = $1",
+            topic_id
+        )
+        total = total_result or 0
+        
+        # Correct answers for this student in this topic
+        correct_result = await c.fetchval(
+            "SELECT COUNT(*) FROM attempts WHERE student_id = $1 AND topic_id = $2 AND is_correct = true",
+            student_id,
+            topic_id
+        )
+        correct = correct_result or 0
+        
+    pct = int((correct / total * 100)) if total > 0 else 0
+    return {"correct": correct, "total": total, "pct": pct}
 
 # Serve static files (HTML, CSS, JS)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

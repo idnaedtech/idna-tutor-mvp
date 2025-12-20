@@ -20,6 +20,7 @@
     <button onclick="start()">Start Session</button>
   </div>
   <div class="meta" id="meta"></div>
+  <div class="meta" id="progress"></div>
 
   <div id="log"></div>
 
@@ -30,6 +31,7 @@
 
 <script>
 let sessionId = null;
+let topicId = null;
 let studentId = "00000000-0000-0000-0000-000000000001";
 
 function add(role, text) {
@@ -55,6 +57,14 @@ async function loadTopics() {
 
 loadTopics();
 
+async function updateProgress() {
+  if (!topicId) return;
+  const res = await fetch(`/api/progress?student_id=${studentId}&topic_id=${topicId}`);
+  const data = await res.json();
+  document.getElementById("progress").textContent = 
+    `Progress (${topicId}): ${data.correct} / ${data.total} (${data.pct}%)`;
+}
+
 async function start() {
   const topic_id = document.getElementById("topicSelect").value;
   if (!topic_id) { alert("Select a topic"); return; }
@@ -77,8 +87,10 @@ async function start() {
     
     const data = await res.json();
     sessionId = data.session_id;
+    topicId = topic_id;
     document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topic_id}`;
     add("Tutor", data.tutor_text);
+    await updateProgress();
   } catch (e) {
     add("Error", `Failed to start session: ${e.message}`);
   }
@@ -111,6 +123,9 @@ async function send() {
     document.getElementById("meta").textContent =
       `session_id: ${sessionId} | topic_id: ${data.topic_id || "-"} | question_id: ${data.question_id || "-"}`;
   }
+  
+  // Update progress
+  await updateProgress();
 }
 
 document.getElementById("msg").addEventListener("keydown", (e) => {
