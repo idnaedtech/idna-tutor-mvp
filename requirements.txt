@@ -1,4 +1,6 @@
-grpcio==1.76.0
-grpcio-tools==1.76.0
-protobuf==6.33.2
-asyncpg==0.29.0
+fastapi
+uvicorn[standard]
+grpcio
+grpcio-tools
+protobuf
+asyncpg
