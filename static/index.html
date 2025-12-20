@@ -46,6 +46,13 @@ async function start() {
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({student_id: studentId, topic_id: topicId})
   });
+  
+  if (!r.ok) {
+    const errText = await r.text();
+    add("Error", `API error ${r.status}: ${errText.substring(0, 200)}`);
+    return;
+  }
+  
   const data = await r.json();
   sessionId = data.session_id;
   document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topicId}`;
@@ -64,6 +71,13 @@ async function send() {
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({student_id: studentId, session_id: sessionId, user_text: msg})
   });
+  
+  if (!r.ok) {
+    const errText = await r.text();
+    add("Error", `API error ${r.status}: ${errText.substring(0, 200)}`);
+    return;
+  }
+  
   const data = await r.json();
   add("Tutor", data.tutor_text);
 

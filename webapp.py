@@ -14,7 +14,7 @@ STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
 class StartReq(BaseModel):
     student_id: str = "00000000-0000-0000-0000-000000000001"
-    topic_id: str
+    topic_id: str = "g6_math_add_01"
 
 class TurnReq(BaseModel):
     student_id: str
@@ -23,15 +23,21 @@ class TurnReq(BaseModel):
 
 @app.post("/start")
 def start(req: StartReq):
-    resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
-        student_id=req.student_id,
-        topic_id=req.topic_id
-    ))
-    return {
-        "session_id": resp.session_id,
-        "state": int(resp.state),
-        "tutor_text": resp.tutor_text
-    }
+    print(f"DEBUG: /start called with student_id={req.student_id}, topic_id={req.topic_id}")
+    try:
+        resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
+            student_id=req.student_id,
+            topic_id=req.topic_id
+        ))
+        print(f"DEBUG: gRPC response received: {resp}")
+        return {
+            "session_id": resp.session_id,
+            "state": int(resp.state),
+            "tutor_text": resp.tutor_text
+        }
+    except Exception as e:
+        print(f"DEBUG: Error in /start: {e}")
+        raise
 
 @app.post("/turn")
 def turn(req: TurnReq):
