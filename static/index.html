@@ -14,10 +14,16 @@
 <body>
   <h2>IDNA Tutor MVP (Text)</h2>
 
+  <div style="margin: 8px 0;">
+    <label for="studentIdInput">Student ID:</label>
+    <input id="studentIdInput" type="text" value="s1" style="width: 320px;" />
+  </div>
+
   <div style="margin-bottom:10px;">
     <label for="topicSelect">Topic:</label>
     <select id="topicSelect" style="width: 400px; padding: 10px;"></select>
     <button onclick="start()">Start Session</button>
+    <button onclick="resume()">Resume Last Session</button>
   </div>
   <div class="meta" id="meta"></div>
   <div class="meta" id="progress"></div>
@@ -32,7 +38,11 @@
 <script>
 let sessionId = null;
 let topicId = null;
-let studentId = "00000000-0000-0000-0000-000000000001";
+
+function getStudentId() {
+  const el = document.getElementById("studentIdInput");
+  return (el?.value || "").trim() || "s1";
+}
 
 function add(role, text) {
   const log = document.getElementById("log");
@@ -59,6 +69,7 @@ loadTopics();
 
 async function updateProgress() {
   if (!topicId) return;
+  const studentId = getStudentId();
   const res = await fetch(`/api/progress?student_id=${studentId}&topic_id=${topicId}`);
   const data = await res.json();
   document.getElementById("progress").textContent = 
@@ -66,6 +77,7 @@ async function updateProgress() {
 }
 
 async function start() {
+  const studentId = getStudentId();
   const topic_id = document.getElementById("topicSelect").value;
   if (!topic_id) { alert("Select a topic"); return; }
   
@@ -96,8 +108,26 @@ async function start() {
   }
 }
 
+async function resume() {
+  const studentId = getStudentId();
+  const res = await fetch(`/api/resume?student_id=${encodeURIComponent(studentId)}`);
+  const data = await res.json();
+
+  if (data.status !== "ok") {
+    add("Tutor", `No previous session found for student ${studentId}.`);
+    return;
+  }
+
+  sessionId = data.session_id;
+  topicId = data.topic_id;
+  document.getElementById("meta").textContent = `session_id: ${data.session_id} | topic_id: ${data.topic_id}`;
+  add("Tutor", `Resumed session ${data.session_id} (topic ${data.topic_id}, state ${data.state}).`);
+  await updateProgress();
+}
+
 async function send() {
   if (!sessionId) { alert("Start session first"); return; }
+  const studentId = getStudentId();
   const msg = document.getElementById("msg").value.trim();
   if (!msg) return;
   document.getElementById("msg").value = "";
