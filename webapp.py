@@ -23,21 +23,15 @@ class TurnReq(BaseModel):
 
 @app.post("/start")
 def start(req: StartReq):
-    print(f"DEBUG: /start called with student_id={req.student_id}, topic_id={req.topic_id}")
-    try:
-        resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
-            student_id=req.student_id,
-            topic_id=req.topic_id
-        ))
-        print(f"DEBUG: gRPC response received: {resp}")
-        return {
-            "session_id": resp.session_id,
-            "state": int(resp.state),
-            "tutor_text": resp.tutor_text
-        }
-    except Exception as e:
-        print(f"DEBUG: Error in /start: {e}")
-        raise
+    resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
+        student_id=req.student_id,
+        topic_id=req.topic_id
+    ))
+    return {
+        "session_id": resp.session_id,
+        "state": int(resp.state),
+        "tutor_text": resp.tutor_text
+    }
 
 @app.post("/turn")
 def turn(req: TurnReq):

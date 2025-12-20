@@ -41,22 +41,26 @@ async function start() {
   const topicId = document.getElementById("topicId").value.trim();
   if (!topicId) { alert("Enter topic_id"); return; }
   
-  const r = await fetch("/start", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({student_id: studentId, topic_id: topicId})
-  });
-  
-  if (!r.ok) {
-    const errText = await r.text();
-    add("Error", `API error ${r.status}: ${errText.substring(0, 200)}`);
-    return;
+  try {
+    const r = await fetch("/start", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({student_id: studentId, topic_id: topicId})
+    });
+    
+    if (!r.ok) {
+      const errText = await r.text();
+      add("Error", `API error ${r.status}: ${errText.substring(0, 200)}`);
+      return;
+    }
+    
+    const data = await r.json();
+    sessionId = data.session_id;
+    document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topicId}`;
+    add("Tutor", data.tutor_text);
+  } catch (e) {
+    add("Error", `Failed to start session: ${e.message}`);
   }
-  
-  const data = await r.json();
-  sessionId = data.session_id;
-  document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topicId}`;
-  add("Tutor", data.tutor_text);
 }
 
 async function send() {

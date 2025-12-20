@@ -21,8 +21,19 @@ async def init_pool():
             max_size=5
         )
         
-        # Create attempts table if it doesn't exist
+        # Create/update tables if they don't exist
         async with _pool.acquire() as c:
+            # Update seen_questions table to add student_id and topic_id if they don't exist
+            await c.execute("""
+            ALTER TABLE seen_questions
+            ADD COLUMN IF NOT EXISTS student_id VARCHAR(36);
+            """)
+            await c.execute("""
+            ALTER TABLE seen_questions
+            ADD COLUMN IF NOT EXISTS topic_id VARCHAR(100);
+            """)
+            
+            # Create attempts table if it doesn't exist
             await c.execute("""
             CREATE TABLE IF NOT EXISTS attempts (
               id SERIAL PRIMARY KEY,
