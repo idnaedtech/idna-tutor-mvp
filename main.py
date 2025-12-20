@@ -96,52 +96,16 @@ def int_to_state(state_int: int) -> str:
 
 class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
     def StartSession(self, request, context):
-        session_id = str(uuid.uuid4())
+        student_id = request.student_id
+        topic_id = request.topic_id
         
-        # Get topic from request, or pick first available if not provided
-        topic_id = request.topic_id.strip() if request.topic_id else None
-        
-        if topic_id:
-            # Fetch specific topic by ID
-            topic = _run_async(get_topic(topic_id))
-        else:
-            # Pick a topic from DB (default: grade 6, math, english for MVP)
-            topic = _run_async(pick_topic(6, "math", "en"))
-        
-        if not topic:
-            return tutoring_pb2.StartSessionResponse(
-                session_id=session_id,
-                state=tutoring_pb2.EXPLAIN,
-                tutor_text="No content found. Please add concepts/questions in database."
-            )
-        
-        topic_id = topic["topic_id"]
-        
-        # Create session with topic_id and QUIZ state
-        _run_async(create_session(session_id, request.student_id, topic_id))
-        
-        # Pick first question
-        qrow = _run_async(pick_question_unseen(session_id, topic_id))
-        if not qrow:
-            qrow = _run_async(pick_question(topic_id))
-        
-        if not qrow:
-            return tutoring_pb2.StartSessionResponse(
-                session_id=session_id,
-                state=tutoring_pb2.EXPLAIN,
-                tutor_text="No questions found for this topic."
-            )
-        
-        # Update session with question
-        _run_async(update_session(
-            session_id,
-            current_question_id=str(qrow["question_id"])
-        ))
+        # Create session in DB (store student_id + topic_id, set state to QUIZ)
+        session_id = _run_async(create_session(student_id=student_id, topic_id=topic_id, state="QUIZ"))
         
         return tutoring_pb2.StartSessionResponse(
             session_id=session_id,
             state=tutoring_pb2.QUIZ,
-            tutor_text=f"Question: {qrow['prompt']}"
+            tutor_text="Session started. Ready to begin."
         )
 
     def Turn(self, request, context):

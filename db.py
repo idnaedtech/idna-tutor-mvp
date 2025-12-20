@@ -24,13 +24,16 @@ async def init_pool():
 def pool():
     return _pool
 
-async def create_session(session_id: str, student_id: str, topic_id: str = ""):
+async def create_session(student_id: str, topic_id: str = "", state: str = "QUIZ"):
+    import uuid
+    session_id = str(uuid.uuid4())
     q = """
     insert into sessions(session_id, student_id, topic_id, state, attempt_count, frustration_counter)
-    values($1,$2,$3,'QUIZ',0,0)
+    values($1,$2,$3,$4,0,0)
     """
     async with pool().acquire() as c:
-        await c.execute(q, session_id, student_id, topic_id)
+        await c.execute(q, session_id, student_id, topic_id, state)
+    return session_id
 
 async def get_session(session_id: str):
     q = "select * from sessions where session_id=$1"
