@@ -81,6 +81,8 @@ async function start() {
   const topic_id = document.getElementById("topicSelect").value;
   if (!topic_id) { alert("Select a topic"); return; }
   
+  console.log("START payload", { student_id: studentId, topic_id: topic_id });
+  
   try {
     const res = await fetch("/start", {
       method: "POST",
