@@ -92,6 +92,7 @@ async def api_progress(student_id: str, topic_id: str):
         correct = correct_result or 0
         
     pct = int((correct / total * 100)) if total > 0 else 0
+    print("PROGRESS", {"student_id": student_id, "topic_id": topic_id, "correct": correct, "total": total, "pct": pct})
     return {"correct": correct, "total": total, "pct": pct}
 
 @app.get("/api/resume")
