@@ -60,7 +60,7 @@ async function loadTopics() {
   topics.forEach(t => {
     const opt = document.createElement("option");
     opt.value = t.topic_id;
-    opt.textContent = t.topic_id;
+    opt.textContent = t.title || t.topic_id;
     sel.appendChild(opt);
   });
 }

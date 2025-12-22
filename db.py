@@ -186,9 +186,9 @@ async def insert_attempt(student_id: str, session_id: str, topic_id: str, questi
 
 async def get_topics():
     q = """
-    select distinct topic_id
-    from questions
-    order by topic_id
+    select topic_id, title
+    from concepts
+    order by grade, subject, title
     """
     async with pool().acquire() as c:
         rows = await c.fetch(q)
