@@ -53,10 +53,10 @@ async def init_pool():
             CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id);
             """)
 
-def pool():
+def pool() -> asyncpg.Pool | None:
     return _pool
 
-async def create_session(student_id: str, topic_id: str = "", state: str = "QUIZ", current_question_id: str = None):
+async def create_session(student_id: str, topic_id: str = "", state: str = "QUIZ", current_question_id: str | None = None):
     import uuid
     session_id = str(uuid.uuid4())
     q = """
