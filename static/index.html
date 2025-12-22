@@ -15,8 +15,8 @@
   <h2>IDNA Tutor MVP (Text)</h2>
 
   <div style="margin: 8px 0;">
-    <label for="studentIdInput">Student ID:</label>
-    <input id="studentIdInput" type="text" value="s1" style="width: 320px;" />
+    <label for="studentId">Student ID:</label>
+    <input id="studentId" type="text" value="s1" style="width: 320px;" />
   </div>
 
   <div style="margin-bottom:10px;">
@@ -40,7 +40,7 @@ let sessionId = null;
 let topicId = null;
 
 function getStudentId() {
-  const el = document.getElementById("studentIdInput");
+  const el = document.getElementById("studentId");
   return (el?.value || "").trim() || "s1";
 }
 
