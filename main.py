@@ -262,14 +262,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             
             if correct:
                 # Record attempt
-                print("INSERT ATTEMPT CALLED", {
-                    "session_id": request.session_id,
-                    "student_id": request.student_id,
-                    "topic_id": topic_id,
-                    "question_id": qid,
-                    "is_correct": correct
-                })
-                _run_async(insert_attempt(request.student_id, request.session_id, topic_id, qid, user_answer, True))
+                _run_async(insert_attempt(request.session_id, request.student_id, topic_id, qid, True))
                 
                 # Mark question as seen
                 _run_async(mark_seen(request.student_id, topic_id, request.session_id, qid))
@@ -314,14 +307,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 )
             else:
                 # Record attempt
-                print("INSERT ATTEMPT CALLED", {
-                    "session_id": request.session_id,
-                    "student_id": request.student_id,
-                    "topic_id": topic_id,
-                    "question_id": qid,
-                    "is_correct": correct
-                })
-                _run_async(insert_attempt(request.student_id, request.session_id, topic_id, qid, user_answer, False))
+                _run_async(insert_attempt(request.session_id, request.student_id, topic_id, qid, False))
                 
                 # Wrong answer: give hint
                 new_attempts = attempt_count + 1

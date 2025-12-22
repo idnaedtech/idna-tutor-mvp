@@ -52,6 +52,11 @@ async def init_pool():
             await c.execute("""
             CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id);
             """)
+            # Drop NOT NULL constraint on user_answer to allow NULL values
+            await c.execute("""
+            ALTER TABLE attempts
+            ALTER COLUMN user_answer DROP NOT NULL;
+            """)
 
 def pool() -> asyncpg.Pool | None:
     return _pool
@@ -175,14 +180,20 @@ async def get_next_question(student_id: str, topic_id: str):
     async with pool().acquire() as c:
         return await c.fetchrow(q, topic_id, student_id)
 
-async def insert_attempt(student_id: str, session_id: str, topic_id: str, question_id: str, user_answer: str, is_correct: bool):
-    """Record an answer attempt."""
+async def insert_attempt(session_id: str, student_id: str, topic_id: str, question_id: str, is_correct: bool):
     q = """
-    insert into attempts(student_id, session_id, topic_id, question_id, user_answer, is_correct, created_at)
-    values($1, $2, $3, $4, $5, $6, now())
+    insert into public.attempts (session_id, student_id, topic_id, question_id, is_correct)
+    values ($1, $2, $3, $4, $5)
+    returning id, created_at;
     """
-    async with pool().acquire() as c:
-        await c.execute(q, student_id, session_id, topic_id, question_id, user_answer, is_correct)
+    try:
+        async with pool().acquire() as c:
+            row = await c.fetchrow(q, session_id, student_id, topic_id, question_id, is_correct)
+        print("INSERT ATTEMPT OK", dict(row) if row else row)
+        return row
+    except Exception as e:
+        print("INSERT ATTEMPT FAILED", repr(e))
+        raise
 
 async def get_topics():
     q = """
