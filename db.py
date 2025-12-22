@@ -215,3 +215,14 @@ async def get_latest_session(student_id: str):
     """
     async with pool().acquire() as c:
         return await c.fetchrow(q, student_id)
+
+async def count_correct_questions(student_id: str, topic_id: str):
+    """Count distinct questions a student answered correctly for a topic."""
+    q = """
+    select count(distinct question_id)
+    from public.attempts
+    where student_id = $1 and topic_id = $2 and is_correct = true;
+    """
+    async with pool().acquire() as c:
+        count = await c.fetchval(q, student_id, topic_id)
+        return count or 0
