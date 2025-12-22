@@ -30,6 +30,7 @@ class TurnReq(BaseModel):
 
 @app.post("/start")
 def start(req: StartReq):
+    print("START received:", {"student_id": req.student_id, "topic_id": req.topic_id})
     resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
         student_id=req.student_id,
         topic_id=req.topic_id
