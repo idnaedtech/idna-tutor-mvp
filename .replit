@@ -33,7 +33,7 @@ packages = ["c-ares", "grpc", "openssl", "pkg-config", "postgresql", "zlib"]
 [userenv]
 
 [userenv.shared]
-DATABASE_URL = "psql -h db.edbstiagplztpjcslczq.supabase.co -p 5432 -d postgres -U postgres"
+DATABASE_URL = "postgresql://postgres:[hemant0276]@db.edbstiagplztpjcslczq.supabase.co:5432/postgres"
 
 [[ports]]
 localPort = 5000

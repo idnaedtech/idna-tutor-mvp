@@ -80,9 +80,9 @@ async def api_progress(student_id: str, topic_id: str):
         )
         total = total_result or 0
         
-        # Correct answers for this student in this topic
+        # Correct answers for this student in this topic (count distinct questions)
         correct_result = await c.fetchval(
-            "SELECT COUNT(*) FROM attempts WHERE student_id = $1 AND topic_id = $2 AND is_correct = true",
+            "SELECT COUNT(DISTINCT question_id) FROM attempts WHERE student_id = $1 AND topic_id = $2 AND is_correct = true",
             student_id,
             topic_id
         )
