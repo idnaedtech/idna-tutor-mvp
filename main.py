@@ -262,6 +262,13 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             
             if correct:
                 # Record attempt
+                print("INSERT ATTEMPT CALLED", {
+                    "session_id": request.session_id,
+                    "student_id": request.student_id,
+                    "topic_id": topic_id,
+                    "question_id": qid,
+                    "is_correct": correct
+                })
                 _run_async(insert_attempt(request.student_id, request.session_id, topic_id, qid, user_answer, True))
                 
                 # Mark question as seen
@@ -307,6 +314,13 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 )
             else:
                 # Record attempt
+                print("INSERT ATTEMPT CALLED", {
+                    "session_id": request.session_id,
+                    "student_id": request.student_id,
+                    "topic_id": topic_id,
+                    "question_id": qid,
+                    "is_correct": correct
+                })
                 _run_async(insert_attempt(request.student_id, request.session_id, topic_id, qid, user_answer, False))
                 
                 # Wrong answer: give hint
