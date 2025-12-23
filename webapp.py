@@ -80,6 +80,7 @@ async def get_next_question_or_complete(conn, session_id: str):
             """,
             session_id
         )
+        print("SESSION_MARKED_COMPLETED", session_id)
         return {
             "session_id": session_id,
             "topic_id": topic_id,
@@ -193,6 +194,7 @@ async def api_next(session_id: str):
     p = db.pool()
     async with p.acquire() as conn:
         result = await get_next_question_or_complete(conn, session_id)
+        print("NEXT_RESULT", result)
         return result
 
 # Serve static files (HTML, CSS, JS)

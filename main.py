@@ -142,6 +142,8 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             context.set_details("Session not found. StartSession first.")
             return tutoring_pb2.TurnResponse()
         
+        print("ANSWER_SESSION_STATUS", s["state"])
+        
         if s["state"] == "COMPLETED":
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
