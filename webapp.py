@@ -187,5 +187,13 @@ async def resume_session(student_id: str):
         "state": row["state"]
     }
 
+@app.get("/api/next")
+async def api_next(session_id: str):
+    """Get next question for session or mark as completed."""
+    p = db.pool()
+    async with p.acquire() as conn:
+        result = await get_next_question_or_complete(conn, session_id)
+        return result
+
 # Serve static files (HTML, CSS, JS)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
