@@ -135,13 +135,21 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         )
 
     def Turn(self, request, context):
+        # Guard: Check if session is already completed (prevent answer spam after completion)
         s = _run_async(get_session(request.session_id))
-        
         if not s:
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details("Session not found. StartSession first.")
             return tutoring_pb2.TurnResponse()
-
+        
+        if s["state"] == "COMPLETED":
+            return tutoring_pb2.TurnResponse(
+                session_id=request.session_id,
+                next_state=tutoring_pb2.FsmState.QUIZ,
+                tutor_text="Session already completed. No more answers accepted.",
+                intent="completed"
+            )
+        
         user_text = request.user_text or ""
         intent = classify_intent(user_text)
         
