@@ -123,7 +123,43 @@ def start(req: StartReq):
     }
 
 @app.post("/turn")
-def turn(req: TurnReq):
+async def turn(req: TurnReq):
+    p = db.pool()
+    async with p.acquire() as conn:
+        # Fetch session info to get topic_id
+        session = await conn.fetchrow(
+            "SELECT session_id, topic_id FROM sessions WHERE session_id=$1",
+            req.session_id
+        )
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        topic_id = session["topic_id"]
+        
+        # HARD GUARD: if already completed, don't accept answers
+        total = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE topic_id=$1", topic_id) or 0
+        correct = await conn.fetchval(
+            """
+            SELECT COUNT(DISTINCT question_id)
+            FROM attempts
+            WHERE student_id=$1 AND topic_id=$2 AND is_correct=true
+            """,
+            req.student_id, topic_id
+        ) or 0
+        
+        if total > 0 and correct >= total:
+            await conn.execute(
+                "UPDATE sessions SET status='COMPLETED', completed_at=NOW() WHERE session_id=$1",
+                req.session_id
+            )
+            return {
+                "session_id": req.session_id,
+                "topic_id": topic_id,
+                "state": "COMPLETED",
+                "question": None,
+                "message": "Topic already completed."
+            }
+    
     resp = STUB.Turn(tutoring_pb2.TurnRequest(
         student_id=req.student_id,
         session_id=req.session_id,
