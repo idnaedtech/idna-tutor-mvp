@@ -172,11 +172,12 @@ async function send() {
   const data = await r.json();
   
   const tutorText =
+    data.tutor_text ??
     data.tutor ??
     data.message ??
     (data.question && (data.question.prompt || data.question)) ??
     "";
-  add("Tutor", tutorText || "Topic completed.");
+  add("Tutor", tutorText || "Continue...");
 
   // show progress metadata if available
   if (data.question_id || data.topic_id) {
