@@ -153,6 +153,17 @@ async def start(req: StartReq):
         "tutor_text": resp.tutor_text
     }
 
+@app.post("/api/reset")
+async def reset_student_progress(student_id: str, topic_id: str):
+    """Clear all attempts for a student+topic (for testing)"""
+    p = db.pool()
+    async with p.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM attempts WHERE student_id=$1 AND topic_id=$2",
+            student_id, topic_id
+        )
+    return {"status": "ok", "message": f"Reset progress for {student_id} on {topic_id}"}
+
 @app.post("/turn")
 def turn(req: TurnReq):
     resp = STUB.Turn(tutoring_pb2.TurnRequest(
