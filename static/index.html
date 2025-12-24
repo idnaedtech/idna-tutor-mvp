@@ -101,9 +101,9 @@ async function start() {
     
     const data = await res.json();
     
-    // BLOCK RESTART: handle completed/blocked start response
-    if (data.blocked || data.state === "COMPLETED" || data.status === "COMPLETED") {
-      add("Tutor", data.tutor || data.message || "Topic already completed. Restart blocked.");
+    // Handle restart-blocked / completed responses from backend
+    if (data.state === "COMPLETED" || data.blocked === true) {
+      tutorBox.innerText = data.message || "Topic already completed. Restart blocked.";
       return;
     }
     
