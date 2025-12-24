@@ -195,77 +195,15 @@ document.getElementById("answer").addEventListener("keydown", (e) => {
   if (e.key === "Enter") send();
 });
 
-// ===== Voice Input (Browser Speech-to-Text) =====
+// ===== Voice Input Note (Web Speech API limitation in Replit iframe) =====
 const micBtn = document.getElementById("micBtn");
 const micStatus = document.getElementById("micStatus");
-const answerInput = document.getElementById("answer");
-const submitBtn = document.getElementById("submit");
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SpeechRecognition) {
-  console.warn("Speech Recognition not supported");
-  micBtn.disabled = true;
-  micStatus.textContent = "Voice not supported in this browser.";
-}
-
-let currentRecognition = null;
-let isListening = false;
-
-function createAndStartRecognition() {
-  // Create a NEW recognition instance each time
-  currentRecognition = new SpeechRecognition();
-  currentRecognition.lang = "en-US";
-  currentRecognition.interimResults = false;
-  currentRecognition.maxAlternatives = 1;
-  currentRecognition.continuous = false;
-
-  currentRecognition.onstart = () => {
-    console.log("Speech recognition started");
-    isListening = true;
-    micStatus.textContent = "Listening...";
-    micBtn.textContent = "⏹ Stop";
-  };
-
-  currentRecognition.onend = () => {
-    console.log("Speech recognition ended");
-    isListening = false;
-    micBtn.textContent = "🎤 Speak";
-    if (!micStatus.textContent.includes("error") && !micStatus.textContent.includes("Captured")) {
-      micStatus.textContent = "";
-    }
-  };
-
-  currentRecognition.onerror = (e) => {
-    console.error("Speech error:", e.error);
-    micStatus.textContent = `Voice error: ${e.error}`;
-  };
-
-  currentRecognition.onresult = (event) => {
-    console.log("Speech result received, results length:", event.results.length);
-    if (event.results && event.results.length > 0) {
-      const transcript = event.results[0][0].transcript;
-      console.log("Captured text:", transcript);
-      answerInput.value = transcript.trim();
-      console.log("Input field updated with:", answerInput.value);
-      micStatus.textContent = "✓ Captured";
-    }
-  };
-
-  // Start listening immediately
-  currentRecognition.start();
-}
-
-micBtn.addEventListener("click", () => {
-  if (!SpeechRecognition) return;
-  
-  if (isListening) {
-    console.log("Stopping recognition");
-    if (currentRecognition) currentRecognition.stop();
-  } else {
-    console.log("Creating new recognition and starting");
-    createAndStartRecognition();
-  }
-});
+// Replit's browser environment (iframe sandbox) blocks Web Speech API audio capture
+// The button is here as a placeholder for future mobile/standalone deployments
+micBtn.disabled = true;
+micStatus.textContent = "Voice input not available in Replit. Type your answers instead! 📝";
+micBtn.title = "Web Speech API audio capture is blocked in Replit's browser. Use typing instead.";
 </script>
 </body>
 </html>
