@@ -103,12 +103,8 @@ async function start() {
     
     // Handle restart-blocked / completed responses from backend
     if (data.state === "COMPLETED" || data.blocked === true) {
-      const tutorText =
-        data.tutor ??
-        data.message ??
-        data.tutor_text ??
-        "Topic already completed. Restart blocked.";
-      add("Tutor", tutorText);
+      const msg = String(data.tutor || data.message || data.tutor_text || "Topic already completed.");
+      add("Tutor", msg);
       return;
     }
     
@@ -116,14 +112,9 @@ async function start() {
     topicId = topic_id;
     document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topic_id}`;
     
-    // Safely extract tutor message - try all possible fields
-    const tutorText =
-      (data.tutor_text && data.tutor_text.trim()) ||
-      (data.message && data.message.trim()) ||
-      (data.tutor && data.tutor.trim()) ||
-      "Session started.";
-    
-    add("Tutor", tutorText);
+    // Safely extract tutor message
+    const msg = String(data.tutor_text || data.message || data.tutor || "Session started.");
+    add("Tutor", msg);
     await updateProgress();
   } catch (e) {
     add("Error", `Failed to start session: ${e.message}`);
