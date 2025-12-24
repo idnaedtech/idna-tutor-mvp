@@ -31,8 +31,8 @@
   <div id="log"></div>
 
   <div style="margin-top:10px;">
-    <input id="msg" placeholder="type: next / repeat / 4 / 10 / 15 ..." />
-    <button onclick="send()">Send</button>
+    <input id="answer" placeholder="type: next / repeat / 4 / 10 / 15 ..." />
+    <button id="submit" onclick="send()">Send</button>
   </div>
 
 <script>
@@ -109,12 +109,16 @@ async function start() {
       const msg = String(data.tutor || data.message || data.tutor_text || "Topic already completed.");
       add("Tutor", msg);
       document.getElementById("meta").textContent = "session_id: null | question_id: -";
+      document.getElementById("answer").disabled = true;
+      document.getElementById("submit").disabled = true;
       return;
     }
     
     sessionId = data.session_id;
     topicId = topic_id;
     document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topic_id}`;
+    document.getElementById("answer").disabled = false;
+    document.getElementById("submit").disabled = false;
     
     // Safely extract tutor message
     const msg = String(data.tutor_text || data.message || data.tutor || "Session started.");
@@ -139,6 +143,8 @@ async function resume() {
   sessionId = data.session_id;
   topicId = data.topic_id;
   document.getElementById("meta").textContent = `session_id: ${data.session_id} | topic_id: ${data.topic_id}`;
+  document.getElementById("answer").disabled = false;
+  document.getElementById("submit").disabled = false;
   add("Tutor", `Resumed session ${data.session_id} (topic ${data.topic_id}, state ${data.state}).`);
   await updateProgress(studentId, data.topic_id);
 }
@@ -146,9 +152,9 @@ async function resume() {
 async function send() {
   if (!sessionId) { alert("Start session first"); return; }
   const studentId = getStudentId();
-  const msg = document.getElementById("msg").value.trim();
+  const msg = document.getElementById("answer").value.trim();
   if (!msg) return;
-  document.getElementById("msg").value = "";
+  document.getElementById("answer").value = "";
   add("You", msg);
 
   const r = await fetch("/turn", {
@@ -182,7 +188,7 @@ async function send() {
   await updateProgress(studentId, topicId);
 }
 
-document.getElementById("msg").addEventListener("keydown", (e) => {
+document.getElementById("answer").addEventListener("keydown", (e) => {
   if (e.key === "Enter") send();
 });
 </script>
