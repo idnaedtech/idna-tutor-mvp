@@ -61,7 +61,7 @@ async def init_pool():
 def pool() -> asyncpg.Pool | None:
     return _pool
 
-async def create_session(student_id: str, topic_id: str = "", state: str = "QUIZ", current_question_id: str | None = None):
+async def create_session(student_id: str, topic_id: str = "", state: str = "ACTIVE", current_question_id: str | None = None):
     import uuid
     session_id = str(uuid.uuid4())
     q = """

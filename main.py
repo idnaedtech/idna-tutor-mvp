@@ -124,7 +124,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         session_id = _run_async(create_session(
             student_id=student_id,
             topic_id=topic_id,
-            state="QUIZ",
+            state="ACTIVE",
             current_question_id=str(qrow["question_id"])
         ))
 
@@ -199,7 +199,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     qrow = _run_async(pick_question(topic_id))
                 _run_async(update_session(
                     request.session_id,
-                    state="QUIZ",
+                    state="ACTIVE",
                     attempt_count=0,
                     current_question_id=str(qrow["question_id"])
                 ))
@@ -298,7 +298,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 # Update session with next question
                 _run_async(update_session(
                     request.session_id,
-                    state="QUIZ",
+                    state="ACTIVE",
                     current_question_id=str(next_q["question_id"]),
                     attempt_count=0,
                     frustration_counter=frustration
@@ -356,7 +356,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     new_q = _run_async(pick_question(topic_id))
                 _run_async(update_session(
                     request.session_id,
-                    state="QUIZ",
+                    state="ACTIVE",
                     attempt_count=0,
                     frustration_counter=0,
                     current_question_id=str(new_q["question_id"])
@@ -411,7 +411,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
         # --- HINT -> QUIZ again ---
         if state == tutoring_pb2.FsmState.HINT:
-            _run_async(update_session(request.session_id, state="QUIZ"))
+            _run_async(update_session(request.session_id, state="ACTIVE"))
             qid = s["current_question_id"]
             q = _run_async(get_question(qid))
             topic_id = s["topic_id"]
