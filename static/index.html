@@ -67,13 +67,14 @@ async function loadTopics() {
 
 loadTopics();
 
-async function updateProgress() {
-  if (!topicId) return;
-  const studentId = getStudentId();
-  const res = await fetch(`/api/progress?student_id=${studentId}&topic_id=${topicId}`);
-  const data = await res.json();
-  document.getElementById("progress").textContent = 
-    `Progress (${topicId}): ${data.correct} / ${data.total} (${data.pct}%)`;
+async function updateProgress(studentId, topicId) {
+  const r = await fetch(
+    `/api/progress?student_id=${studentId}&topic_id=${topicId}`
+  );
+  const p = await r.json();
+
+  document.getElementById("progress").innerText =
+    `Progress (${topicId}): ${p.correct} / ${p.total} (${p.pct}%)`;
 }
 
 async function start() {
@@ -118,7 +119,7 @@ async function start() {
     // Safely extract tutor message
     const msg = String(data.tutor_text || data.message || data.tutor || "Session started.");
     add("Tutor", msg);
-    await updateProgress();
+    await updateProgress(studentId, topic_id);
   } catch (e) {
     add("Error", `Failed to start session: ${e.message}`);
   }
@@ -139,7 +140,7 @@ async function resume() {
   topicId = data.topic_id;
   document.getElementById("meta").textContent = `session_id: ${data.session_id} | topic_id: ${data.topic_id}`;
   add("Tutor", `Resumed session ${data.session_id} (topic ${data.topic_id}, state ${data.state}).`);
-  await updateProgress();
+  await updateProgress(studentId, data.topic_id);
 }
 
 async function send() {
@@ -178,7 +179,7 @@ async function send() {
   }
   
   // Update progress
-  await updateProgress();
+  await updateProgress(studentId, topicId);
 }
 
 document.getElementById("msg").addEventListener("keydown", (e) => {
