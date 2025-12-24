@@ -191,6 +191,7 @@ async def resume_session(student_id: str):
 @app.get("/api/next")
 async def api_next(session_id: str):
     """Get next question for session or mark as completed."""
+    print("NEXT_CALLED", session_id)
     p = db.pool()
     async with p.acquire() as conn:
         result = await get_next_question_or_complete(conn, session_id)
