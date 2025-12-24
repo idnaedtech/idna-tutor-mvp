@@ -76,6 +76,7 @@ def grade_answer(text: str) -> bool:
 
 def state_to_int(state_str: str) -> int:
     state_map = {
+        "ACTIVE": tutoring_pb2.FsmState.QUIZ,
         "EXPLAIN": tutoring_pb2.FsmState.EXPLAIN,
         "QUIZ": tutoring_pb2.FsmState.QUIZ,
         "EVALUATE": tutoring_pb2.FsmState.EVALUATE,
