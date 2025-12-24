@@ -100,9 +100,11 @@ async function start() {
     }
     
     const data = await res.json();
+    console.log("START response:", data);
     
     // BLOCK RESTART: handle completed/blocked start response
-    if (data.session_id === null || data.state === "COMPLETED" || data.status === "COMPLETED") {
+    if (!data.session_id || data.state === "COMPLETED" || data.message?.includes("Restart blocked")) {
+      console.log("Restart blocked - showing message");
       add("Tutor", data.message || "Topic already completed. Restart blocked.");
       return;
     }
