@@ -100,6 +100,13 @@ async function start() {
     }
     
     const data = await res.json();
+    
+    // BLOCK RESTART: handle completed/blocked start response
+    if (data.session_id === null || data.state === "COMPLETED" || data.status === "COMPLETED") {
+      add("Tutor", data.message || "Topic already completed. Restart blocked.");
+      return;
+    }
+    
     sessionId = data.session_id;
     topicId = topic_id;
     document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topic_id}`;
