@@ -250,7 +250,7 @@ async def check_and_mark_completion(session_id: str, topic_id: str):
         # If all questions answered correctly, mark session COMPLETED
         if correct >= total:
             await c.execute(
-                "UPDATE sessions SET status='COMPLETED', completed_at=NOW() WHERE session_id=$1",
+                "UPDATE sessions SET state='COMPLETED', completed_at=NOW() WHERE session_id=$1",
                 session_id
             )
             print("SESSION_MARKED_COMPLETED", session_id)

@@ -149,7 +149,7 @@ async def turn(req: TurnReq):
         
         if total > 0 and correct >= total:
             await conn.execute(
-                "UPDATE sessions SET status='COMPLETED', completed_at=NOW() WHERE session_id=$1",
+                "UPDATE sessions SET state='COMPLETED', completed_at=NOW() WHERE session_id=$1",
                 req.session_id
             )
             return {
