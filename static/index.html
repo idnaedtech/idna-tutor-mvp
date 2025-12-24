@@ -81,6 +81,8 @@ async function start() {
   const topic_id = document.getElementById("topicSelect").value;
   if (!topic_id) { alert("Select a topic"); return; }
   
+  document.getElementById("log").innerHTML = "";
+  
   console.log("START payload", { student_id: studentId, topic_id: topic_id });
   
   try {
@@ -123,6 +125,7 @@ async function start() {
 
 async function resume() {
   const studentId = getStudentId();
+  document.getElementById("log").innerHTML = "";
   const res = await fetch(`/api/resume?student_id=${encodeURIComponent(studentId)}`);
   const data = await res.json();
 
