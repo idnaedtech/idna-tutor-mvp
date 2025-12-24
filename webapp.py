@@ -134,10 +134,11 @@ async def start(req: StartReq):
         if total > 0 and correct >= total:
             print(f"RESTART BLOCKED: Topic completed ({correct}/{total})")
             return {
+                "blocked": True,
+                "state": "COMPLETED",
                 "session_id": None,
                 "topic_id": req.topic_id,
-                "state": "COMPLETED",
-                "question": None,
+                "tutor": "Topic already completed. Restart blocked.",
                 "message": "Topic already completed. Restart blocked."
             }
     
