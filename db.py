@@ -226,3 +226,34 @@ async def count_correct_questions(student_id: str, topic_id: str):
     async with pool().acquire() as c:
         count = await c.fetchval(q, student_id, topic_id)
         return count or 0
+
+async def check_and_mark_completion(session_id: str, topic_id: str):
+    """Check if all questions in topic are answered correctly. If so, mark session COMPLETED."""
+    p = pool()
+    async with p.acquire() as c:
+        # Count total questions in topic
+        total = await c.fetchval("SELECT COUNT(*) FROM questions WHERE topic_id=$1", topic_id)
+        if not total or total == 0:
+            return False
+        
+        # Count distinct correct answers for this session
+        correct = await c.fetchval(
+            """
+            SELECT COUNT(DISTINCT question_id)
+            FROM attempts
+            WHERE session_id=$1 AND topic_id=$2 AND is_correct=true
+            """,
+            session_id, topic_id
+        )
+        correct = correct or 0
+        
+        # If all questions answered correctly, mark session COMPLETED
+        if correct >= total:
+            await c.execute(
+                "UPDATE sessions SET status='COMPLETED', completed_at=NOW() WHERE session_id=$1",
+                session_id
+            )
+            print("SESSION_MARKED_COMPLETED", session_id)
+            return True
+        
+        return False

@@ -8,7 +8,7 @@ from queue import Queue
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, mark_question_seen, get_topic, get_next_question, mark_seen, insert_attempt
+from db import init_pool, create_session, get_session, update_session, pick_topic, pick_question, get_question, mark_question_seen, get_topic, get_next_question, mark_seen, insert_attempt, check_and_mark_completion
 
 # Global async runner
 _async_queue = Queue()
@@ -274,6 +274,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 # Record attempt
                 _run_async(insert_attempt(request.session_id, request.student_id, topic_id, qid, True))
                 
+                # Check if topic is now complete
+                _run_async(check_and_mark_completion(request.session_id, topic_id))
+                
                 # Mark question as seen
                 _run_async(mark_seen(request.student_id, topic_id, request.session_id, qid))
                 
@@ -318,6 +321,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             else:
                 # Record attempt
                 _run_async(insert_attempt(request.session_id, request.student_id, topic_id, qid, False))
+                
+                # Check if topic is now complete (even with wrong answer, might have answered all questions)
+                _run_async(check_and_mark_completion(request.session_id, topic_id))
                 
                 # Wrong answer: give hint
                 new_attempts = attempt_count + 1
