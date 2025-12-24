@@ -194,6 +194,61 @@ async function send() {
 document.getElementById("answer").addEventListener("keydown", (e) => {
   if (e.key === "Enter") send();
 });
+
+// ===== Voice Input (Browser Speech-to-Text) =====
+const micBtn = document.getElementById("micBtn");
+const micStatus = document.getElementById("micStatus");
+const answerInput = document.getElementById("answer"); // change if your id differs
+const submitBtn = document.getElementById("submit");   // change if your id differs
+
+let recognition = null;
+let isListening = false;
+
+function setupSpeech() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    micBtn.disabled = true;
+    micStatus.textContent = "Voice not supported in this browser.";
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";        // change later for Hindi/Bengali
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    isListening = true;
+    micStatus.textContent = "Listening...";
+    micBtn.textContent = "⏹ Stop";
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    micStatus.textContent = "";
+    micBtn.textContent = "🎤 Speak";
+  };
+
+  recognition.onerror = (e) => {
+    micStatus.textContent = `Voice error: ${e.error}`;
+  };
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript.trim();
+    answerInput.value = text;
+
+    // Optional: auto-submit after speaking
+    // submitBtn.click();
+  };
+}
+
+setupSpeech();
+
+micBtn.addEventListener("click", () => {
+  if (!recognition) return;
+  if (isListening) recognition.stop();
+  else recognition.start();
+});
 </script>
 </body>
 </html>
