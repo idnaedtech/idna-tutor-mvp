@@ -107,6 +107,7 @@ async function start() {
     if (data.state === "COMPLETED" || data.blocked === true) {
       const msg = String(data.tutor || data.message || data.tutor_text || "Topic already completed.");
       add("Tutor", msg);
+      document.getElementById("meta").textContent = "session_id: null | question_id: -";
       return;
     }
     
