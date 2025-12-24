@@ -146,6 +146,7 @@ async def start(req: StartReq):
         student_id=req.student_id,
         topic_id=req.topic_id
     ))
+    print(f"NORMAL START: state={resp.state}, tutor_text={resp.tutor_text}")
     return {
         "session_id": resp.session_id,
         "state": int(resp.state),
