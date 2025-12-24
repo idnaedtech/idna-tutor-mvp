@@ -198,101 +198,72 @@ document.getElementById("answer").addEventListener("keydown", (e) => {
 // ===== Voice Input (Browser Speech-to-Text) =====
 const micBtn = document.getElementById("micBtn");
 const micStatus = document.getElementById("micStatus");
-const answerInput = document.getElementById("answer"); // change if your id differs
-const submitBtn = document.getElementById("submit");   // change if your id differs
+const answerInput = document.getElementById("answer");
+const submitBtn = document.getElementById("submit");
 
-let recognition = null;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognition) {
+  console.warn("Speech Recognition not supported");
+  micBtn.disabled = true;
+  micStatus.textContent = "Voice not supported in this browser.";
+}
+
+let currentRecognition = null;
 let isListening = false;
 
-function setupSpeech() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    console.warn("Speech Recognition not supported");
-    micBtn.disabled = true;
-    micStatus.textContent = "Voice not supported in this browser.";
-    return;
-  }
+function createAndStartRecognition() {
+  // Create a NEW recognition instance each time
+  currentRecognition = new SpeechRecognition();
+  currentRecognition.lang = "en-US";
+  currentRecognition.interimResults = false;
+  currentRecognition.maxAlternatives = 1;
+  currentRecognition.continuous = false;
 
-  recognition = new SpeechRecognition();
-  recognition.lang = "en-US";        // change later for Hindi/Bengali
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.continuous = false;
-
-  recognition.onstart = () => {
+  currentRecognition.onstart = () => {
     console.log("Speech recognition started");
     isListening = true;
     micStatus.textContent = "Listening...";
     micBtn.textContent = "⏹ Stop";
   };
 
-  recognition.onend = () => {
+  currentRecognition.onend = () => {
     console.log("Speech recognition ended");
     isListening = false;
     micBtn.textContent = "🎤 Speak";
-    // Only clear status if not already showing an error
-    if (!micStatus.textContent.includes("error")) {
+    if (!micStatus.textContent.includes("error") && !micStatus.textContent.includes("Captured")) {
       micStatus.textContent = "";
     }
   };
 
-  recognition.onerror = (e) => {
+  currentRecognition.onerror = (e) => {
     console.error("Speech error:", e.error);
     micStatus.textContent = `Voice error: ${e.error}`;
   };
 
-  recognition.onresult = (event) => {
-    console.log("Speech result event:", event);
+  currentRecognition.onresult = (event) => {
+    console.log("Speech result received, results length:", event.results.length);
     if (event.results && event.results.length > 0) {
       const transcript = event.results[0][0].transcript;
       console.log("Captured text:", transcript);
       answerInput.value = transcript.trim();
       console.log("Input field updated with:", answerInput.value);
       micStatus.textContent = "✓ Captured";
-    } else {
-      console.warn("No results in event");
-      micStatus.textContent = "No audio captured";
     }
-
-    // Optional: auto-submit after speaking
-    // submitBtn.click();
   };
 
-  // Handle case where recognition ends without results
-  let recognitionAttempted = false;
-  const originalStart = recognition.start.bind(recognition);
-  recognition.start = function() {
-    recognitionAttempted = true;
-    originalStart();
-  };
-
-  // Check if no results were captured after recognition ends
-  const originalOnEnd = recognition.onend;
-  recognition.onend = function() {
-    if (recognitionAttempted && !answerInput.value) {
-      console.warn("Recognition ended but no text captured - might be permission issue or Replit iframe limitation");
-      if (!micStatus.textContent) {
-        micStatus.textContent = "No speech detected or mic not available";
-      }
-    }
-    originalOnEnd.call(this);
-  };
+  // Start listening immediately
+  currentRecognition.start();
 }
 
-setupSpeech();
-
 micBtn.addEventListener("click", () => {
-  console.log("Mic button clicked. isListening:", isListening, "recognition:", recognition);
-  if (!recognition) {
-    console.error("Speech recognition not initialized");
-    return;
-  }
+  if (!SpeechRecognition) return;
+  
   if (isListening) {
     console.log("Stopping recognition");
-    recognition.stop();
+    if (currentRecognition) currentRecognition.stop();
   } else {
-    console.log("Starting recognition");
-    recognition.start();
+    console.log("Creating new recognition and starting");
+    createAndStartRecognition();
   }
 });
 </script>
