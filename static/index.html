@@ -207,35 +207,47 @@ let isListening = false;
 function setupSpeech() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
+    console.warn("Speech Recognition not supported");
     micBtn.disabled = true;
     micStatus.textContent = "Voice not supported in this browser.";
     return;
   }
 
   recognition = new SpeechRecognition();
-  recognition.lang = "en-IN";        // change later for Hindi/Bengali
+  recognition.lang = "en-US";        // change later for Hindi/Bengali
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
+  recognition.continuous = false;
 
   recognition.onstart = () => {
+    console.log("Speech recognition started");
     isListening = true;
     micStatus.textContent = "Listening...";
     micBtn.textContent = "⏹ Stop";
   };
 
   recognition.onend = () => {
+    console.log("Speech recognition ended");
     isListening = false;
     micStatus.textContent = "";
     micBtn.textContent = "🎤 Speak";
   };
 
   recognition.onerror = (e) => {
+    console.error("Speech error:", e.error);
     micStatus.textContent = `Voice error: ${e.error}`;
   };
 
   recognition.onresult = (event) => {
-    const text = event.results[0][0].transcript.trim();
-    answerInput.value = text;
+    console.log("Speech result event:", event);
+    if (event.results && event.results.length > 0) {
+      const transcript = event.results[0][0].transcript;
+      console.log("Captured text:", transcript);
+      answerInput.value = transcript.trim();
+      console.log("Input field updated with:", answerInput.value);
+    } else {
+      console.warn("No results in event");
+    }
 
     // Optional: auto-submit after speaking
     // submitBtn.click();
@@ -245,9 +257,18 @@ function setupSpeech() {
 setupSpeech();
 
 micBtn.addEventListener("click", () => {
-  if (!recognition) return;
-  if (isListening) recognition.stop();
-  else recognition.start();
+  console.log("Mic button clicked. isListening:", isListening, "recognition:", recognition);
+  if (!recognition) {
+    console.error("Speech recognition not initialized");
+    return;
+  }
+  if (isListening) {
+    console.log("Stopping recognition");
+    recognition.stop();
+  } else {
+    console.log("Starting recognition");
+    recognition.start();
+  }
 });
 </script>
 </body>
