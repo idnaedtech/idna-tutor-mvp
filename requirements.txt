@@ -4,5 +4,4 @@ grpcio
 grpcio-tools
 protobuf
 asyncpg
-fastapi
 pydantic
