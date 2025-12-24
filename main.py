@@ -135,6 +135,8 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         )
 
     def Turn(self, request, context):
+        print("TURN HIT", time.time(), "BODY=", {"student_id": request.student_id, "session_id": request.session_id, "user_text": request.user_text})
+        
         # Guard: Check if session is already completed (prevent answer spam after completion)
         s = _run_async(get_session(request.session_id))
         if not s:
@@ -142,7 +144,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             context.set_details("Session not found. StartSession first.")
             return tutoring_pb2.TurnResponse()
         
-        print("ANSWER_SESSION_STATUS", s["status"])
+        print("TURN_SESSION_STATUS", s["status"])
         
         if s["status"] == "COMPLETED":
             return tutoring_pb2.TurnResponse(
