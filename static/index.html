@@ -110,7 +110,13 @@ async function start() {
     sessionId = data.session_id;
     topicId = topic_id;
     document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topic_id}`;
-    add("Tutor", data.tutor_text || data.tutor || "Session started.");
+    
+    const tutorText =
+      data.tutor ??
+      data.message ??
+      data.tutor_text ??
+      "Session started.";
+    add("Tutor", tutorText || "Topic completed.");
     await updateProgress();
   } catch (e) {
     add("Error", `Failed to start session: ${e.message}`);
@@ -155,7 +161,13 @@ async function send() {
   }
   
   const data = await r.json();
-  add("Tutor", data.tutor_text);
+  
+  const tutorText =
+    data.tutor ??
+    data.message ??
+    (data.question && (data.question.prompt || data.question)) ??
+    "";
+  add("Tutor", tutorText || "Topic completed.");
 
   // show progress metadata if available
   if (data.question_id || data.topic_id) {
