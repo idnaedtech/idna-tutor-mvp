@@ -229,8 +229,11 @@ function setupSpeech() {
   recognition.onend = () => {
     console.log("Speech recognition ended");
     isListening = false;
-    micStatus.textContent = "";
     micBtn.textContent = "🎤 Speak";
+    // Only clear status if not already showing an error
+    if (!micStatus.textContent.includes("error")) {
+      micStatus.textContent = "";
+    }
   };
 
   recognition.onerror = (e) => {
@@ -245,12 +248,34 @@ function setupSpeech() {
       console.log("Captured text:", transcript);
       answerInput.value = transcript.trim();
       console.log("Input field updated with:", answerInput.value);
+      micStatus.textContent = "✓ Captured";
     } else {
       console.warn("No results in event");
+      micStatus.textContent = "No audio captured";
     }
 
     // Optional: auto-submit after speaking
     // submitBtn.click();
+  };
+
+  // Handle case where recognition ends without results
+  let recognitionAttempted = false;
+  const originalStart = recognition.start.bind(recognition);
+  recognition.start = function() {
+    recognitionAttempted = true;
+    originalStart();
+  };
+
+  // Check if no results were captured after recognition ends
+  const originalOnEnd = recognition.onend;
+  recognition.onend = function() {
+    if (recognitionAttempted && !answerInput.value) {
+      console.warn("Recognition ended but no text captured - might be permission issue or Replit iframe limitation");
+      if (!micStatus.textContent) {
+        micStatus.textContent = "No speech detected or mic not available";
+      }
+    }
+    originalOnEnd.call(this);
   };
 }
 
