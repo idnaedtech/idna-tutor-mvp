@@ -103,7 +103,12 @@ async function start() {
     
     // Handle restart-blocked / completed responses from backend
     if (data.state === "COMPLETED" || data.blocked === true) {
-      add("Tutor", data.message || "Topic already completed. Restart blocked.");
+      const tutorText =
+        data.tutor ??
+        data.message ??
+        data.tutor_text ??
+        "Topic already completed. Restart blocked.";
+      add("Tutor", tutorText);
       return;
     }
     
