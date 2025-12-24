@@ -180,6 +180,25 @@ async def get_next_question(student_id: str, topic_id: str):
     async with pool().acquire() as c:
         return await c.fetchrow(q, topic_id, student_id)
 
+async def get_next_question_in_session(session_id: str, topic_id: str):
+    """Get next question for this session, excluding only questions answered correctly in THIS session."""
+    q = """
+    select question_id, prompt, answer_key, hint1, hint2, reveal_explain
+    from questions
+    where topic_id=$1
+      and not exists (
+        select 1
+        from attempts a
+        where a.session_id=$2
+          and a.question_id=questions.question_id
+          and a.is_correct=true
+      )
+    order by random()
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, topic_id, session_id)
+
 async def insert_attempt(session_id: str, student_id: str, topic_id: str, question_id: str, is_correct: bool):
     q = """
     insert into public.attempts (session_id, student_id, topic_id, question_id, is_correct)
