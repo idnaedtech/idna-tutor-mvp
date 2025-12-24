@@ -142,9 +142,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             context.set_details("Session not found. StartSession first.")
             return tutoring_pb2.TurnResponse()
         
-        print("ANSWER_SESSION_STATUS", s["state"])
+        print("ANSWER_SESSION_STATUS", s["status"])
         
-        if s["state"] == "COMPLETED":
+        if s["status"] == "COMPLETED":
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
                 next_state=tutoring_pb2.FsmState.QUIZ,
@@ -155,12 +155,12 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         user_text = request.user_text or ""
         intent = classify_intent(user_text)
         
-        state = state_to_int(s["state"])
+        state = state_to_int(s["status"])
         attempt_count = s["attempt_count"]
         frustration = s["frustration_counter"]
 
         # --- COMPLETED ---
-        if s["state"] == "COMPLETED":
+        if s["status"] == "COMPLETED":
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
                 next_state=tutoring_pb2.FsmState.QUIZ,
