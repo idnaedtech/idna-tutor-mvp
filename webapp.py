@@ -109,9 +109,36 @@ async def get_next_question_or_complete(conn, session_id: str):
     }
 
 @app.post("/start")
-def start(req: StartReq):
+async def start(req: StartReq):
     print("START HIT", time.time(), "BODY=", req.dict())
     print("START received:", {"student_id": req.student_id, "topic_id": req.topic_id})
+    
+    # BLOCK RESTART: if topic already completed for this student, don't create new session
+    p = db.pool()
+    async with p.acquire() as conn:
+        total = await conn.fetchval(
+            "SELECT COUNT(*) FROM questions WHERE topic_id=$1",
+            req.topic_id
+        ) or 0
+
+        correct = await conn.fetchval(
+            """
+            SELECT COUNT(DISTINCT question_id)
+            FROM attempts
+            WHERE student_id=$1 AND topic_id=$2 AND is_correct=true
+            """,
+            req.student_id, req.topic_id
+        ) or 0
+
+        if total > 0 and correct >= total:
+            return {
+                "session_id": None,
+                "topic_id": req.topic_id,
+                "state": "COMPLETED",
+                "question": None,
+                "message": "Topic already completed. Restart blocked."
+            }
+    
     resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
         student_id=req.student_id,
         topic_id=req.topic_id
