@@ -130,7 +130,9 @@ async def start(req: StartReq):
             req.student_id, req.topic_id
         ) or 0
 
+        print(f"RESTART CHECK: student_id={req.student_id}, topic_id={req.topic_id}, total={total}, correct={correct}")
         if total > 0 and correct >= total:
+            print(f"RESTART BLOCKED: Topic completed ({correct}/{total})")
             return {
                 "session_id": None,
                 "topic_id": req.topic_id,
