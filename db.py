@@ -276,3 +276,30 @@ async def check_and_mark_completion(session_id: str, topic_id: str):
             return True
         
         return False
+        import os
+import asyncpg
+from urllib.parse import urlparse
+
+_pool = None
+
+def parse_db_url():
+    url = urlparse(os.environ["DATABASE_URL"])
+    return {
+        "user": url.username,
+        "password": url.password,
+        "database": url.path[1:],
+        "host": url.hostname,
+        "port": url.port,
+        "ssl": "require",
+    }
+
+async def init_pool():
+    global _pool
+    if _pool is None:
+        cfg = parse_db_url()
+        _pool = await asyncpg.create_pool(**cfg)
+    return _pool
+
+def pool():
+    return _pool
+
