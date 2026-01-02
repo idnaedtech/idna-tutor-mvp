@@ -11,6 +11,14 @@ from db import get_topics, init_pool, pool, get_latest_session
 import db
 
 app = FastAPI()
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
 
 @app.on_event("startup")
 async def startup():
