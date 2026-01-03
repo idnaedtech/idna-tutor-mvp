@@ -62,7 +62,6 @@ def root():
 def healthz():
     return {"status": "ok"}
 
-
 @app.on_event("startup")
 async def startup():
     await init_pool()
@@ -215,8 +214,8 @@ async def reset_student_progress(student_id: str, topic_id: str):
         )
     return {"status": "ok", "message": f"Reset progress for {student_id} on {topic_id}"}
 
-@app.post("/turn")
-def turn(req: TurnReq):
+@app.post("/turn_grpc")
+def turn_grpc(req: TurnReq):
     resp = STUB.Turn(tutoring_pb2.TurnRequest(
         student_id=req.student_id,
         session_id=req.session_id,
