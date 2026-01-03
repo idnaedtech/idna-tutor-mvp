@@ -1,17 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import grpc
-import asyncio
 import time
+import uuid
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-from db import get_topics, init_pool, pool, get_latest_session
+from db import get_topics, init_pool, get_latest_session
 import db
 
+# Deploy-proof version tag (check logs / include in reply)
+TURN_ROUTER_VERSION = "v2"
+
 app = FastAPI()
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,7 +23,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-import uuid
+
+# -------------------------
+# Phase-1 /turn (echo router)
+# -------------------------
 
 class TurnIn(BaseModel):
     text: str
@@ -37,28 +43,43 @@ def turn(payload: TurnIn):
     text = (payload.text or "").strip()
     sid = payload.session_id or str(uuid.uuid4())
 
-t = text.lower()
-print("TURN_ROUTER_VERSION=v2")  # deploy-proof
+    t = text.lower().strip()
+    print(f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} text={t!r}")
 
-if ("?" in t) or any(w in t.split() for w in ["what", "why", "how", "when", "where"]):
-    intent = "question"
-    reply = f"Got it. You asked: {text}"
-elif any(w in t for w in ["hi", "hello", "hey"]):
-    intent = "greet"
-    reply = "Hi. Say a question like: 'Explain fractions'."
-elif text:
-    intent = "unknown"
-    reply = f"Say it as a question. You said: {text}"
-else:
-    intent = "empty"
-    reply = "Say something."
+    # Tokenize
+    tokens = [tok for tok in t.replace("?", " ? ").split() if tok]
 
+    greet_words = {"hi", "hello", "hey"}
+    wh_words = {"what", "why", "how", "when", "where"}
+
+    # Treat "hello what is 2+2" as a question (not greet)
+    is_question = False
+    if "?" in t:
+        is_question = True
+    elif tokens:
+        if tokens[0] in wh_words:
+            is_question = True
+        elif tokens[0] in greet_words and len(tokens) > 1 and tokens[1] in wh_words:
+            is_question = True
+
+    if not text:
+        intent = "empty"
+        reply = "Say something."
+    elif is_question:
+        intent = "question"
+        reply = f"Got it. You asked: {text} [{TURN_ROUTER_VERSION}]"
+    elif any(w in tokens for w in greet_words):
+        intent = "greet"
+        reply = f"Hi. Say a question like: 'Explain fractions'. [{TURN_ROUTER_VERSION}]"
+    else:
+        intent = "unknown"
+        reply = f"Say it as a question. You said: {text} [{TURN_ROUTER_VERSION}]"
 
     return {"ok": True, "session_id": sid, "intent": intent, "reply": reply}
 
-@app.get("/")
-def root():
-    return {"status": "ok"}
+# -------------------------
+# Health
+# -------------------------
 
 @app.get("/healthz")
 def healthz():
@@ -68,7 +89,10 @@ def healthz():
 async def startup():
     await init_pool()
 
-# gRPC channel to your existing server
+# -------------------------
+# gRPC tutoring endpoints
+# -------------------------
+
 CHANNEL = grpc.insecure_channel("localhost:50051")
 STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
@@ -82,7 +106,6 @@ class TurnReq(BaseModel):
     user_text: str
 
 async def get_next_question_or_complete(conn, session_id: str):
-    # 1) Load session
     session = await conn.fetchrow(
         "SELECT session_id, topic_id, status FROM sessions WHERE session_id=$1",
         session_id
@@ -90,7 +113,6 @@ async def get_next_question_or_complete(conn, session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # 2) Guard: already completed => never ask new question
     if session["status"] == "COMPLETED":
         return {
             "session_id": session_id,
@@ -102,7 +124,6 @@ async def get_next_question_or_complete(conn, session_id: str):
 
     topic_id = session["topic_id"]
 
-    # 3) Pick next unanswered question (unanswered = no correct attempt in this session)
     q = await conn.fetchrow(
         """
         SELECT q.question_id, q.prompt, q.qtype, q.answer_key, q.hint1, q.hint2, q.reveal_explain
@@ -120,7 +141,6 @@ async def get_next_question_or_complete(conn, session_id: str):
         topic_id, session_id
     )
 
-    # 4) If none left => mark COMPLETED in DB and return terminal response
     if not q:
         await conn.execute(
             """
@@ -141,7 +161,6 @@ async def get_next_question_or_complete(conn, session_id: str):
             "message": "No more questions left in this topic."
         }
 
-    # 5) Save current question in session
     await conn.execute(
         "UPDATE sessions SET current_question_id=$1 WHERE session_id=$2",
         q["question_id"], session_id
@@ -164,8 +183,7 @@ async def get_next_question_or_complete(conn, session_id: str):
 async def start(req: StartReq):
     print("START HIT", time.time(), "BODY=", req.dict())
     print("START received:", {"student_id": req.student_id, "topic_id": req.topic_id})
-    
-    # BLOCK RESTART: if topic already completed for this student, don't create new session
+
     p = db.pool()
     async with p.acquire() as conn:
         total = await conn.fetchval(
@@ -193,7 +211,7 @@ async def start(req: StartReq):
                 "tutor": "Topic already completed. Restart blocked.",
                 "message": "Topic already completed. Restart blocked."
             }
-    
+
     resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
         student_id=req.student_id,
         topic_id=req.topic_id
@@ -207,7 +225,6 @@ async def start(req: StartReq):
 
 @app.post("/api/reset")
 async def reset_student_progress(student_id: str, topic_id: str):
-    """Clear all attempts for a student+topic (for testing)"""
     p = db.pool()
     async with p.acquire() as conn:
         await conn.execute(
@@ -218,13 +235,13 @@ async def reset_student_progress(student_id: str, topic_id: str):
 
 @app.post("/turn_grpc")
 def turn_grpc(req: TurnReq):
-raise RuntimeError("TURN_ROUTER_HIT_V2")
     resp = STUB.Turn(tutoring_pb2.TurnRequest(
         student_id=req.student_id,
         session_id=req.session_id,
         user_text=req.user_text
     ))
-    out = {
+
+    return {
         "session_id": resp.session_id,
         "state": int(resp.next_state),
         "tutor_text": resp.tutor_text,
@@ -235,33 +252,26 @@ raise RuntimeError("TURN_ROUTER_HIT_V2")
         "question_id": getattr(resp, "question_id", None),
         "concept_title": getattr(resp, "concept_title", None),
     }
-    return out
 
 @app.get("/api/topics")
 async def api_topics():
-    topics = await get_topics()
-    return topics
+    return await get_topics()
 
 @app.get("/api/progress")
 async def api_progress(student_id: str, topic_id: str):
-    """Get progress for a student on a topic: correct, total, percentage."""
     p = db.pool()
     async with p.acquire() as c:
-        # Total questions in topic
-        total_result = await c.fetchval(
+        total = await c.fetchval(
             "SELECT COUNT(*) FROM questions WHERE topic_id = $1",
             topic_id
-        )
-        total = total_result or 0
-        
-        # Correct answers for this student in this topic (count distinct questions)
-        correct_result = await c.fetchval(
+        ) or 0
+
+        correct = await c.fetchval(
             "SELECT COUNT(DISTINCT question_id) FROM attempts WHERE student_id = $1 AND topic_id = $2 AND is_correct = true",
             student_id,
             topic_id
-        )
-        correct = correct_result or 0
-        
+        ) or 0
+
     pct = int((correct / total * 100)) if total > 0 else 0
     print("PROGRESS", {"student_id": student_id, "topic_id": topic_id, "correct": correct, "total": total, "pct": pct})
     return {"correct": correct, "total": total, "pct": pct}
@@ -269,7 +279,6 @@ async def api_progress(student_id: str, topic_id: str):
 @app.get("/api/resume")
 async def resume_session(student_id: str):
     row = await get_latest_session(student_id)
-
     if not row:
         return {"status": "none"}
 
@@ -282,7 +291,6 @@ async def resume_session(student_id: str):
 
 @app.get("/api/next")
 async def api_next(session_id: str):
-    """Get next question for session or mark as completed."""
     print("NEXT HIT", time.time(), "session_id=", session_id)
     p = db.pool()
     async with p.acquire() as conn:
@@ -290,5 +298,5 @@ async def api_next(session_id: str):
         print("NEXT_RESULT", result)
         return result
 
-# Serve static files (HTML, CSS, JS)
+# Static (keep last)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
