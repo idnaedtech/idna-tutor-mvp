@@ -20,17 +20,40 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+import uuid
+from pydantic import BaseModel
+
 class TurnIn(BaseModel):
     text: str
+    session_id: str | None = None
 
 class TurnOut(BaseModel):
     ok: bool
-    echo: str
+    session_id: str
+    intent: str
+    reply: str
 
 @app.post("/turn", response_model=TurnOut)
 def turn(payload: TurnIn):
-    t = (payload.text or "").strip()
-    return {"ok": True, "echo": t}
+    text = (payload.text or "").strip()
+    sid = payload.session_id or str(uuid.uuid4())
+
+    t = text.lower()
+    if any(w in t for w in ["hi", "hello", "hey"]):
+        intent = "greet"
+        reply = "Hi. Say a question like: 'Explain fractions'."
+    elif t.endswith("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
+        intent = "question"
+        reply = f"Got it. You asked: {text}"
+    elif text:
+        intent = "unknown"
+        reply = f"Say it as a question. You said: {text}"
+    else:
+        intent = "empty"
+        reply = "Say something."
+
+    return {"ok": True, "session_id": sid, "intent": intent, "reply": reply}
+
 
 @app.get("/")
 def root():
