@@ -39,12 +39,12 @@ def turn(payload: TurnIn):
     sid = payload.session_id or str(uuid.uuid4())
 
     t = text.lower()
-    if any(w in t for w in ["hi", "hello", "hey"]):
-        intent = "greet"
-        reply = "Hi. Say a question like: 'Explain fractions'."
-    elif t.endswith("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
-        intent = "question"
-        reply = f"Got it. You asked: {text}"
+if t.endswith("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
+    intent = "question"
+    reply = f"Got it. You asked: {text}"
+elif any(w in t for w in ["hi", "hello", "hey"]):
+    intent = "greet"
+    reply = "Hi. Say a question like: 'Explain fractions'."
     elif text:
         intent = "unknown"
         reply = f"Say it as a question. You said: {text}"
