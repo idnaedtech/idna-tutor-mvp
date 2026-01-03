@@ -37,21 +37,20 @@ class TurnOut(BaseModel):
 def turn(payload: TurnIn):
     text = (payload.text or "").strip()
     sid = payload.session_id or str(uuid.uuid4())
+ t = text.lower()
 
-    t = text.lower()
 if t.endswith("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
     intent = "question"
     reply = f"Got it. You asked: {text}"
 elif any(w in t for w in ["hi", "hello", "hey"]):
     intent = "greet"
     reply = "Hi. Say a question like: 'Explain fractions'."
-    elif text:
-        intent = "unknown"
-        reply = f"Say it as a question. You said: {text}"
-    else:
-        intent = "empty"
-        reply = "Say something."
-
+elif text:
+    intent = "unknown"
+    reply = f"Say it as a question. You said: {text}"
+else:
+    intent = "empty"
+    reply = "Say something."
     return {"ok": True, "session_id": sid, "intent": intent, "reply": reply}
 
 
