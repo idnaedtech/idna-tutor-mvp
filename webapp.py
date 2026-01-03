@@ -12,7 +12,11 @@ from db import get_topics, init_pool, get_latest_session
 import db
 
 # Deploy-proof version tag (check logs / include in reply)
-TURN_ROUTER_VERSION = "v2"
+TURN_ROUTER_VERSION = "v2-2A"
+
+# Defaults (Phase 2A minimal diff)
+DEFAULT_STUDENT_ID = "00000000-0000-0000-0000-000000000001"
+DEFAULT_TOPIC_ID = "g6_math_add_01"
 
 app = FastAPI()
 
@@ -25,7 +29,7 @@ app.add_middleware(
 )
 
 # -------------------------
-# Phase-1 /turn (echo router)
+# Models
 # -------------------------
 
 class TurnIn(BaseModel):
@@ -38,47 +42,8 @@ class TurnOut(BaseModel):
     intent: str
     reply: str
 
-@app.post("/turn", response_model=TurnOut)
-def turn(payload: TurnIn):
-    text = (payload.text or "").strip()
-    sid = payload.session_id or str(uuid.uuid4())
-
-    t = text.lower().strip()
-    print(f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} text={t!r}")
-
-    # Tokenize
-    tokens = [tok for tok in t.replace("?", " ? ").split() if tok]
-
-    greet_words = {"hi", "hello", "hey"}
-    wh_words = {"what", "why", "how", "when", "where"}
-
-    # Treat "hello what is 2+2" as a question (not greet)
-    is_question = False
-    if "?" in t:
-        is_question = True
-    elif tokens:
-        if tokens[0] in wh_words:
-            is_question = True
-        elif tokens[0] in greet_words and len(tokens) > 1 and tokens[1] in wh_words:
-            is_question = True
-
-    if not text:
-        intent = "empty"
-        reply = "Say something."
-    elif is_question:
-        intent = "question"
-        reply = f"Got it. You asked: {text} [{TURN_ROUTER_VERSION}]"
-    elif any(w in tokens for w in greet_words):
-        intent = "greet"
-        reply = f"Hi. Say a question like: 'Explain fractions'. [{TURN_ROUTER_VERSION}]"
-    else:
-        intent = "unknown"
-        reply = f"Say it as a question. You said: {text} [{TURN_ROUTER_VERSION}]"
-
-    return {"ok": True, "session_id": sid, "intent": intent, "reply": reply}
-
 # -------------------------
-# Health
+# Health + startup
 # -------------------------
 
 @app.get("/healthz")
@@ -97,13 +62,122 @@ CHANNEL = grpc.insecure_channel("localhost:50051")
 STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
 class StartReq(BaseModel):
-    student_id: str = "00000000-0000-0000-0000-000000000001"
-    topic_id: str = "g6_math_add_01"
+    student_id: str = DEFAULT_STUDENT_ID
+    topic_id: str = DEFAULT_TOPIC_ID
 
 class TurnReq(BaseModel):
     student_id: str
     session_id: str
     user_text: str
+
+def _start_session_grpc(student_id: str, topic_id: str):
+    resp = STUB.StartSession(
+        tutoring_pb2.StartSessionRequest(student_id=student_id, topic_id=topic_id)
+    )
+    return resp
+
+def _turn_grpc(student_id: str, session_id: str, user_text: str):
+    resp = STUB.Turn(
+        tutoring_pb2.TurnRequest(
+            student_id=student_id, session_id=session_id, user_text=user_text
+        )
+    )
+    return resp
+
+# -------------------------
+# Phase 2A: /turn router
+#   - greet/unknown/empty => local reply (as before)
+#   - question => gRPC Turn (or StartSession if no session_id)
+# -------------------------
+
+def _classify_intent(text: str) -> tuple[str, bool]:
+    t = (text or "").lower().strip()
+    tokens = [tok for tok in t.replace("?", " ? ").split() if tok]
+
+    greet_words = {"hi", "hello", "hey"}
+    wh_words = {"what", "why", "how", "when", "where"}
+
+    is_question = False
+    if "?" in t:
+        is_question = True
+    elif tokens:
+        if tokens[0] in wh_words:
+            is_question = True
+        elif tokens[0] in greet_words and len(tokens) > 1 and tokens[1] in wh_words:
+            is_question = True
+
+    if not (text or "").strip():
+        return "empty", False
+    if is_question:
+        return "question", True
+    if any(w in tokens for w in greet_words):
+        return "greet", False
+    return "unknown", False
+
+@app.post("/turn", response_model=TurnOut)
+def turn(payload: TurnIn):
+    text = (payload.text or "").strip()
+    sid_in = (payload.session_id or "").strip() or None
+
+    intent, is_question = _classify_intent(text)
+    print(f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} intent={intent} sid_in={sid_in!r} text={text!r}")
+
+    # Non-question paths stay local (minimal diff)
+    if intent == "empty":
+        sid = sid_in or str(uuid.uuid4())
+        return {"ok": True, "session_id": sid, "intent": "empty", "reply": "Say something."}
+
+    if not is_question:
+        sid = sid_in or str(uuid.uuid4())
+        if intent == "greet":
+            return {
+                "ok": True,
+                "session_id": sid,
+                "intent": "greet",
+                "reply": f"Hi. Say a question like: 'Explain fractions'. [{TURN_ROUTER_VERSION}]",
+            }
+        # unknown
+        return {
+            "ok": True,
+            "session_id": sid,
+            "intent": "unknown",
+            "reply": f"Say it as a question. You said: {text} [{TURN_ROUTER_VERSION}]",
+        }
+
+    # Question path => gRPC
+    student_id = DEFAULT_STUDENT_ID
+
+    try:
+        # If no session_id yet, start a session and return the first tutor prompt
+        if not sid_in:
+            start_resp = _start_session_grpc(student_id=student_id, topic_id=DEFAULT_TOPIC_ID)
+            return {
+                "ok": True,
+                "session_id": start_resp.session_id,
+                "intent": "start",
+                "reply": start_resp.tutor_text,
+            }
+
+        # Otherwise, continue the session with Turn()
+        resp = _turn_grpc(student_id=student_id, session_id=sid_in, user_text=text)
+
+        # Use proto intent if present, else keep "question"
+        resp_intent = getattr(resp, "intent", None) or "question"
+
+        return {
+            "ok": True,
+            "session_id": resp.session_id,
+            "intent": str(resp_intent),
+            "reply": resp.tutor_text,
+        }
+
+    except Exception as e:
+        # Keep HTTP 200 shape? Better to surface as 500 with detail.
+        raise HTTPException(status_code=500, detail=f"gRPC error: {e}")
+
+# -------------------------
+# Existing REST endpoints
+# -------------------------
 
 async def get_next_question_or_complete(conn, session_id: str):
     session = await conn.fetchrow(
