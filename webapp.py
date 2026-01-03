@@ -218,6 +218,7 @@ async def reset_student_progress(student_id: str, topic_id: str):
 
 @app.post("/turn_grpc")
 def turn_grpc(req: TurnReq):
+raise RuntimeError("TURN_ROUTER_HIT_V2")
     resp = STUB.Turn(tutoring_pb2.TurnRequest(
         student_id=req.student_id,
         session_id=req.session_id,
