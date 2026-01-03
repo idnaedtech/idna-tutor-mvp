@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import grpc
 import time
 import uuid
-import os  # ✅ ADDED
+import os
 
 import tutoring_pb2
 import tutoring_pb2_grpc
@@ -59,15 +59,12 @@ async def startup():
 # gRPC tutoring endpoints
 # -------------------------
 
-# ✅ CHANGED (Phase 2A minimal diff)
-GRPC_TARGET = os.getenv("GRPC_TARGET")
-
-if not GRPC_TARGET:
-    raise RuntimeError("GRPC_TARGET env var not set")
+# Use Railway env var. Safe default keeps FastAPI from crashing if unset.
+GRPC_TARGET = os.getenv("GRPC_TARGET", "localhost:50051")
+print(f"GRPC_TARGET={GRPC_TARGET}")
 
 CHANNEL = grpc.insecure_channel(GRPC_TARGET)
 STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
-
 
 class StartReq(BaseModel):
     student_id: str = DEFAULT_STUDENT_ID
@@ -79,18 +76,18 @@ class TurnReq(BaseModel):
     user_text: str
 
 def _start_session_grpc(student_id: str, topic_id: str):
-    resp = STUB.StartSession(
+    return STUB.StartSession(
         tutoring_pb2.StartSessionRequest(student_id=student_id, topic_id=topic_id)
     )
-    return resp
 
 def _turn_grpc(student_id: str, session_id: str, user_text: str):
-    resp = STUB.Turn(
+    return STUB.Turn(
         tutoring_pb2.TurnRequest(
-            student_id=student_id, session_id=session_id, user_text=user_text
+            student_id=student_id,
+            session_id=session_id,
+            user_text=user_text,
         )
     )
-    return resp
 
 # -------------------------
 # Phase 2A: /turn router
@@ -128,7 +125,10 @@ def turn(payload: TurnIn):
     sid_in = (payload.session_id or "").strip() or None
 
     intent, is_question = _classify_intent(text)
-    print(f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} GRPC_TARGET={GRPC_TARGET} intent={intent} sid_in={sid_in!r} text={text!r}")
+    print(
+        f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} "
+        f"GRPC_TARGET={GRPC_TARGET} intent={intent} sid_in={sid_in!r} text={text!r}"
+    )
 
     # Non-question paths stay local (minimal diff)
     if intent == "empty":
@@ -144,7 +144,6 @@ def turn(payload: TurnIn):
                 "intent": "greet",
                 "reply": f"Hi. Say a question like: 'Explain fractions'. [{TURN_ROUTER_VERSION}]",
             }
-        # unknown
         return {
             "ok": True,
             "session_id": sid,
@@ -168,8 +167,6 @@ def turn(payload: TurnIn):
 
         # Otherwise, continue the session with Turn()
         resp = _turn_grpc(student_id=student_id, session_id=sid_in, user_text=text)
-
-        # Use proto intent if present, else keep "question"
         resp_intent = getattr(resp, "intent", None) or "question"
 
         return {
@@ -314,25 +311,30 @@ async def reset_student_progress(student_id: str, topic_id: str):
         )
     return {"status": "ok", "message": f"Reset progress for {student_id} on {topic_id}"}
 
+# ✅ FIXED /turn_grpc
 @app.post("/turn_grpc")
 def turn_grpc(req: TurnReq):
-    resp = STUB.Turn(tutoring_pb2.TutoringServiceStub(CHANNEL).TurnRequest(
-        student_id=req.student_id,
-        session_id=req.session_id,
-        user_text=req.user_text
-    ))
-
-    return {
-        "session_id": resp.session_id,
-        "state": int(resp.next_state),
-        "tutor_text": resp.tutor_text,
-        "attempt_count": getattr(resp, "attempt_count", None),
-        "frustration_counter": getattr(resp, "frustration_counter", None),
-        "intent": getattr(resp, "intent", None),
-        "topic_id": getattr(resp, "topic_id", None),
-        "question_id": getattr(resp, "question_id", None),
-        "concept_title": getattr(resp, "concept_title", None),
-    }
+    try:
+        resp = STUB.Turn(
+            tutoring_pb2.TurnRequest(
+                student_id=req.student_id,
+                session_id=req.session_id,
+                user_text=req.user_text
+            )
+        )
+        return {
+            "session_id": resp.session_id,
+            "state": int(resp.next_state),
+            "tutor_text": resp.tutor_text,
+            "attempt_count": getattr(resp, "attempt_count", None),
+            "frustration_counter": getattr(resp, "frustration_counter", None),
+            "intent": getattr(resp, "intent", None),
+            "topic_id": getattr(resp, "topic_id", None),
+            "question_id": getattr(resp, "question_id", None),
+            "concept_title": getattr(resp, "concept_title", None),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"gRPC error: {e}")
 
 @app.get("/api/topics")
 async def api_topics():
