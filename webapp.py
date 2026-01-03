@@ -39,7 +39,7 @@ def turn(payload: TurnIn):
 
     t = text.lower()
 
-    if t.endswith("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
+    if ("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
         intent = "question"
         reply = f"Got it. You asked: {text}"
     elif any(w in t for w in ["hi", "hello", "hey"]):
