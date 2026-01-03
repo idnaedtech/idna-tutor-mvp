@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import grpc
 import time
 import uuid
+import os  # ✅ ADDED
 
 import tutoring_pb2
 import tutoring_pb2_grpc
@@ -58,7 +59,9 @@ async def startup():
 # gRPC tutoring endpoints
 # -------------------------
 
-CHANNEL = grpc.insecure_channel("localhost:50051")
+# ✅ CHANGED (Phase 2A minimal diff)
+GRPC_TARGET = os.getenv("GRPC_TARGET", "grpc.railway.internal:50051")
+CHANNEL = grpc.insecure_channel(GRPC_TARGET)
 STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
 class StartReq(BaseModel):
@@ -120,7 +123,7 @@ def turn(payload: TurnIn):
     sid_in = (payload.session_id or "").strip() or None
 
     intent, is_question = _classify_intent(text)
-    print(f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} intent={intent} sid_in={sid_in!r} text={text!r}")
+    print(f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} GRPC_TARGET={GRPC_TARGET} intent={intent} sid_in={sid_in!r} text={text!r}")
 
     # Non-question paths stay local (minimal diff)
     if intent == "empty":
@@ -172,7 +175,6 @@ def turn(payload: TurnIn):
         }
 
     except Exception as e:
-        # Keep HTTP 200 shape? Better to surface as 500 with detail.
         raise HTTPException(status_code=500, detail=f"gRPC error: {e}")
 
 # -------------------------
@@ -309,7 +311,7 @@ async def reset_student_progress(student_id: str, topic_id: str):
 
 @app.post("/turn_grpc")
 def turn_grpc(req: TurnReq):
-    resp = STUB.Turn(tutoring_pb2.TurnRequest(
+    resp = STUB.Turn(tutoring_pb2.TutoringServiceStub(CHANNEL).TurnRequest(
         student_id=req.student_id,
         session_id=req.session_id,
         user_text=req.user_text
