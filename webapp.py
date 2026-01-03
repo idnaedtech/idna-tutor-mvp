@@ -60,9 +60,14 @@ async def startup():
 # -------------------------
 
 # ✅ CHANGED (Phase 2A minimal diff)
-GRPC_TARGET = os.getenv("GRPC_TARGET", "grpc.railway.internal:50051")
+GRPC_TARGET = os.getenv("GRPC_TARGET")
+
+if not GRPC_TARGET:
+    raise RuntimeError("GRPC_TARGET env var not set")
+
 CHANNEL = grpc.insecure_channel(GRPC_TARGET)
 STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
+
 
 class StartReq(BaseModel):
     student_id: str = DEFAULT_STUDENT_ID
