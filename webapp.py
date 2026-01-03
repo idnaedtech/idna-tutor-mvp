@@ -21,7 +21,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 import uuid
-from pydantic import BaseModel
 
 class TurnIn(BaseModel):
     text: str
@@ -37,22 +36,23 @@ class TurnOut(BaseModel):
 def turn(payload: TurnIn):
     text = (payload.text or "").strip()
     sid = payload.session_id or str(uuid.uuid4())
- t = text.lower()
 
-if t.endswith("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
-    intent = "question"
-    reply = f"Got it. You asked: {text}"
-elif any(w in t for w in ["hi", "hello", "hey"]):
-    intent = "greet"
-    reply = "Hi. Say a question like: 'Explain fractions'."
-elif text:
-    intent = "unknown"
-    reply = f"Say it as a question. You said: {text}"
-else:
-    intent = "empty"
-    reply = "Say something."
+    t = text.lower()
+
+    if t.endswith("?") or any(w in t.split()[:1] for w in ["what", "why", "how", "when", "where"]):
+        intent = "question"
+        reply = f"Got it. You asked: {text}"
+    elif any(w in t for w in ["hi", "hello", "hey"]):
+        intent = "greet"
+        reply = "Hi. Say a question like: 'Explain fractions'."
+    elif text:
+        intent = "unknown"
+        reply = f"Say it as a question. You said: {text}"
+    else:
+        intent = "empty"
+        reply = "Say something."
+
     return {"ok": True, "session_id": sid, "intent": intent, "reply": reply}
-
 
 @app.get("/")
 def root():
@@ -221,9 +221,6 @@ def turn_grpc(req: TurnReq):
         session_id=req.session_id,
         user_text=req.user_text
     ))
-
-    # These fields exist only if your proto added them.
-    # If not, they'll simply be absent and that's fine.
     out = {
         "session_id": resp.session_id,
         "state": int(resp.next_state),
