@@ -20,6 +20,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+class TurnIn(BaseModel):
+    text: str
+
+class TurnOut(BaseModel):
+    ok: bool
+    echo: str
+
+@app.post("/turn", response_model=TurnOut)
+def turn(payload: TurnIn):
+    t = (payload.text or "").strip()
+    return {"ok": True, "echo": t}
 
 @app.get("/")
 def root():
