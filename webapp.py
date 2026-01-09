@@ -6,12 +6,15 @@ import grpc
 import time
 import uuid
 import os
+import logging
+import traceback
+import grpc
 
 import tutoring_pb2
 import tutoring_pb2_grpc
 from db import get_topics, init_pool, get_latest_session
 import db
-
+logger = logging.getLogger("idna.turn_grpc")
 # Deploy-proof version tag (check logs / include in reply)
 TURN_ROUTER_VERSION = "v2-2A"
 
@@ -315,13 +318,15 @@ async def reset_student_progress(student_id: str, topic_id: str):
 @app.post("/turn_grpc")
 def turn_grpc(req: TurnReq):
     try:
-        resp = STUB.Turn(
-            tutoring_pb2.TurnRequest(
-                student_id=req.student_id,
-                session_id=req.session_id,
-                user_text=req.user_text
-            )
+        grpc_req = tutoring_pb2.TurnRequest(
+            student_id=req.student_id,
+            session_id=req.session_id,
+            user_text=req.user_text
         )
+
+        # IMPORTANT: add a timeout so you don't get silent hangs
+        resp = STUB.Turn(grpc_req, timeout=20)
+
         return {
             "session_id": resp.session_id,
             "state": int(resp.next_state),
@@ -333,9 +338,35 @@ def turn_grpc(req: TurnReq):
             "question_id": getattr(resp, "question_id", None),
             "concept_title": getattr(resp, "concept_title", None),
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"gRPC error: {e}")
 
+    except grpc.RpcError as e:
+        # This is the real error path for gRPC failures
+        logger.error("gRPC Turn() failed: code=%s details=%s", e.code(), e.details())
+
+        # Often contains extra hints; safe to attempt
+        try:
+            logger.error("gRPC debug_error_string=%s", e.debug_error_string())
+        except Exception:
+            pass
+
+        try:
+            logger.error("gRPC trailing_metadata=%s", e.trailing_metadata())
+        except Exception:
+            pass
+
+        logger.error("traceback:\n%s", traceback.format_exc())
+
+        # surface something useful to the client (optional)
+        raise HTTPException(
+            status_code=502,
+            detail={"grpc_code": str(e.code()), "grpc_details": e.details()}
+        )
+
+    except Exception:
+        logger.error("Non-gRPC exception in /turn_grpc")
+        logger.error("traceback:\n%s", traceback.format_exc())
+        raise
+   
 @app.get("/api/topics")
 async def api_topics():
     return await get_topics()
