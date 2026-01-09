@@ -1,8 +1,8 @@
 import uuid
+import os
 import grpc
 from concurrent import futures
 import asyncio
-import os
 import threading
 import time
 from queue import Queue
@@ -455,15 +455,14 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         )
 
 def serve():
-    _run_async(init_pool())
-    
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(TutoringServicer(), server)
-    import os  # add near the top of the file if not already present
-    port = os.environ.get("PORT", "50051")
-    server.add_insecure_port(f"0.0.0.0:{port}")
+
+    grpc_port = os.getenv("GRPC_PORT", "50051")
+    server.add_insecure_port(f"0.0.0.0:{grpc_port}")
+
     server.start()
-    print(f"[BUILD-20260109-A] gRPC FSM server running on 0.0.0.0:{port}")
+    print(f"gRPC FSM server running on 0.0.0.0:{grpc_port}")
     server.wait_for_termination()
 
    
