@@ -458,11 +458,11 @@ def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(TutoringServicer(), server)
 
-    port = os.getenv("PORT", "8080")  # Railway public port (usually 8080)
-    server.add_insecure_port(f"0.0.0.0:{port}")
+    grpc_port = os.getenv("GRPC_PORT", "50051")
+    server.add_insecure_port(f"0.0.0.0:{grpc_port}")
 
     server.start()
-    print(f"gRPC FSM server running on 0.0.0.0:{port}")
+    print(f"gRPC FSM server running on 0.0.0.0:{grpc_port}")
     server.wait_for_termination()
 
 
