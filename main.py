@@ -456,8 +456,10 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(TutoringServicer(), server)
-
+    tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(
+        TutoringServicer(), server
+    )
+    
     grpc_port = os.getenv("GRPC_PORT", "50051")
     server.add_insecure_port(f"0.0.0.0:{grpc_port}")
 
