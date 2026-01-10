@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import grpc
 import time
 import uuid
 import os
@@ -14,7 +13,14 @@ import tutoring_pb2
 import tutoring_pb2_grpc
 from db import get_topics, init_pool, get_latest_session
 import db
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s:%(lineno)d - %(message)s",
+)
+
 logger = logging.getLogger("idna.turn_grpc")
+
 # Deploy-proof version tag (check logs / include in reply)
 TURN_ROUTER_VERSION = "v2-2A"
 
@@ -64,9 +70,30 @@ async def startup():
 
 # Use Railway env var. Safe default keeps FastAPI from crashing if unset.
 GRPC_TARGET = os.getenv("GRPC_TARGET", "localhost:50051")
-print(f"GRPC_TARGET={GRPC_TARGET}")
+# Set to "1" when calling a public domain (recommended)
+GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")  # "1" or "0"
 
-CHANNEL = grpc.insecure_channel(GRPC_TARGET)
+logger.info("GRPC_TARGET=%s GRPC_USE_TLS=%s", GRPC_TARGET, GRPC_USE_TLS)
+
+_GRPC_OPTIONS = [
+    ("grpc.keepalive_time_ms", 30_000),
+    ("grpc.keepalive_timeout_ms", 10_000),
+    ("grpc.http2.max_pings_without_data", 0),
+    ("grpc.keepalive_permit_without_calls", 1),
+]
+
+def _make_channel(target: str) -> grpc.Channel:
+    # Auto TLS for public Railway domains unless explicitly disabled
+    auto_tls = (".up.railway.app" in target)
+    use_tls = (GRPC_USE_TLS == "1") or (auto_tls and GRPC_USE_TLS != "0")
+
+    if use_tls:
+        creds = grpc.ssl_channel_credentials()
+        return grpc.secure_channel(target, creds, options=_GRPC_OPTIONS)
+
+    return grpc.insecure_channel(target, options=_GRPC_OPTIONS)
+
+CHANNEL = _make_channel(GRPC_TARGET)
 STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
 class StartReq(BaseModel):
@@ -79,17 +106,21 @@ class TurnReq(BaseModel):
     user_text: str
 
 def _start_session_grpc(student_id: str, topic_id: str):
+    # timeout avoids silent hangs
     return STUB.StartSession(
-        tutoring_pb2.StartSessionRequest(student_id=student_id, topic_id=topic_id)
+        tutoring_pb2.StartSessionRequest(student_id=student_id, topic_id=topic_id),
+        timeout=20
     )
 
 def _turn_grpc(student_id: str, session_id: str, user_text: str):
+    # timeout avoids silent hangs
     return STUB.Turn(
         tutoring_pb2.TurnRequest(
             student_id=student_id,
             session_id=session_id,
             user_text=user_text,
-        )
+        ),
+        timeout=20
     )
 
 # -------------------------
@@ -128,9 +159,10 @@ def turn(payload: TurnIn):
     sid_in = (payload.session_id or "").strip() or None
 
     intent, is_question = _classify_intent(text)
-    print(
-        f"TURN_ROUTER_VERSION={TURN_ROUTER_VERSION} "
-        f"GRPC_TARGET={GRPC_TARGET} intent={intent} sid_in={sid_in!r} text={text!r}"
+
+    logger.info(
+        "TURN_ROUTER_VERSION=%s GRPC_TARGET=%s intent=%s sid_in=%r text=%r",
+        TURN_ROUTER_VERSION, GRPC_TARGET, intent, sid_in, text
     )
 
     # Non-question paths stay local (minimal diff)
@@ -179,8 +211,22 @@ def turn(payload: TurnIn):
             "reply": resp.tutor_text,
         }
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"gRPC error: {e}")
+    except grpc.RpcError as e:
+        logger.error("gRPC error in /turn: code=%s details=%s", e.code(), e.details())
+        try:
+            logger.error("gRPC debug_error_string=%s", e.debug_error_string())
+        except Exception:
+            pass
+        logger.error("traceback:\n%s", traceback.format_exc())
+        raise HTTPException(
+            status_code=502,
+            detail={"grpc_code": str(e.code()), "grpc_details": e.details()}
+        )
+
+    except Exception:
+        logger.error("Non-gRPC exception in /turn")
+        logger.error("traceback:\n%s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal error")
 
 # -------------------------
 # Existing REST endpoints
@@ -296,7 +342,8 @@ async def start(req: StartReq):
     resp = STUB.StartSession(tutoring_pb2.StartSessionRequest(
         student_id=req.student_id,
         topic_id=req.topic_id
-    ))
+    ), timeout=20)
+
     print(f"NORMAL START: state={resp.state}, tutor_text={resp.tutor_text}")
     return {
         "session_id": resp.session_id,
@@ -324,7 +371,6 @@ def turn_grpc(req: TurnReq):
             user_text=req.user_text
         )
 
-        # IMPORTANT: add a timeout so you don't get silent hangs
         resp = STUB.Turn(grpc_req, timeout=20)
 
         return {
@@ -340,10 +386,8 @@ def turn_grpc(req: TurnReq):
         }
 
     except grpc.RpcError as e:
-        # This is the real error path for gRPC failures
         logger.error("gRPC Turn() failed: code=%s details=%s", e.code(), e.details())
 
-        # Often contains extra hints; safe to attempt
         try:
             logger.error("gRPC debug_error_string=%s", e.debug_error_string())
         except Exception:
@@ -356,7 +400,6 @@ def turn_grpc(req: TurnReq):
 
         logger.error("traceback:\n%s", traceback.format_exc())
 
-        # surface something useful to the client (optional)
         raise HTTPException(
             status_code=502,
             detail={"grpc_code": str(e.code()), "grpc_details": e.details()}
@@ -366,7 +409,7 @@ def turn_grpc(req: TurnReq):
         logger.error("Non-gRPC exception in /turn_grpc")
         logger.error("traceback:\n%s", traceback.format_exc())
         raise
-   
+
 @app.get("/api/topics")
 async def api_topics():
     return await get_topics()
