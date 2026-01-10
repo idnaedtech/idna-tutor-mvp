@@ -68,10 +68,10 @@ async def startup():
 # gRPC tutoring endpoints
 # -------------------------
 
-# Use Railway env var. Safe default keeps FastAPI from crashing if unset.
+# Use Railway env var. Default targets the Railway private service name.
 GRPC_TARGET = os.getenv("GRPC_TARGET", "idna-grpc:50051")
-# Set to "1" when calling a public domain (recommended)
-GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")  # "1" or "0"
+# "1" to use TLS, "0" for insecure (typical for private network)
+GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")
 
 logger.info("GRPC_TARGET=%s GRPC_USE_TLS=%s", GRPC_TARGET, GRPC_USE_TLS)
 
