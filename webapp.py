@@ -69,7 +69,7 @@ async def startup():
 # -------------------------
 
 # Use Railway env var. Safe default keeps FastAPI from crashing if unset.
-GRPC_TARGET = os.getenv("GRPC_TARGET", "localhost:50051")
+GRPC_TARGET = os.getenv("GRPC_TARGET", "idna-grpc:50051")
 # Set to "1" when calling a public domain (recommended)
 GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")  # "1" or "0"
 
