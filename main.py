@@ -460,7 +460,7 @@ def serve():
         TutoringServicer(), server
     )
     
-    grpc_port = os.getenv("GRPC_PORT", "50051")
+    grpc_port = os.getenv("PORT") or os.getenv("GRPC_PORT", "50051")
     server.add_insecure_port(f"0.0.0.0:{grpc_port}")
 
     server.start()
