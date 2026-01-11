@@ -4,14 +4,14 @@ import grpc
 from concurrent import futures
 
 import tutoring_pb2_grpc
-from tutoring_service import TutoringService  # adjust if your servicer class is in a different file
+from tutoring_service import TutoringService
 
 
 def serve(port: int | None = None):
     port = port or int(os.getenv("GRPC_PORT", "50051"))
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    tutoring_pb2_grpc.add_TutoringServicer_to_server(TutoringService(), server)
+    tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(TutoringService(), server)
 
     bind_addr = f"0.0.0.0:{port}"
     server.add_insecure_port(bind_addr)
