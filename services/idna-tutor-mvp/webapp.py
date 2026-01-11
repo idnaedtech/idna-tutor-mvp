@@ -8,7 +8,6 @@ import os
 import logging
 import traceback
 import grpc
-
 import tutoring_pb2
 import tutoring_pb2_grpc
 from db import get_topics, init_pool, get_latest_session
