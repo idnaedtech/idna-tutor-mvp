@@ -12,6 +12,16 @@ import tutoring_pb2
 import tutoring_pb2_grpc
 from db import get_topics, init_pool, get_latest_session
 import db
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+if STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+else:
+    # optional: log once so you notice in Railway logs
+    print(f"[WARN] Static dir missing: {STATIC_DIR} (skipping app.mount)")
 
 logging.basicConfig(
     level=logging.INFO,
