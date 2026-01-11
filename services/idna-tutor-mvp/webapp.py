@@ -465,4 +465,9 @@ async def api_next(session_id: str):
         return result
 
 # Static (keep last)
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+else:
+    print(f"[WARN] Static dir missing: {STATIC_DIR} (skipping app.mount)")
