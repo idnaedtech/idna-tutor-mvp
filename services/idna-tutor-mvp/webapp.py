@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import os
-import time
 import uuid
+import time
 import logging
 import traceback
 from pathlib import Path
+from typing import Tuple, Optional
 
 import grpc
 from fastapi import FastAPI, HTTPException
@@ -13,77 +16,60 @@ from pydantic import BaseModel
 
 import tutoring_pb2
 import tutoring_pb2_grpc
-import db
+
 from db import get_topics, init_pool, get_latest_session
+import db
+
 
 # -------------------------
 # Logging
 # -------------------------
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s:%(lineno)d - %(message)s",
 )
-logger = logging.getLogger("idna.turn_grpc")
+logger = logging.getLogger("idna.webapp")
+
 
 # -------------------------
 # App
 # -------------------------
-
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten later
+    allow_origins=["*"],  # tighten later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -------------------------
-# Version + Defaults
-# -------------------------
-
 TURN_ROUTER_VERSION = "v2-2A"
+
 DEFAULT_STUDENT_ID = "00000000-0000-0000-0000-000000000001"
 DEFAULT_TOPIC_ID = "g6_math_add_01"
 
-# -------------------------
-# Static files
-#   - Serve files at /static/*
-#   - Serve / (index.html) if it exists
-# -------------------------
 
+# -------------------------
+# Static
+# -------------------------
+# Your static directory should be: services/idna-tutor-mvp/static/
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-INDEX_FILE = STATIC_DIR / "index.html"
 
 if STATIC_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    logger.warning("Static mounted at /static from %s", STATIC_DIR)
+    # Serve UI assets at /
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static-root")
+    logger.warning("Static mounted at / from %s", STATIC_DIR)
 else:
     logger.warning("Static dir missing: %s (skipping static mount)", STATIC_DIR)
-
-
-@app.get("/")
-def root():
-    """
-    If you have static/index.html, return it at /
-    Otherwise show a minimal message (so / doesn't 404).
-    """
-    if INDEX_FILE.is_file():
-        # Use StaticFiles-style serving via FileResponse
-        from fastapi.responses import FileResponse
-        return FileResponse(str(INDEX_FILE))
-    return {"status": "ok", "message": "API is running. Static index.html not found."}
 
 
 # -------------------------
 # Models
 # -------------------------
-
 class TurnIn(BaseModel):
     text: str
-    session_id: str | None = None
+    session_id: Optional[str] = None
 
 
 class TurnOut(BaseModel):
@@ -105,12 +91,11 @@ class TurnReq(BaseModel):
 
 
 # -------------------------
-# Health + startup
+# Startup / Health
 # -------------------------
-
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok"}
+    return {"status": "ok", "version": TURN_ROUTER_VERSION}
 
 
 @app.on_event("startup")
@@ -119,13 +104,10 @@ async def startup():
 
 
 # -------------------------
-# gRPC setup
+# gRPC client
 # -------------------------
-
 GRPC_TARGET = os.getenv("GRPC_TARGET", "idna-grpc:50051")
-GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")  # "1" tls, "0" insecure
-
-logger.info("GRPC_TARGET=%s GRPC_USE_TLS=%s", GRPC_TARGET, GRPC_USE_TLS)
+GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")
 
 _GRPC_OPTIONS = [
     ("grpc.keepalive_time_ms", 30_000),
@@ -134,9 +116,8 @@ _GRPC_OPTIONS = [
     ("grpc.keepalive_permit_without_calls", 1),
 ]
 
-
 def _make_channel(target: str) -> grpc.Channel:
-    auto_tls = ".up.railway.app" in target
+    auto_tls = (".up.railway.app" in target)
     use_tls = (GRPC_USE_TLS == "1") or (auto_tls and GRPC_USE_TLS != "0")
 
     if use_tls:
@@ -146,6 +127,7 @@ def _make_channel(target: str) -> grpc.Channel:
     return grpc.insecure_channel(target, options=_GRPC_OPTIONS)
 
 
+logger.info("GRPC_TARGET=%s GRPC_USE_TLS=%s", GRPC_TARGET, GRPC_USE_TLS)
 CHANNEL = _make_channel(GRPC_TARGET)
 STUB = tutoring_pb2_grpc.TutoringServiceStub(CHANNEL)
 
@@ -165,10 +147,9 @@ def _turn_grpc(student_id: str, session_id: str, user_text: str):
 
 
 # -------------------------
-# Phase 2A: /turn router
+# Intent classifier
 # -------------------------
-
-def _classify_intent(text: str) -> tuple[str, bool]:
+def _classify_intent(text: str) -> Tuple[str, bool]:
     t = (text or "").lower().strip()
     tokens = [tok for tok in t.replace("?", " ? ").split() if tok]
 
@@ -178,10 +159,8 @@ def _classify_intent(text: str) -> tuple[str, bool]:
     if not (text or "").strip():
         return "empty", False
 
-    is_question = False
-    if "?" in t:
-        is_question = True
-    elif tokens:
+    is_question = ("?" in t)
+    if not is_question and tokens:
         if tokens[0] in wh_words:
             is_question = True
         elif tokens[0] in greet_words and len(tokens) > 1 and tokens[1] in wh_words:
@@ -194,6 +173,9 @@ def _classify_intent(text: str) -> tuple[str, bool]:
     return "unknown", False
 
 
+# -------------------------
+# /turn router (Phase 2A)
+# -------------------------
 @app.post("/turn", response_model=TurnOut)
 def turn(payload: TurnIn):
     text = (payload.text or "").strip()
@@ -202,11 +184,11 @@ def turn(payload: TurnIn):
     intent, is_question = _classify_intent(text)
 
     logger.info(
-        "TURN_ROUTER_VERSION=%s GRPC_TARGET=%s intent=%s sid_in=%r text=%r",
+        "TURN version=%s grpc=%s intent=%s sid_in=%r text=%r",
         TURN_ROUTER_VERSION, GRPC_TARGET, intent, sid_in, text
     )
 
-    # Local replies (non-question)
+    # local replies
     if intent == "empty":
         sid = sid_in or str(uuid.uuid4())
         return {"ok": True, "session_id": sid, "intent": "empty", "reply": "Say something."}
@@ -227,10 +209,10 @@ def turn(payload: TurnIn):
             "reply": f"Say it as a question. You said: {text} [{TURN_ROUTER_VERSION}]",
         }
 
-    # Question => gRPC
-    student_id = DEFAULT_STUDENT_ID
-
+    # question => gRPC
     try:
+        student_id = DEFAULT_STUDENT_ID
+
         if not sid_in:
             start_resp = _start_session_grpc(student_id=student_id, topic_id=DEFAULT_TOPIC_ID)
             return {
@@ -257,25 +239,20 @@ def turn(payload: TurnIn):
         except Exception:
             pass
         logger.error("traceback:\n%s", traceback.format_exc())
-        raise HTTPException(
-            status_code=502,
-            detail={"grpc_code": str(e.code()), "grpc_details": e.details()},
-        )
+        raise HTTPException(status_code=502, detail={"grpc_code": str(e.code()), "grpc_details": e.details()})
 
     except Exception:
-        logger.error("Non-gRPC exception in /turn")
-        logger.error("traceback:\n%s", traceback.format_exc())
+        logger.error("Non-gRPC exception in /turn\n%s", traceback.format_exc())
         raise HTTPException(status_code=500, detail="Internal error")
 
 
 # -------------------------
 # Existing REST endpoints
 # -------------------------
-
 async def get_next_question_or_complete(conn, session_id: str):
     session = await conn.fetchrow(
         "SELECT session_id, topic_id, status FROM sessions WHERE session_id=$1",
-        session_id,
+        session_id
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -286,7 +263,7 @@ async def get_next_question_or_complete(conn, session_id: str):
             "topic_id": session["topic_id"],
             "state": "COMPLETED",
             "question": None,
-            "message": "Session already completed.",
+            "message": "Session already completed."
         }
 
     topic_id = session["topic_id"]
@@ -305,8 +282,7 @@ async def get_next_question_or_complete(conn, session_id: str):
         ORDER BY q.question_id
         LIMIT 1
         """,
-        topic_id,
-        session_id,
+        topic_id, session_id
     )
 
     if not q:
@@ -318,20 +294,19 @@ async def get_next_question_or_complete(conn, session_id: str):
                 current_question_id=NULL
             WHERE session_id=$1 AND status <> 'COMPLETED'
             """,
-            session_id,
+            session_id
         )
         return {
             "session_id": session_id,
             "topic_id": topic_id,
             "state": "COMPLETED",
             "question": None,
-            "message": "No more questions left in this topic.",
+            "message": "No more questions left in this topic."
         }
 
     await conn.execute(
         "UPDATE sessions SET current_question_id=$1 WHERE session_id=$2",
-        q["question_id"],
-        session_id,
+        q["question_id"], session_id
     )
 
     return {
@@ -344,7 +319,7 @@ async def get_next_question_or_complete(conn, session_id: str):
             "qtype": q["qtype"],
             "hint1": q["hint1"],
             "hint2": q["hint2"],
-        },
+        }
     }
 
 
@@ -354,7 +329,7 @@ async def start(req: StartReq):
     async with p.acquire() as conn:
         total = await conn.fetchval(
             "SELECT COUNT(*) FROM questions WHERE topic_id=$1",
-            req.topic_id,
+            req.topic_id
         ) or 0
 
         correct = await conn.fetchval(
@@ -363,8 +338,7 @@ async def start(req: StartReq):
             FROM attempts
             WHERE student_id=$1 AND topic_id=$2 AND is_correct=true
             """,
-            req.student_id,
-            req.topic_id,
+            req.student_id, req.topic_id
         ) or 0
 
         if total > 0 and correct >= total:
@@ -374,13 +348,14 @@ async def start(req: StartReq):
                 "session_id": None,
                 "topic_id": req.topic_id,
                 "tutor": "Topic already completed. Restart blocked.",
-                "message": "Topic already completed. Restart blocked.",
+                "message": "Topic already completed. Restart blocked."
             }
 
     resp = STUB.StartSession(
         tutoring_pb2.StartSessionRequest(student_id=req.student_id, topic_id=req.topic_id),
-        timeout=20,
+        timeout=20
     )
+
     return {"session_id": resp.session_id, "state": int(resp.state), "tutor_text": resp.tutor_text}
 
 
@@ -388,24 +363,17 @@ async def start(req: StartReq):
 async def reset_student_progress(student_id: str, topic_id: str):
     p = db.pool()
     async with p.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM attempts WHERE student_id=$1 AND topic_id=$2",
-            student_id,
-            topic_id,
-        )
+        await conn.execute("DELETE FROM attempts WHERE student_id=$1 AND topic_id=$2", student_id, topic_id)
     return {"status": "ok", "message": f"Reset progress for {student_id} on {topic_id}"}
 
 
 @app.post("/turn_grpc")
 def turn_grpc(req: TurnReq):
     try:
-        grpc_req = tutoring_pb2.TurnRequest(
-            student_id=req.student_id,
-            session_id=req.session_id,
-            user_text=req.user_text,
+        resp = STUB.Turn(
+            tutoring_pb2.TurnRequest(student_id=req.student_id, session_id=req.session_id, user_text=req.user_text),
+            timeout=20
         )
-        resp = STUB.Turn(grpc_req, timeout=20)
-
         return {
             "session_id": resp.session_id,
             "state": int(resp.next_state),
@@ -425,10 +393,7 @@ def turn_grpc(req: TurnReq):
         except Exception:
             pass
         logger.error("traceback:\n%s", traceback.format_exc())
-        raise HTTPException(
-            status_code=502,
-            detail={"grpc_code": str(e.code()), "grpc_details": e.details()},
-        )
+        raise HTTPException(status_code=502, detail={"grpc_code": str(e.code()), "grpc_details": e.details()})
 
 
 @app.get("/api/topics")
@@ -440,19 +405,10 @@ async def api_topics():
 async def api_progress(student_id: str, topic_id: str):
     p = db.pool()
     async with p.acquire() as c:
-        total = await c.fetchval(
-            "SELECT COUNT(*) FROM questions WHERE topic_id = $1",
-            topic_id,
-        ) or 0
-
+        total = await c.fetchval("SELECT COUNT(*) FROM questions WHERE topic_id = $1", topic_id) or 0
         correct = await c.fetchval(
-            """
-            SELECT COUNT(DISTINCT question_id)
-            FROM attempts
-            WHERE student_id = $1 AND topic_id = $2 AND is_correct = true
-            """,
-            student_id,
-            topic_id,
+            "SELECT COUNT(DISTINCT question_id) FROM attempts WHERE student_id = $1 AND topic_id = $2 AND is_correct = true",
+            student_id, topic_id
         ) or 0
 
     pct = int((correct / total * 100)) if total > 0 else 0
@@ -465,12 +421,7 @@ async def resume_session(student_id: str):
     if not row:
         return {"status": "none"}
 
-    return {
-        "status": "ok",
-        "session_id": row["session_id"],
-        "topic_id": row["topic_id"],
-        "state": row["state"],
-    }
+    return {"status": "ok", "session_id": row["session_id"], "topic_id": row["topic_id"], "state": row["state"]}
 
 
 @app.get("/api/next")
