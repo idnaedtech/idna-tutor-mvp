@@ -1,4 +1,6 @@
+grpcio>=1.76.0
+protobuf
 fastapi
 uvicorn
-grpcio
-protobuf
+asyncpg
+
