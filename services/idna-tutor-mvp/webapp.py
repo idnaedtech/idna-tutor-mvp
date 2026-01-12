@@ -106,7 +106,7 @@ async def startup():
 # -------------------------
 # gRPC client
 # -------------------------
-GRPC_TARGET = os.getenv("GRPC_TARGET", "idna-grpc:50051")
+GRPC_TARGET = os.getenv("GRPC_TARGET")
 GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")
 
 _GRPC_OPTIONS = [
