@@ -17,8 +17,9 @@ def grpc_ping():
         return {"ok": False, "error": "GRPC_TARGET not set"}
 
     try:
-        channel = grpc.insecure_channel(target)
+        creds = grpc.ssl_channel_credentials()
+        channel = grpc.secure_channel(target, creds)
         grpc.channel_ready_future(channel).result(timeout=3)
-        return {"ok": True, "target": target}
+        return {"ok": True, "target": target, "tls": True}
     except Exception as e:
-        return {"ok": False, "target": target, "error": str(e)}
+        return {"ok": False, "target": target, "tls": True, "error": str(e)}
