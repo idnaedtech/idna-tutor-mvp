@@ -429,3 +429,22 @@ async def api_next(session_id: str):
     p = db.pool()
     async with p.acquire() as conn:
         return await get_next_question_or_complete(conn, session_id)
+        @app.get("/grpc_ping")
+def grpc_ping():
+    target = os.getenv("GRPC_TARGET")
+    use_tls = os.getenv("GRPC_USE_TLS", "0") == "1"
+
+    if not target:
+        return {"ok": False, "error": "GRPC_TARGET not set"}
+
+    if use_tls:
+        channel = grpc.secure_channel(target, grpc.ssl_channel_credentials())
+    else:
+        channel = grpc.insecure_channel(target)
+
+    try:
+        grpc.channel_ready_future(channel).result(timeout=3)
+        return {"ok": True, "target": target}
+    except Exception as e:
+        return {"ok": False, "target": target, "error": str(e)}
+
