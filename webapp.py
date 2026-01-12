@@ -458,7 +458,7 @@ async def api_next(session_id: str):
 # Static (keep last)
 
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+@app.get("/grpc_ping")
 def grpc_ping():
     target = os.getenv("GRPC_TARGET")
     use_tls = os.getenv("GRPC_USE_TLS", "0") == "1"
