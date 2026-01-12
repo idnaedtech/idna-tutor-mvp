@@ -69,7 +69,7 @@ async def startup():
 # -------------------------
 
 # Use Railway env var. Default targets the Railway private service name.
-GRPC_TARGET = os.getenv("GRPC_TARGET", "idna-grpc:50051")
+GRPC_TARGET = os.getenv("GRPC_TARGET")
 # "1" to use TLS, "0" for insecure (typical for private network)
 GRPC_USE_TLS = os.getenv("GRPC_USE_TLS", "0")
 
