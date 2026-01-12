@@ -465,7 +465,7 @@ def serve():
     server.add_insecure_port(f"[::]:{grpc_port}")
 
     server.start()
-    print(f"gRPC FSM server running on 0.0.0.0:{grpc_port}")
+    print(f"gRPC FSM server running on [::]:{grpc_port}")
     server.wait_for_termination()
 
 
