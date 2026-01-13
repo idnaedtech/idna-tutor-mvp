@@ -1,10 +1,19 @@
 from fastapi import FastAPI
+from pydantic import BaseModel
 import os
 import grpc
+
+import tutoring_pb2
+import tutoring_pb2_grpc
 
 app = FastAPI()
 
 print("### RUNNING CLEAN BASELINE WEBAPP ###")
+
+class TurnIn(BaseModel):
+    student_id: str
+    session_id: str
+    user_text: str
 
 @app.get("/healthz")
 def healthz():
@@ -34,3 +43,39 @@ def grpc_ping():
             "error_type": type(e).__name__,
             "error": repr(e),
         }
+
+@app.post("/turn")
+def turn(payload: TurnIn):
+    target = os.getenv("GRPC_TARGET")
+    use_tls = os.getenv("GRPC_USE_TLS", "0") == "1"
+    if not target:
+        return {"ok": False, "error": "GRPC_TARGET not set"}
+
+    if use_tls:
+        channel = grpc.secure_channel(target, grpc.ssl_channel_credentials())
+    else:
+        channel = grpc.insecure_channel(target)
+
+    stub = tutoring_pb2_grpc.TutoringServiceStub(channel)
+
+    resp = stub.Turn(
+        tutoring_pb2.TurnRequest(
+            student_id=payload.student_id,
+            session_id=payload.session_id,
+            user_text=payload.user_text,
+        ),
+        timeout=10,
+    )
+
+    return {
+        "ok": True,
+        "session_id": resp.session_id,
+        "next_state": int(resp.next_state),
+        "tutor_text": resp.tutor_text,
+        "intent": resp.intent,
+        "attempt_count": resp.attempt_count,
+        "frustration_counter": resp.frustration_counter,
+        "topic_id": resp.topic_id,
+        "question_id": resp.question_id,
+        "title": resp.title,
+    }
