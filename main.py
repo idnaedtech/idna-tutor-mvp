@@ -383,21 +383,23 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
 
 def serve():
-    # IMPORTANT for Railway: bind to PORT if present
     grpc_port = os.getenv("PORT") or os.getenv("GRPC_PORT", "50051")
 
-    # Ensure DB is ready BEFORE serving requests
+    # init db once (important)
     _run_async(init_pool())
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(TutoringServicer(), server)
+    tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(
+        TutoringServicer(), server
+    )
 
     bind_addr = f"0.0.0.0:{grpc_port}"
     server.add_insecure_port(bind_addr)
 
-    print(f"gRPC server binding on {bind_addr}")
+    print(f"gRPC server running on {bind_addr}")
     server.start()
     server.wait_for_termination()
+
 
 
 if __name__ == "__main__":
