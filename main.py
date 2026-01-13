@@ -385,7 +385,6 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 def serve():
     grpc_port = os.getenv("PORT") or os.getenv("GRPC_PORT", "50051")
 
-    # init db once (important)
     _run_async(init_pool())
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -396,10 +395,9 @@ def serve():
     bind_addr = f"0.0.0.0:{grpc_port}"
     server.add_insecure_port(bind_addr)
 
-    print(f"gRPC server running on {bind_addr}")
+    print(f"GRPC_LISTENING {bind_addr}", flush=True)
     server.start()
     server.wait_for_termination()
-
 
 
 if __name__ == "__main__":
