@@ -46,6 +46,11 @@ def get_stub() -> tutoring_pb2_grpc.TutoringServiceStub:
 # ----------
 # Routes
 # ----------
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
@@ -65,7 +70,9 @@ def grpc_ping():
             else grpc.insecure_channel(target)
         )
 
-        grpc.channel_ready_future(channel).result(timeout=3)
+        # ✅ Increased timeout (was 3)
+        grpc.channel_ready_future(channel).result(timeout=10)
+
         return {"ok": True, "target": target, "tls": use_tls}
 
     except Exception as e:
@@ -80,9 +87,7 @@ def grpc_ping():
 
 @app.post("/start_session")
 def start_session(payload: StartSessionIn):
-    # This calls the real gRPC StartSession
     stub = get_stub()
-
     resp = stub.StartSession(
         tutoring_pb2.StartSessionRequest(
             student_id=payload.student_id,
@@ -90,7 +95,6 @@ def start_session(payload: StartSessionIn):
         ),
         timeout=10,
     )
-
     return {
         "ok": True,
         "session_id": resp.session_id,
@@ -102,7 +106,6 @@ def start_session(payload: StartSessionIn):
 @app.post("/turn")
 def turn(payload: TurnIn):
     stub = get_stub()
-
     resp = stub.Turn(
         tutoring_pb2.TurnRequest(
             student_id=payload.student_id,
