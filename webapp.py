@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import os
 import grpc
+from grpc import RpcError
 
 import tutoring_pb2
 import tutoring_pb2_grpc
@@ -86,46 +87,73 @@ def grpc_ping():
 
 @app.post("/start_session")
 def start_session(payload: StartSessionIn):
-    stub = get_stub()
-    resp = stub.StartSession(
-        tutoring_pb2.StartSessionRequest(
-            student_id=payload.student_id,
-            topic_id=payload.topic_id,
-        ),
-        timeout=10,
-    )
-    return {
-        "ok": True,
-        "session_id": resp.session_id,
-        "state": int(resp.state),
-        "tutor_text": resp.tutor_text,
-    }
+    try:
+        stub = get_stub()
+        resp = stub.StartSession(
+            tutoring_pb2.StartSessionRequest(
+                student_id=payload.student_id,
+                topic_id=payload.topic_id,
+            ),
+            timeout=10,
+        )
+        return {
+            "ok": True,
+            "session_id": resp.session_id,
+            "state": int(resp.state),
+            "tutor_text": resp.tutor_text,
+        }
+
+    except RpcError as e:
+        # Return real gRPC error instead of FastAPI "Internal Server Error"
+        return {
+            "ok": False,
+            "grpc_code": str(e.code()),
+            "error": e.details(),
+            "target": os.getenv("GRPC_TARGET"),
+            "tls": os.getenv("GRPC_USE_TLS", "0") == "1",
+        }
+
+    except Exception as e:
+        return {"ok": False, "error_type": type(e).__name__, "error": repr(e)}
 
 
 @app.post("/turn")
 def turn(payload: TurnIn):
-    stub = get_stub()
-    resp = stub.Turn(
-        tutoring_pb2.TurnRequest(
-            student_id=payload.student_id,
-            session_id=payload.session_id,
-            user_text=payload.user_text,
-        ),
-        timeout=10,
-    )
+    try:
+        stub = get_stub()
+        resp = stub.Turn(
+            tutoring_pb2.TurnRequest(
+                student_id=payload.student_id,
+                session_id=payload.session_id,
+                user_text=payload.user_text,
+            ),
+            timeout=10,
+        )
 
-    return {
-        "ok": True,
-        "session_id": resp.session_id,
-        "next_state": int(resp.next_state),
-        "tutor_text": resp.tutor_text,
-        "intent": resp.intent,
-        "attempt_count": resp.attempt_count,
-        "frustration_counter": resp.frustration_counter,
-        "topic_id": resp.topic_id,
-        "question_id": resp.question_id,
-        "title": resp.title,
-    }
+        return {
+            "ok": True,
+            "session_id": resp.session_id,
+            "next_state": int(resp.next_state),
+            "tutor_text": resp.tutor_text,
+            "intent": resp.intent,
+            "attempt_count": resp.attempt_count,
+            "frustration_counter": resp.frustration_counter,
+            "topic_id": resp.topic_id,
+            "question_id": resp.question_id,
+            "title": resp.title,
+        }
+
+    except RpcError as e:
+        return {
+            "ok": False,
+            "grpc_code": str(e.code()),
+            "error": e.details(),
+            "target": os.getenv("GRPC_TARGET"),
+            "tls": os.getenv("GRPC_USE_TLS", "0") == "1",
+        }
+
+    except Exception as e:
+        return {"ok": False, "error_type": type(e).__name__, "error": repr(e)}
 
 
 # -------------------------
