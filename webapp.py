@@ -48,6 +48,7 @@ def get_stub() -> tutoring_pb2_grpc.TutoringServiceStub:
 # ----------
 @app.get("/")
 def root():
+    # Some platforms health-check "/" by default.
     return {"status": "ok"}
 
 
@@ -70,9 +71,7 @@ def grpc_ping():
             else grpc.insecure_channel(target)
         )
 
-        # ✅ Increased timeout (was 3)
         grpc.channel_ready_future(channel).result(timeout=10)
-
         return {"ok": True, "target": target, "tls": use_tls}
 
     except Exception as e:
@@ -126,4 +125,18 @@ def turn(payload: TurnIn):
         "topic_id": resp.topic_id,
         "question_id": resp.question_id,
         "title": resp.title,
+    }
+
+
+# -------------------------
+# Debug: prove which file is running
+# -------------------------
+@app.get("/__whoami")
+def whoami():
+    return {
+        "file": __file__,
+        "cwd": os.getcwd(),
+        "port_env": os.getenv("PORT"),
+        "grpc_target": os.getenv("GRPC_TARGET"),
+        "grpc_use_tls": os.getenv("GRPC_USE_TLS", "0"),
     }
