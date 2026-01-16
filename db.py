@@ -107,6 +107,7 @@ async def get_latest_session(student_id: str):
 # =========================
 
 async def get_topics():
+    # Query from topics table (primary), fallback to concepts if topics is empty
     q = """
     SELECT topic_id, title
     FROM topics
@@ -114,6 +115,11 @@ async def get_topics():
     """
     async with pool().acquire() as c:
         rows = await c.fetch(q)
+        if rows:
+            return [dict(r) for r in rows]
+        # Fallback to concepts table for backwards compatibility
+        q2 = "SELECT topic_id, title FROM concepts ORDER BY title"
+        rows = await c.fetch(q2)
         return [dict(r) for r in rows]
 
 

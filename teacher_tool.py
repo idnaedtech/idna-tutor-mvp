@@ -2,13 +2,20 @@ import csv
 import asyncio
 from db import init_pool, pool
 
-UPSERT_CONCEPT = """
-insert into concepts(topic_id, grade, subject, language, title, explain_text)
-values($1,$2,$3,$4,$5,$6)
+UPSERT_TOPIC = """
+insert into topics(topic_id, title, grade, subject)
+values($1,$2,$3,$4)
 on conflict (topic_id) do update set
+  title=excluded.title,
   grade=excluded.grade,
-  subject=excluded.subject,
-  language=excluded.language,
+  subject=excluded.subject;
+"""
+
+UPSERT_CONCEPT = """
+insert into concepts(concept_id, topic_id, title, explain_text)
+values($1,$2,$3,$4)
+on conflict (concept_id) do update set
+  topic_id=excluded.topic_id,
   title=excluded.title,
   explain_text=excluded.explain_text;
 """
@@ -31,24 +38,32 @@ async def main():
         with open("content.csv", newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
 
-        concepts_done = set()
+        topics_done = set()
         q_count = 0
 
         async with pool().acquire() as conn:
             for r in rows:
                 topic_id = r["topic_id"].strip()
-                if topic_id not in concepts_done:
+                if topic_id not in topics_done:
+                    # Insert into topics table first (for foreign key)
+                    await conn.execute(
+                        UPSERT_TOPIC,
+                        topic_id,
+                        r["title"].strip(),
+                        r["grade"].strip(),
+                        r["subject"].strip(),
+                    )
+                    # Insert into concepts table
+                    concept_id = f"concept_{topic_id}"
                     await conn.execute(
                         UPSERT_CONCEPT,
+                        concept_id,
                         topic_id,
-                        int(r["grade"]),
-                        r["subject"].strip(),
-                        r["language"].strip(),
                         r["title"].strip(),
                         r["explain_text"].strip(),
                     )
-                    concepts_done.add(topic_id)
-                    print(f"✓ Concept: {r['title']}")
+                    topics_done.add(topic_id)
+                    print(f"✓ Topic + Concept: {r['title']}")
 
                 await conn.execute(
                     UPSERT_QUESTION,
@@ -63,7 +78,7 @@ async def main():
                 q_count += 1
                 print(f"  ✓ Question: {r['prompt'][:40]}...")
 
-        print(f"\n✓ Loaded {len(concepts_done)} concepts")
+        print(f"\n✓ Loaded {len(topics_done)} topics/concepts")
         print(f"✓ Loaded {q_count} questions")
     finally:
         await pool().close()

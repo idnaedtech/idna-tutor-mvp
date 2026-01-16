@@ -1,13 +1,27 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 import os
 import grpc
 from grpc import RpcError
 
 import tutoring_pb2
 import tutoring_pb2_grpc
+import db
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: initialize DB pool
+    await db.init_pool()
+    print("DB pool initialized", flush=True)
+    yield
+    # Shutdown: nothing to clean up
+
+
+app = FastAPI(lifespan=lifespan)
 
 print("### RUNNING CLEAN BASELINE WEBAPP ###", flush=True)
 
@@ -157,6 +171,63 @@ def turn(payload: TurnIn):
 
 
 # -------------------------
+# API endpoints for frontend
+# -------------------------
+@app.get("/api/topics")
+async def api_topics():
+    """Return list of available topics for the dropdown."""
+    try:
+        topics = await db.get_topics()
+        return topics
+    except Exception as e:
+        return []
+
+
+@app.get("/api/progress")
+async def api_progress(
+    student_id: str = Query(...),
+    topic_id: str = Query(...)
+):
+    """Return progress for a student on a topic."""
+    try:
+        correct = await db.count_correct_questions(student_id, topic_id)
+        # Get total questions in topic
+        async with db.pool().acquire() as c:
+            total = await c.fetchval(
+                "SELECT COUNT(*) FROM questions WHERE topic_id=$1",
+                topic_id
+            )
+        total = total or 0
+        pct = round((correct / total) * 100) if total > 0 else 0
+        return {"correct": correct, "total": total, "pct": pct}
+    except Exception as e:
+        return {"correct": 0, "total": 0, "pct": 0, "error": str(e)}
+
+
+@app.get("/api/resume")
+async def api_resume(student_id: str = Query(...)):
+    """Get the latest session for a student to resume."""
+    try:
+        session = await db.get_latest_session(student_id)
+        if session:
+            return {
+                "status": "ok",
+                "session_id": session["session_id"],
+                "topic_id": session["topic_id"],
+                "state": session["state"],
+            }
+        return {"status": "not_found"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/start")
+def start_session_alias(payload: StartSessionIn):
+    """Alias for /start_session to match frontend expectations."""
+    return start_session(payload)
+
+
+# -------------------------
 # Debug: prove which file is running
 # -------------------------
 @app.get("/__whoami")
@@ -168,3 +239,16 @@ def whoami():
         "grpc_target": os.getenv("GRPC_TARGET"),
         "grpc_use_tls": os.getenv("GRPC_USE_TLS", "0"),
     }
+
+
+# -------------------------
+# Static file serving (must be last)
+# -------------------------
+@app.get("/ui")
+async def serve_ui():
+    """Serve the main UI page."""
+    return FileResponse("static/index.html")
+
+
+# Mount static files for any additional assets
+app.mount("/static", StaticFiles(directory="static"), name="static")
