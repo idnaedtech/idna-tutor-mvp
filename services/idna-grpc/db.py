@@ -1,22 +1,39 @@
 import os
 import asyncpg
+from urllib.parse import urlparse
 
 _pool = None
+
+
+def _parse_database_url() -> dict:
+    """Parse DATABASE_URL into connection parameters."""
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        u = urlparse(db_url)
+        return {
+            "user": u.username,
+            "password": u.password,
+            "database": u.path.lstrip("/"),
+            "host": u.hostname,
+            "port": u.port or 5432,
+            "ssl": "require",
+        }
+    # Fallback to individual env vars for local dev
+    return {
+        "user": os.environ.get("PGUSER", "postgres"),
+        "password": os.environ.get("PGPASSWORD", "password"),
+        "database": os.environ.get("PGDATABASE", "postgres"),
+        "host": os.environ.get("PGHOST", "localhost"),
+        "port": int(os.environ.get("PGPORT", "5432")),
+    }
+
 
 async def init_pool():
     global _pool
     if _pool is None:
-        # Build connection string from individual Postgres env vars
-        user = os.environ.get("PGUSER", "postgres")
-        password = os.environ.get("PGPASSWORD", "password")
-        host = os.environ.get("PGHOST", "localhost")
-        port = os.environ.get("PGPORT", "5432")
-        database = os.environ.get("PGDATABASE", "postgres")
-        
-        dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
-        
+        cfg = _parse_database_url()
         _pool = await asyncpg.create_pool(
-            dsn=dsn,
+            **cfg,
             min_size=1,
             max_size=5
         )
@@ -276,29 +293,3 @@ async def check_and_mark_completion(session_id: str, topic_id: str):
             return True
         
         return False
-        import os
-import asyncpg
-from urllib.parse import urlparse
-
-_pool = None
-
-def parse_db_url():
-    url = urlparse(os.environ["DATABASE_URL"])
-    return {
-        "user": url.username,
-        "password": url.password,
-        "database": url.path[1:],
-        "host": url.hostname,
-        "port": url.port,
-        "ssl": "require",
-    }
-
-async def init_pool():
-    global _pool
-    if _pool is None:
-        cfg = parse_db_url()
-        _pool = await asyncpg.create_pool(**cfg)
-    return _pool
-
-def pool():
-    return _pool
