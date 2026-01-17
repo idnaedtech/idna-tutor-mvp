@@ -258,7 +258,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 # CORRECT! Record attempt and move on
                 attempt_count += 1
                 _run_async(insert_attempt(
-                    request.session_id, student_id, "addition",
+                    request.session_id, student_id, session["topic_id"],
                     f"q{questions_completed + 1}", True
                 ))
 
@@ -307,7 +307,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 fsm_data["attempt_count"] = attempt_count
 
                 _run_async(insert_attempt(
-                    request.session_id, student_id, "addition",
+                    request.session_id, student_id, session["topic_id"],
                     f"q{questions_completed + 1}", False
                 ))
 
@@ -396,7 +396,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 # CORRECT after hint
                 attempt_count += 1
                 _run_async(insert_attempt(
-                    request.session_id, student_id, "addition",
+                    request.session_id, student_id, session["topic_id"],
                     f"q{questions_completed + 1}", True
                 ))
 
@@ -442,7 +442,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 fsm_data["attempt_count"] = attempt_count
 
                 _run_async(insert_attempt(
-                    request.session_id, student_id, "addition",
+                    request.session_id, student_id, session["topic_id"],
                     f"q{questions_completed + 1}", False
                 ))
 
