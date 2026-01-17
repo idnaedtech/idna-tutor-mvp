@@ -7,12 +7,13 @@ import sys
 import os
 import atexit
 
-# Get port from Railway environment (defaults to 8000 for local dev)
+# Railway sets PORT for the public-facing service (webapp)
+# gRPC is INTERNAL only - always use fixed port 50051
 web_port = os.environ.get("PORT", "8000")
-grpc_port = os.environ.get("GRPC_PORT", "50051")
+GRPC_INTERNAL_PORT = "50051"  # Fixed internal port, never use Railway's PORT
 
-# Set GRPC_TARGET for webapp to connect to gRPC server
-os.environ["GRPC_TARGET"] = f"localhost:{grpc_port}"
+# Set GRPC_TARGET for webapp to connect to internal gRPC server
+os.environ["GRPC_TARGET"] = f"localhost:{GRPC_INTERNAL_PORT}"
 
 # Track child processes for cleanup
 grpc_proc = None
@@ -67,13 +68,15 @@ signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
 # Start gRPC server (from services/idna-grpc/)
+# CRITICAL: Remove PORT from gRPC env so it uses GRPC_PORT instead
 grpc_env = os.environ.copy()
-grpc_env["GRPC_PORT"] = grpc_port
+grpc_env.pop("PORT", None)  # Remove Railway's PORT to avoid conflict
+grpc_env["GRPC_PORT"] = GRPC_INTERNAL_PORT
 grpc_proc = subprocess.Popen(
     [sys.executable, "services/idna-grpc/main.py"],
     env=grpc_env
 )
-print(f"[run_servers] gRPC server starting on port {grpc_port} (pid={grpc_proc.pid})...", flush=True)
+print(f"[run_servers] gRPC server starting on internal port {GRPC_INTERNAL_PORT} (pid={grpc_proc.pid})...", flush=True)
 
 # Wait for gRPC to be ready (check every 0.5s, up to 10s)
 for i in range(20):
