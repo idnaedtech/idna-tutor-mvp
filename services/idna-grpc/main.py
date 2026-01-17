@@ -259,7 +259,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 attempt_count += 1
                 _run_async(insert_attempt(
                     request.session_id, student_id, session["topic_id"],
-                    f"q{questions_completed + 1}", True
+                    None, True
                 ))
 
                 questions_completed += 1
@@ -308,7 +308,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
                 _run_async(insert_attempt(
                     request.session_id, student_id, session["topic_id"],
-                    f"q{questions_completed + 1}", False
+                    None, False
                 ))
 
                 if attempt_count == 1:
@@ -397,7 +397,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 attempt_count += 1
                 _run_async(insert_attempt(
                     request.session_id, student_id, session["topic_id"],
-                    f"q{questions_completed + 1}", True
+                    None, True
                 ))
 
                 questions_completed += 1
@@ -443,7 +443,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
                 _run_async(insert_attempt(
                     request.session_id, student_id, session["topic_id"],
-                    f"q{questions_completed + 1}", False
+                    None, False
                 ))
 
                 if attempt_count == 2:

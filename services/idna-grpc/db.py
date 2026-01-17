@@ -77,6 +77,18 @@ async def init_pool():
             CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id);
             """)
 
+            # Drop FK constraint on question_id to allow generated questions
+            await c.execute("""
+            ALTER TABLE attempts
+            DROP CONSTRAINT IF EXISTS attempts_question_id_fkey;
+            """)
+
+            # Allow NULL question_id for dynamically generated questions
+            await c.execute("""
+            ALTER TABLE attempts
+            ALTER COLUMN question_id DROP NOT NULL;
+            """)
+
 def pool() -> asyncpg.Pool | None:
     return _pool
 
@@ -256,7 +268,7 @@ async def get_next_question_in_session(session_id: str, topic_id: str):
     async with pool().acquire() as c:
         return await c.fetchrow(q, topic_id, session_id)
 
-async def insert_attempt(session_id: str, student_id: str, topic_id: str, question_id: str, is_correct: bool):
+async def insert_attempt(session_id: str, student_id: str, topic_id: str, question_id: str | None, is_correct: bool):
     q = """
     insert into public.attempts (session_id, student_id, topic_id, question_id, is_correct)
     values ($1, $2, $3, $4, $5)
