@@ -78,6 +78,14 @@ async def init_pool():
 def pool() -> asyncpg.Pool | None:
     return _pool
 
+
+async def close_pool():
+    """Gracefully close the database connection pool."""
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+
 async def create_session(student_id: str, topic_id: str = "", state: str = "ACTIVE", current_question_id: str | None = None):
     import uuid
     session_id = str(uuid.uuid4())

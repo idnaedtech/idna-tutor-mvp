@@ -48,6 +48,14 @@ def pool() -> asyncpg.Pool:
     return _pool
 
 
+async def close_pool():
+    """Gracefully close the database connection pool."""
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+
+
 # =========================
 # Sessions
 # =========================

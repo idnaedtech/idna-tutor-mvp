@@ -1,16 +1,21 @@
 import os
-import time
+import signal
 import grpc
 import asyncio
 import threading
 from queue import Queue
 from concurrent import futures
 
+from grpc_health.v1 import health
+from grpc_health.v1 import health_pb2
+from grpc_health.v1 import health_pb2_grpc
+
 import tutoring_pb2
 import tutoring_pb2_grpc
 
 from db import (
     init_pool,
+    close_pool,
     create_session,
     get_session,
     update_session,
@@ -163,23 +168,65 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 # ===============================
 # gRPC Server bootstrap
 # ===============================
+_server = None
+_health_servicer = None
+
+
+def _shutdown_handler(signum, frame):
+    """Handle SIGTERM/SIGINT for graceful shutdown."""
+    sig_name = signal.Signals(signum).name
+    print(f"[gRPC] Received {sig_name}, shutting down gracefully...", flush=True)
+
+    if _server:
+        # Stop accepting new requests, wait up to 10s for in-flight
+        _server.stop(grace=10)
+
+    # Close DB pool
+    try:
+        _run_async(close_pool())
+        print("[gRPC] DB pool closed", flush=True)
+    except Exception as e:
+        print(f"[gRPC] Error closing DB pool: {e}", flush=True)
+
+    # Stop the async worker thread
+    _async_queue.put((None, None))
+    print("[gRPC] Shutdown complete", flush=True)
+
+
 def serve():
+    global _server, _health_servicer
+
     # 🔒 CRITICAL: Railway port binding
     grpc_port = os.getenv("PORT") or os.getenv("GRPC_PORT", "50051")
 
     # Init DB ONCE
     _run_async(init_pool())
 
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    _server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+
+    # Add TutoringService
     tutoring_pb2_grpc.add_TutoringServiceServicer_to_server(
-        TutoringServicer(), server
+        TutoringServicer(), _server
     )
 
-    server.add_insecure_port(f"0.0.0.0:{grpc_port}")
+    # Add Health Check service
+    _health_servicer = health.HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(_health_servicer, _server)
+
+    # Set health status to SERVING
+    _health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+    _health_servicer.set("TutoringService", health_pb2.HealthCheckResponse.SERVING)
+
+    _server.add_insecure_port(f"0.0.0.0:{grpc_port}")
     print(f"GRPC_LISTENING 0.0.0.0:{grpc_port}", flush=True)
 
-    server.start()
-    server.wait_for_termination()
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
+
+    _server.start()
+    print("[gRPC] Server started, health check enabled", flush=True)
+    _server.wait_for_termination()
 
 
 if __name__ == "__main__":

@@ -1,24 +1,38 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import os
 import grpc
 from grpc import RpcError
+import io
+
+from openai import OpenAI
 
 import tutoring_pb2
 import tutoring_pb2_grpc
 import db
 
 
+# Initialize OpenAI client (uses OPENAI_API_KEY env var)
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    return OpenAI(api_key=api_key)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: initialize DB pool
     await db.init_pool()
-    print("DB pool initialized", flush=True)
+    print("[webapp] DB pool initialized", flush=True)
     yield
-    # Shutdown: nothing to clean up
+    # Shutdown: close DB pool
+    print("[webapp] Shutting down, closing DB pool...", flush=True)
+    await db.close_pool()
+    print("[webapp] DB pool closed", flush=True)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -68,8 +82,14 @@ def root():
 
 
 @app.get("/healthz")
-def healthz():
-    return {"status": "ok"}
+async def healthz():
+    """Health check endpoint - verifies DB connection is alive."""
+    try:
+        async with db.pool().acquire() as c:
+            await c.fetchval("SELECT 1")
+        return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        return {"status": "degraded", "db": "error", "error": str(e)}
 
 
 @app.get("/grpc_ping")
@@ -225,6 +245,72 @@ async def api_resume(student_id: str = Query(...)):
 def start_session_alias(payload: StartSessionIn):
     """Alias for /start_session to match frontend expectations."""
     return start_session(payload)
+
+
+# -------------------------
+# Voice API endpoints (OpenAI Whisper & TTS)
+# -------------------------
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "alloy"  # Options: alloy, echo, fable, onyx, nova, shimmer
+
+
+@app.post("/api/speech-to-text")
+async def speech_to_text(audio: UploadFile = File(...)):
+    """
+    Convert speech to text using OpenAI Whisper API.
+    Accepts audio file (webm, mp3, wav, etc.)
+    """
+    try:
+        client = get_openai_client()
+
+        # Read the uploaded audio file
+        audio_content = await audio.read()
+
+        # Create a file-like object with proper filename
+        audio_file = io.BytesIO(audio_content)
+        audio_file.name = audio.filename or "audio.webm"
+
+        # Call Whisper API
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            response_format="text"
+        )
+
+        return {"ok": True, "text": transcript.strip()}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/text-to-speech")
+async def text_to_speech(request: TTSRequest):
+    """
+    Convert text to speech using OpenAI TTS API.
+    Returns audio as mp3 stream.
+    """
+    try:
+        client = get_openai_client()
+
+        # Call TTS API
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice=request.voice,
+            input=request.text
+        )
+
+        # Stream the audio response
+        audio_content = response.content
+
+        return StreamingResponse(
+            io.BytesIO(audio_content),
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "inline; filename=speech.mp3"}
+        )
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 # -------------------------

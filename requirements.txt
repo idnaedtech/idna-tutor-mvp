@@ -2,6 +2,9 @@ fastapi
 uvicorn[standard]
 grpcio
 grpcio-tools
+grpcio-health-checking
 protobuf
 asyncpg
 pydantic
+openai
+python-multipart

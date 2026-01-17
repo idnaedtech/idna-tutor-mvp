@@ -9,10 +9,15 @@
     input { width: 78%; padding: 10px; }
     button { padding: 10px 14px; }
     .meta { color: #666; font-size: 12px; margin-top: 8px; }
+    #micBtn.recording { background: #ff4444; color: white; }
+    #micBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .voice-controls { margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+    .voice-controls label { margin-right: 15px; cursor: pointer; }
+    #voiceSelect { padding: 5px; margin-left: 10px; }
   </style>
 </head>
 <body>
-  <h2>IDNA Tutor MVP (Text)</h2>
+  <h2>IDNA Tutor MVP</h2>
 
   <div style="margin: 8px 0;">
     <label for="studentId">Student ID:</label>
@@ -37,9 +42,33 @@
     <span id="micStatus" style="margin-left:8px;"></span>
   </div>
 
+  <div class="voice-controls">
+    <label>
+      <input type="checkbox" id="ttsEnabled" checked />
+      Enable voice output (TTS)
+    </label>
+    <label>
+      Voice:
+      <select id="voiceSelect">
+        <option value="alloy">Alloy</option>
+        <option value="echo">Echo</option>
+        <option value="fable">Fable</option>
+        <option value="onyx">Onyx</option>
+        <option value="nova" selected>Nova</option>
+        <option value="shimmer">Shimmer</option>
+      </select>
+    </label>
+    <audio id="ttsAudio" style="display:none;"></audio>
+  </div>
+
 <script>
 let sessionId = null;
 let topicId = null;
+
+// Voice recording state
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
 
 function getStudentId() {
   const el = document.getElementById("studentId");
@@ -50,6 +79,119 @@ function add(role, text) {
   const log = document.getElementById("log");
   log.textContent += `${role}: ${text}\n\n`;
   log.scrollTop = log.scrollHeight;
+}
+
+// ===== Text-to-Speech (TTS) =====
+async function speakText(text) {
+  const ttsEnabled = document.getElementById("ttsEnabled").checked;
+  if (!ttsEnabled || !text) return;
+
+  const voice = document.getElementById("voiceSelect").value;
+  const audioEl = document.getElementById("ttsAudio");
+
+  try {
+    const response = await fetch("/api/text-to-speech", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voice })
+    });
+
+    if (!response.ok) {
+      console.error("TTS error:", await response.text());
+      return;
+    }
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    audioEl.src = audioUrl;
+    audioEl.play();
+  } catch (e) {
+    console.error("TTS failed:", e);
+  }
+}
+
+// ===== Speech-to-Text (STT) via OpenAI Whisper =====
+async function initVoiceRecording() {
+  const micBtn = document.getElementById("micBtn");
+  const micStatus = document.getElementById("micStatus");
+
+  // Check for MediaRecorder support
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    micBtn.disabled = true;
+    micStatus.textContent = "Voice input not supported in this browser.";
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // Determine supported MIME type
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : 'audio/mp4';
+
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        audioChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: mimeType });
+      audioChunks = [];
+
+      micStatus.textContent = "Transcribing...";
+
+      // Send to backend for Whisper transcription
+      const formData = new FormData();
+      const ext = mimeType === 'audio/webm' ? 'webm' : 'mp4';
+      formData.append("audio", audioBlob, `recording.${ext}`);
+
+      try {
+        const response = await fetch("/api/speech-to-text", {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.ok && result.text) {
+          document.getElementById("answer").value = result.text;
+          micStatus.textContent = "Transcribed! Press Send or Enter.";
+        } else {
+          micStatus.textContent = `Transcription failed: ${result.error || "Unknown error"}`;
+        }
+      } catch (e) {
+        micStatus.textContent = `Error: ${e.message}`;
+      }
+    };
+
+    micBtn.disabled = false;
+    micStatus.textContent = "Click mic to speak";
+
+    // Toggle recording on click
+    micBtn.onclick = () => {
+      if (!isRecording) {
+        audioChunks = [];
+        mediaRecorder.start();
+        isRecording = true;
+        micBtn.classList.add("recording");
+        micBtn.textContent = "⏹ Stop";
+        micStatus.textContent = "Recording... Click to stop";
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        micBtn.classList.remove("recording");
+        micBtn.textContent = "🎤 Speak";
+      }
+    };
+
+  } catch (e) {
+    micBtn.disabled = true;
+    micStatus.textContent = `Mic access denied: ${e.message}`;
+  }
 }
 
 async function loadTopics() {
@@ -68,6 +210,7 @@ async function loadTopics() {
 }
 
 loadTopics();
+initVoiceRecording();
 
 async function updateProgress(studentId, topicId) {
   const r = await fetch(
@@ -83,11 +226,11 @@ async function start() {
   const studentId = getStudentId();
   const topic_id = document.getElementById("topicSelect").value;
   if (!topic_id) { alert("Select a topic"); return; }
-  
+
   document.getElementById("log").innerHTML = "";
-  
+
   console.log("START payload", { student_id: studentId, topic_id: topic_id });
-  
+
   try {
     const res = await fetch("/start", {
       method: "POST",
@@ -97,34 +240,36 @@ async function start() {
         topic_id: topic_id
       })
     });
-    
+
     if (!res.ok) {
       const errText = await res.text();
       add("Error", `API error ${res.status}: ${errText.substring(0, 200)}`);
       return;
     }
-    
+
     const data = await res.json();
-    
+
     // Handle restart-blocked / completed responses from backend
     if (data.state === "COMPLETED" || data.blocked === true) {
       const msg = String(data.tutor || data.message || data.tutor_text || "Topic already completed.");
       add("Tutor", msg);
+      speakText(msg);
       document.getElementById("meta").textContent = "session_id: null | question_id: -";
       document.getElementById("answer").disabled = true;
       document.getElementById("submit").disabled = true;
       return;
     }
-    
+
     sessionId = data.session_id;
     topicId = topic_id;
     document.getElementById("meta").textContent = `session_id: ${sessionId} | topic_id: ${topic_id}`;
     document.getElementById("answer").disabled = false;
     document.getElementById("submit").disabled = false;
-    
+
     // Safely extract tutor message
     const msg = String(data.tutor_text || data.message || data.tutor || "Session started.");
     add("Tutor", msg);
+    speakText(msg);
     await updateProgress(studentId, topic_id);
   } catch (e) {
     add("Error", `Failed to start session: ${e.message}`);
@@ -138,7 +283,9 @@ async function resume() {
   const data = await res.json();
 
   if (data.status !== "ok") {
-    add("Tutor", `No previous session found for student ${studentId}.`);
+    const msg = `No previous session found for student ${studentId}.`;
+    add("Tutor", msg);
+    speakText(msg);
     return;
   }
 
@@ -147,7 +294,9 @@ async function resume() {
   document.getElementById("meta").textContent = `session_id: ${data.session_id} | topic_id: ${data.topic_id}`;
   document.getElementById("answer").disabled = false;
   document.getElementById("submit").disabled = false;
-  add("Tutor", `Resumed session ${data.session_id} (topic ${data.topic_id}, state ${data.state}).`);
+  const msg = `Resumed session. Topic: ${data.topic_id}. State: ${data.state}.`;
+  add("Tutor", msg);
+  speakText(msg);
   await updateProgress(studentId, data.topic_id);
 }
 
@@ -164,15 +313,15 @@ async function send() {
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({student_id: studentId, session_id: sessionId, user_text: msg})
   });
-  
+
   if (!r.ok) {
     const errText = await r.text();
     add("Error", `API error ${r.status}: ${errText.substring(0, 200)}`);
     return;
   }
-  
+
   const data = await r.json();
-  
+
   const tutorText =
     data.tutor_text ??
     data.tutor ??
@@ -180,13 +329,14 @@ async function send() {
     (data.question && (data.question.prompt || data.question)) ??
     "";
   add("Tutor", tutorText || "Continue...");
+  speakText(tutorText);
 
   // show progress metadata if available
   if (data.question_id || data.topic_id) {
     document.getElementById("meta").textContent =
       `session_id: ${sessionId} | topic_id: ${data.topic_id || "-"} | question_id: ${data.question_id || "-"}`;
   }
-  
+
   // Update progress
   await updateProgress(studentId, topicId);
 }
@@ -194,16 +344,6 @@ async function send() {
 document.getElementById("answer").addEventListener("keydown", (e) => {
   if (e.key === "Enter") send();
 });
-
-// ===== Voice Input Note (Web Speech API limitation in Replit iframe) =====
-const micBtn = document.getElementById("micBtn");
-const micStatus = document.getElementById("micStatus");
-
-// Replit's browser environment (iframe sandbox) blocks Web Speech API audio capture
-// The button is here as a placeholder for future mobile/standalone deployments
-micBtn.disabled = true;
-micStatus.textContent = "Voice input not available in Replit. Type your answers instead! 📝";
-micBtn.title = "Web Speech API audio capture is blocked in Replit's browser. Use typing instead.";
 </script>
 </body>
 </html>
