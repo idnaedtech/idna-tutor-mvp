@@ -189,7 +189,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         session_id = _run_async(
             create_session(
                 student_id=request.student_id,
-                topic_id="addition",
+                topic_id="t_cbse6_math_add",
                 state="EXPLAIN",
                 current_question_id=None,
                 fsm_data={
