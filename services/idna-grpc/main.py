@@ -6,9 +6,15 @@ import threading
 from queue import Queue
 from concurrent import futures
 
-from grpc_health.v1 import health
-from grpc_health.v1 import health_pb2
-from grpc_health.v1 import health_pb2_grpc
+# Optional: gRPC health check (graceful if unavailable)
+try:
+    from grpc_health.v1 import health
+    from grpc_health.v1 import health_pb2
+    from grpc_health.v1 import health_pb2_grpc
+    HEALTH_CHECK_AVAILABLE = True
+except ImportError:
+    print("[gRPC] WARNING: grpcio-health-checking not installed, health check disabled", flush=True)
+    HEALTH_CHECK_AVAILABLE = False
 
 import tutoring_pb2
 import tutoring_pb2_grpc
@@ -209,13 +215,12 @@ def serve():
         TutoringServicer(), _server
     )
 
-    # Add Health Check service
-    _health_servicer = health.HealthServicer()
-    health_pb2_grpc.add_HealthServicer_to_server(_health_servicer, _server)
-
-    # Set health status to SERVING
-    _health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
-    _health_servicer.set("TutoringService", health_pb2.HealthCheckResponse.SERVING)
+    # Add Health Check service (if available)
+    if HEALTH_CHECK_AVAILABLE:
+        _health_servicer = health.HealthServicer()
+        health_pb2_grpc.add_HealthServicer_to_server(_health_servicer, _server)
+        _health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+        _health_servicer.set("TutoringService", health_pb2.HealthCheckResponse.SERVING)
 
     _server.add_insecure_port(f"0.0.0.0:{grpc_port}")
     print(f"GRPC_LISTENING 0.0.0.0:{grpc_port}", flush=True)
@@ -225,7 +230,8 @@ def serve():
     signal.signal(signal.SIGINT, _shutdown_handler)
 
     _server.start()
-    print("[gRPC] Server started, health check enabled", flush=True)
+    health_status = "enabled" if HEALTH_CHECK_AVAILABLE else "disabled"
+    print(f"[gRPC] Server started, health check {health_status}", flush=True)
     _server.wait_for_termination()
 
 
