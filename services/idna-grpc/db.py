@@ -1,4 +1,5 @@
 import os
+import json
 import asyncpg
 from urllib.parse import urlparse
 
@@ -37,9 +38,15 @@ async def init_pool():
             min_size=1,
             max_size=5
         )
-        
+
         # Create/update tables if they don't exist
         async with _pool.acquire() as c:
+            # Add fsm_data column to sessions for FSM state storage
+            await c.execute("""
+            ALTER TABLE sessions
+            ADD COLUMN IF NOT EXISTS fsm_data JSONB DEFAULT '{}';
+            """)
+
             # Update seen_questions table to add student_id and topic_id if they don't exist
             await c.execute("""
             ALTER TABLE seen_questions
@@ -49,7 +56,7 @@ async def init_pool():
             ALTER TABLE seen_questions
             ADD COLUMN IF NOT EXISTS topic_id VARCHAR(100);
             """)
-            
+
             # Create attempts table if it doesn't exist
             await c.execute("""
             CREATE TABLE IF NOT EXISTS attempts (
@@ -58,7 +65,7 @@ async def init_pool():
               session_id VARCHAR(36) NOT NULL,
               topic_id VARCHAR(100) NOT NULL,
               question_id VARCHAR(100) NOT NULL,
-              user_answer TEXT NOT NULL,
+              user_answer TEXT,
               is_correct BOOLEAN NOT NULL,
               created_at TIMESTAMP DEFAULT NOW()
             );
@@ -68,11 +75,6 @@ async def init_pool():
             """)
             await c.execute("""
             CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id);
-            """)
-            # Drop NOT NULL constraint on user_answer to allow NULL values
-            await c.execute("""
-            ALTER TABLE attempts
-            ALTER COLUMN user_answer DROP NOT NULL;
             """)
 
 def pool() -> asyncpg.Pool | None:
@@ -86,28 +88,58 @@ async def close_pool():
         await _pool.close()
         _pool = None
 
-async def create_session(student_id: str, topic_id: str = "", state: str = "ACTIVE", current_question_id: str | None = None):
+async def create_session(
+    student_id: str,
+    topic_id: str = "",
+    state: str = "ACTIVE",
+    current_question_id: str | None = None,
+    fsm_data: dict | None = None
+):
     import uuid
     session_id = str(uuid.uuid4())
+    fsm_json = json.dumps(fsm_data) if fsm_data else "{}"
+
     q = """
-    insert into sessions(session_id, student_id, topic_id, state, attempt_count, frustration_counter, current_question_id)
-    values($1,$2,$3,$4,0,0,$5)
+    INSERT INTO sessions(session_id, student_id, topic_id, state, attempt_count, frustration_counter, current_question_id, fsm_data)
+    VALUES($1, $2, $3, $4, 0, 0, $5, $6::jsonb)
     """
     async with pool().acquire() as c:
-        await c.execute(q, session_id, student_id, topic_id, state, current_question_id)
+        await c.execute(q, session_id, student_id, topic_id, state, current_question_id, fsm_json)
     return session_id
 
 async def get_session(session_id: str):
-    q = "select * from sessions where session_id=$1"
+    q = "SELECT * FROM sessions WHERE session_id=$1"
     async with pool().acquire() as c:
-        return await c.fetchrow(q, session_id)
+        row = await c.fetchrow(q, session_id)
+        if row:
+            # Convert to dict and parse fsm_data if present
+            result = dict(row)
+            if result.get("fsm_data"):
+                # asyncpg returns JSONB as dict already, but handle string case
+                if isinstance(result["fsm_data"], str):
+                    result["fsm_data"] = json.loads(result["fsm_data"])
+            return result
+        return None
 
 async def update_session(session_id: str, **fields):
     keys = list(fields.keys())
     if not keys:
         return
-    set_clause = ", ".join([f"{k}=${i+2}" for i, k in enumerate(keys)])
-    q = f"update sessions set {set_clause}, updated_at=now() where session_id=$1"
+
+    # Convert fsm_data dict to JSON string for JSONB column
+    if "fsm_data" in fields and isinstance(fields["fsm_data"], dict):
+        fields["fsm_data"] = json.dumps(fields["fsm_data"])
+
+    # Build SET clause with proper casting for fsm_data
+    set_parts = []
+    for i, k in enumerate(keys):
+        if k == "fsm_data":
+            set_parts.append(f"{k}=${i+2}::jsonb")
+        else:
+            set_parts.append(f"{k}=${i+2}")
+    set_clause = ", ".join(set_parts)
+
+    q = f"UPDATE sessions SET {set_clause}, updated_at=now() WHERE session_id=$1"
     values = [fields[k] for k in keys]
     async with pool().acquire() as c:
         await c.execute(q, session_id, *values)
