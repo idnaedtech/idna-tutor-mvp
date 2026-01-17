@@ -55,6 +55,70 @@ class TurnIn(BaseModel):
 
 
 # -------------
+# State mapping (int -> string)
+# -------------
+STATE_NAMES = {
+    0: "IDLE",
+    1: "EXPLAIN",
+    2: "QUIZ",
+    3: "FEEDBACK",
+    4: "HINT",
+    5: "REVEAL",
+    6: "DONE",
+}
+
+
+def state_to_string(state_int: int) -> str:
+    """Convert state integer to string name."""
+    return STATE_NAMES.get(state_int, "UNKNOWN")
+
+
+# -------------
+# Response helpers (locked schema)
+# -------------
+GRPC_TIMEOUT = 10  # seconds
+
+
+def error_response(message: str = "Tutor is thinking, please try again", retry: bool = True) -> dict:
+    """Return consistent error response format."""
+    return {
+        "ok": False,
+        "error": message,
+        "retry": retry,
+    }
+
+
+def success_response_start(session_id: str, state: int, tutor_text: str) -> dict:
+    """Return consistent success response for start_session."""
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "state": state_to_string(state),
+        "tutor_text": tutor_text,
+        "intent": "",
+        "attempt_count": 0,
+    }
+
+
+def success_response_turn(
+    session_id: str,
+    state: int,
+    tutor_text: str,
+    intent: str = "",
+    attempt_count: int = 0,
+) -> dict:
+    """Return consistent success response for turn."""
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "state": state_to_string(state),
+        "tutor_text": tutor_text,
+        "intent": intent,
+        "attempt_count": attempt_count,
+    }
+
+
+# -------------
 # gRPC helper
 # -------------
 def get_stub() -> tutoring_pb2_grpc.TutoringServiceStub:
@@ -128,27 +192,24 @@ def start_session(payload: StartSessionIn):
                 student_id=payload.student_id,
                 topic_id=payload.topic_id,
             ),
-            timeout=10,
+            timeout=GRPC_TIMEOUT,
         )
-        return {
-            "ok": True,
-            "session_id": resp.session_id,
-            "state": int(resp.state),
-            "tutor_text": resp.tutor_text,
-        }
+        return success_response_start(
+            session_id=resp.session_id,
+            state=int(resp.state),
+            tutor_text=resp.tutor_text,
+        )
 
     except RpcError as e:
-        # Return real gRPC error instead of FastAPI "Internal Server Error"
-        return {
-            "ok": False,
-            "grpc_code": str(e.code()),
-            "error": e.details(),
-            "target": os.getenv("GRPC_TARGET"),
-            "tls": os.getenv("GRPC_USE_TLS", "0") == "1",
-        }
+        # Log for debugging but return friendly message
+        print(f"[start_session] gRPC error: {e.code()} - {e.details()}", flush=True)
+        if e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+            return error_response("Tutor took too long to respond, please try again")
+        return error_response("Tutor is thinking, please try again")
 
     except Exception as e:
-        return {"ok": False, "error_type": type(e).__name__, "error": repr(e)}
+        print(f"[start_session] Error: {type(e).__name__} - {e}", flush=True)
+        return error_response("Something went wrong, please try again")
 
 
 @app.post("/turn")
@@ -161,33 +222,27 @@ def turn(payload: TurnIn):
                 session_id=payload.session_id,
                 user_text=payload.user_text,
             ),
-            timeout=10,
+            timeout=GRPC_TIMEOUT,
         )
 
-        return {
-            "ok": True,
-            "session_id": resp.session_id,
-            "next_state": int(resp.next_state),
-            "tutor_text": resp.tutor_text,
-            "intent": resp.intent,
-            "attempt_count": resp.attempt_count,
-            "frustration_counter": resp.frustration_counter,
-            "topic_id": resp.topic_id,
-            "question_id": resp.question_id,
-            "title": resp.title,
-        }
+        return success_response_turn(
+            session_id=resp.session_id,
+            state=int(resp.next_state),
+            tutor_text=resp.tutor_text,
+            intent=resp.intent,
+            attempt_count=resp.attempt_count,
+        )
 
     except RpcError as e:
-        return {
-            "ok": False,
-            "grpc_code": str(e.code()),
-            "error": e.details(),
-            "target": os.getenv("GRPC_TARGET"),
-            "tls": os.getenv("GRPC_USE_TLS", "0") == "1",
-        }
+        # Log for debugging but return friendly message
+        print(f"[turn] gRPC error: {e.code()} - {e.details()}", flush=True)
+        if e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+            return error_response("Tutor took too long to respond, please try again")
+        return error_response("Tutor is thinking, please try again")
 
     except Exception as e:
-        return {"ok": False, "error_type": type(e).__name__, "error": repr(e)}
+        print(f"[turn] Error: {type(e).__name__} - {e}", flush=True)
+        return error_response("Something went wrong, please try again")
 
 
 # -------------------------
@@ -239,6 +294,49 @@ async def api_resume(student_id: str = Query(...)):
         return {"status": "not_found"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/status")
+async def api_status():
+    """System health and connectivity status for debugging/monitoring."""
+    status = {
+        "ok": True,
+        "services": {
+            "db": {"ok": False, "error": None},
+            "grpc": {"ok": False, "error": None},
+        },
+    }
+
+    # Check database
+    try:
+        async with db.pool().acquire() as c:
+            await c.fetchval("SELECT 1")
+        status["services"]["db"]["ok"] = True
+    except Exception as e:
+        status["services"]["db"]["error"] = str(e)
+        status["ok"] = False
+
+    # Check gRPC
+    target = os.getenv("GRPC_TARGET")
+    use_tls = os.getenv("GRPC_USE_TLS", "0") == "1"
+    if not target:
+        status["services"]["grpc"]["error"] = "GRPC_TARGET not set"
+        status["ok"] = False
+    else:
+        try:
+            channel = (
+                grpc.secure_channel(target, grpc.ssl_channel_credentials())
+                if use_tls
+                else grpc.insecure_channel(target)
+            )
+            grpc.channel_ready_future(channel).result(timeout=5)
+            status["services"]["grpc"]["ok"] = True
+            status["services"]["grpc"]["target"] = target
+        except Exception as e:
+            status["services"]["grpc"]["error"] = str(e)
+            status["ok"] = False
+
+    return status
 
 
 @app.post("/start")
