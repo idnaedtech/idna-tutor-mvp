@@ -37,6 +37,10 @@ message TurnResponse {
   string topic_id = 7;
   string question_id = 8;
   string title = 9;
+  string question = 10;
+  bool is_correct = 11;
+  bool done = 12;
+  string expected_answer = 13;
 }
 
 service TutoringService {

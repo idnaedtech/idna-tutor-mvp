@@ -21,6 +21,9 @@ except ImportError:
 import tutoring_pb2
 import tutoring_pb2_grpc
 
+# LLM wrapper for generating tutor text
+from llm import generate_tutor_text, get_empty_input_response, get_complete_response
+
 from db import (
     init_pool,
     close_pool,
@@ -134,6 +137,29 @@ def is_correct_answer(user_text: str, expected: int) -> bool:
     return parsed == expected
 
 
+def is_empty_or_gibberish(user_text: str) -> bool:
+    """
+    Check if user input is empty or gibberish (no valid content).
+
+    Returns True if:
+    - Empty or whitespace only
+    - Contains no alphanumeric characters
+    - Too short to be meaningful (< 1 char after strip)
+    """
+    if not user_text:
+        return True
+
+    text = user_text.strip()
+    if not text:
+        return True
+
+    # Check if there's any alphanumeric content
+    if not any(c.isalnum() for c in text):
+        return True
+
+    return False
+
+
 # ===============================
 # Async DB runner (thread-safe)
 # ===============================
@@ -226,6 +252,19 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
         questions_completed = fsm_data.get("questions_completed", 0)
         total_questions = fsm_data.get("total_questions", 5)
 
+        # Check for empty/gibberish input - don't count as attempt
+        # Skip this check for EXPLAIN state (any input advances)
+        if current_state != "EXPLAIN" and is_empty_or_gibberish(request.user_text):
+            return tutoring_pb2.TurnResponse(
+                session_id=request.session_id,
+                next_state=tutoring_pb2.FsmState.Value(current_state) if current_state in ["QUIZ", "HINT", "REVEAL"] else tutoring_pb2.FsmState.QUIZ,
+                tutor_text=get_empty_input_response(),
+                attempt_count=attempt_count,
+                question=current_q.get("prompt", ""),
+                is_correct=False,
+                done=False,
+            )
+
         # ========== STATE MACHINE ==========
 
         # EXPLAIN → QUIZ (any input advances)
@@ -237,11 +276,24 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 fsm_data=fsm_data
             ))
 
+            # Generate tutor text using LLM
+            tutor_text = generate_tutor_text(
+                state="QUIZ",
+                question=current_q,
+                attempt_no=0,
+                user_text="",
+                is_correct=False,
+                expected_answer=current_q["answer"]
+            )
+
             return tutoring_pb2.TurnResponse(
                 session_id=request.session_id,
                 next_state=tutoring_pb2.FsmState.QUIZ,
-                tutor_text=f"Question {questions_completed + 1}: {current_q['prompt']}",
+                tutor_text=tutor_text,
                 attempt_count=0,
+                question=current_q["prompt"],
+                is_correct=False,
+                done=False,
             )
 
         # QUIZ → EVALUATE (any input is treated as answer attempt)
@@ -266,18 +318,32 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
 
                 # Check if session complete
                 if questions_completed >= total_questions:
+                    fsm_data["questions_completed"] = questions_completed
                     _run_async(update_session(
                         request.session_id,
                         state="COMPLETED",
                         fsm_data=fsm_data
                     ))
+
+                    tutor_text = generate_tutor_text(
+                        state="REVEAL",
+                        question=current_q,
+                        attempt_no=attempt_count,
+                        user_text=user_text,
+                        is_correct=True,
+                        expected_answer=expected
+                    ) + " " + get_complete_response()
+
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
-                        next_state=tutoring_pb2.FsmState.REVEAL,  # Use REVEAL as END
-                        tutor_text=f"Correct! {current_q['a']} + {current_q['b']} = {expected}\n\n"
-                                   f"Great job! You completed all {total_questions} questions!",
+                        next_state=tutoring_pb2.FsmState.REVEAL,
+                        tutor_text=tutor_text,
                         intent="complete",
                         attempt_count=attempt_count,
+                        question=current_q["prompt"],
+                        is_correct=True,
+                        done=True,
+                        expected_answer=str(expected),
                     )
 
                 # Generate next question
@@ -292,13 +358,24 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     fsm_data=fsm_data
                 ))
 
+                tutor_text = generate_tutor_text(
+                    state="QUIZ",
+                    question=current_q,
+                    attempt_no=attempt_count,
+                    user_text=user_text,
+                    is_correct=True,
+                    expected_answer=expected
+                )
+
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
                     next_state=tutoring_pb2.FsmState.QUIZ,
-                    tutor_text=f"Correct! {current_q['a']} + {current_q['b']} = {expected}\n\n"
-                               f"Question {questions_completed + 1}: {new_q['prompt']}",
+                    tutor_text=tutor_text + f" Next question: {new_q['prompt']}",
                     intent="correct",
                     attempt_count=attempt_count,
+                    question=new_q["prompt"],
+                    is_correct=True,
+                    done=False,
                 )
 
             else:
@@ -318,13 +395,26 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         state="HINT",
                         fsm_data=fsm_data
                     ))
+
+                    tutor_text = generate_tutor_text(
+                        state="HINT",
+                        question=current_q,
+                        attempt_no=attempt_count,
+                        user_text=user_text,
+                        is_correct=False,
+                        expected_answer=expected
+                    )
+
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.FsmState.HINT,
-                        tutor_text=f"Not quite. Let me help!\n\n{current_q['hint1']}\n\nTry again: {current_q['prompt']}",
+                        tutor_text=tutor_text,
                         intent="hint1",
                         attempt_count=attempt_count,
                         frustration_counter=1,
+                        question=current_q["prompt"],
+                        is_correct=False,
+                        done=False,
                     )
 
                 elif attempt_count == 2:
@@ -334,18 +424,32 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         state="HINT",
                         fsm_data=fsm_data
                     ))
+
+                    tutor_text = generate_tutor_text(
+                        state="HINT",
+                        question=current_q,
+                        attempt_no=attempt_count,
+                        user_text=user_text,
+                        is_correct=False,
+                        expected_answer=expected
+                    )
+
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.FsmState.HINT,
-                        tutor_text=f"Still not right. Here's another way to think about it:\n\n{current_q['hint2']}\n\nOne more try: {current_q['prompt']}",
+                        tutor_text=tutor_text,
                         intent="hint2",
                         attempt_count=attempt_count,
                         frustration_counter=2,
+                        question=current_q["prompt"],
+                        is_correct=False,
+                        done=False,
                     )
 
                 else:
                     # Third wrong → REVEAL and move on
                     questions_completed += 1
+                    fsm_data["questions_completed"] = questions_completed
 
                     # Check if session complete
                     if questions_completed >= total_questions:
@@ -354,21 +458,33 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                             state="COMPLETED",
                             fsm_data=fsm_data
                         ))
+
+                        tutor_text = generate_tutor_text(
+                            state="REVEAL",
+                            question=current_q,
+                            attempt_no=attempt_count,
+                            user_text=user_text,
+                            is_correct=False,
+                            expected_answer=expected
+                        ) + " " + get_complete_response()
+
                         return tutoring_pb2.TurnResponse(
                             session_id=request.session_id,
                             next_state=tutoring_pb2.FsmState.REVEAL,
-                            tutor_text=f"{current_q['reveal']}\n\n"
-                                       f"You completed all {total_questions} questions! Keep practicing!",
+                            tutor_text=tutor_text,
                             intent="complete",
                             attempt_count=attempt_count,
                             frustration_counter=3,
+                            question=current_q["prompt"],
+                            is_correct=False,
+                            done=True,
+                            expected_answer=str(expected),
                         )
 
                     # Generate next question
                     new_q = generate_addition_question()
                     fsm_data["current_question"] = new_q
                     fsm_data["attempt_count"] = 0
-                    fsm_data["questions_completed"] = questions_completed
 
                     _run_async(update_session(
                         request.session_id,
@@ -376,14 +492,26 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         fsm_data=fsm_data
                     ))
 
+                    tutor_text = generate_tutor_text(
+                        state="REVEAL",
+                        question=current_q,
+                        attempt_no=attempt_count,
+                        user_text=user_text,
+                        is_correct=False,
+                        expected_answer=expected
+                    )
+
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.FsmState.REVEAL,
-                        tutor_text=f"{current_q['reveal']}\n\n"
-                                   f"Let's try another one!\n\nQuestion {questions_completed + 1}: {new_q['prompt']}",
+                        tutor_text=tutor_text + f" Next question: {new_q['prompt']}",
                         intent="reveal",
                         attempt_count=attempt_count,
                         frustration_counter=3,
+                        question=new_q["prompt"],
+                        is_correct=False,
+                        done=False,
+                        expected_answer=str(expected),
                     )
 
         # HINT state → user tries again → back to EVALUATE
@@ -401,6 +529,7 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 ))
 
                 questions_completed += 1
+                fsm_data["questions_completed"] = questions_completed
 
                 if questions_completed >= total_questions:
                     _run_async(update_session(
@@ -408,19 +537,31 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         state="COMPLETED",
                         fsm_data=fsm_data
                     ))
+
+                    tutor_text = generate_tutor_text(
+                        state="REVEAL",
+                        question=current_q,
+                        attempt_no=attempt_count,
+                        user_text=user_text,
+                        is_correct=True,
+                        expected_answer=expected
+                    ) + " " + get_complete_response()
+
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.FsmState.REVEAL,
-                        tutor_text=f"Correct! {current_q['a']} + {current_q['b']} = {expected}\n\n"
-                                   f"Excellent! You completed all {total_questions} questions!",
+                        tutor_text=tutor_text,
                         intent="complete",
                         attempt_count=attempt_count,
+                        question=current_q["prompt"],
+                        is_correct=True,
+                        done=True,
+                        expected_answer=str(expected),
                     )
 
                 new_q = generate_addition_question()
                 fsm_data["current_question"] = new_q
                 fsm_data["attempt_count"] = 0
-                fsm_data["questions_completed"] = questions_completed
 
                 _run_async(update_session(
                     request.session_id,
@@ -428,13 +569,24 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                     fsm_data=fsm_data
                 ))
 
+                tutor_text = generate_tutor_text(
+                    state="QUIZ",
+                    question=current_q,
+                    attempt_no=attempt_count,
+                    user_text=user_text,
+                    is_correct=True,
+                    expected_answer=expected
+                )
+
                 return tutoring_pb2.TurnResponse(
                     session_id=request.session_id,
                     next_state=tutoring_pb2.FsmState.QUIZ,
-                    tutor_text=f"Correct! {current_q['a']} + {current_q['b']} = {expected}\n\n"
-                               f"Question {questions_completed + 1}: {new_q['prompt']}",
+                    tutor_text=tutor_text + f" Next question: {new_q['prompt']}",
                     intent="correct",
                     attempt_count=attempt_count,
+                    question=new_q["prompt"],
+                    is_correct=True,
+                    done=False,
                 )
             else:
                 # Wrong again - continue escalation
@@ -452,17 +604,31 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         state="HINT",
                         fsm_data=fsm_data
                     ))
+
+                    tutor_text = generate_tutor_text(
+                        state="HINT",
+                        question=current_q,
+                        attempt_no=attempt_count,
+                        user_text=user_text,
+                        is_correct=False,
+                        expected_answer=expected
+                    )
+
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.FsmState.HINT,
-                        tutor_text=f"Not quite yet. Here's another hint:\n\n{current_q['hint2']}\n\nLast try: {current_q['prompt']}",
+                        tutor_text=tutor_text,
                         intent="hint2",
                         attempt_count=attempt_count,
                         frustration_counter=2,
+                        question=current_q["prompt"],
+                        is_correct=False,
+                        done=False,
                     )
                 else:
                     # attempt_count >= 3 → REVEAL
                     questions_completed += 1
+                    fsm_data["questions_completed"] = questions_completed
 
                     if questions_completed >= total_questions:
                         _run_async(update_session(
@@ -470,20 +636,32 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                             state="COMPLETED",
                             fsm_data=fsm_data
                         ))
+
+                        tutor_text = generate_tutor_text(
+                            state="REVEAL",
+                            question=current_q,
+                            attempt_no=attempt_count,
+                            user_text=user_text,
+                            is_correct=False,
+                            expected_answer=expected
+                        ) + " " + get_complete_response()
+
                         return tutoring_pb2.TurnResponse(
                             session_id=request.session_id,
                             next_state=tutoring_pb2.FsmState.REVEAL,
-                            tutor_text=f"{current_q['reveal']}\n\n"
-                                       f"Session complete! You practiced {total_questions} questions.",
+                            tutor_text=tutor_text,
                             intent="complete",
                             attempt_count=attempt_count,
                             frustration_counter=3,
+                            question=current_q["prompt"],
+                            is_correct=False,
+                            done=True,
+                            expected_answer=str(expected),
                         )
 
                     new_q = generate_addition_question()
                     fsm_data["current_question"] = new_q
                     fsm_data["attempt_count"] = 0
-                    fsm_data["questions_completed"] = questions_completed
 
                     _run_async(update_session(
                         request.session_id,
@@ -491,14 +669,26 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                         fsm_data=fsm_data
                     ))
 
+                    tutor_text = generate_tutor_text(
+                        state="REVEAL",
+                        question=current_q,
+                        attempt_no=attempt_count,
+                        user_text=user_text,
+                        is_correct=False,
+                        expected_answer=expected
+                    )
+
                     return tutoring_pb2.TurnResponse(
                         session_id=request.session_id,
                         next_state=tutoring_pb2.FsmState.REVEAL,
-                        tutor_text=f"{current_q['reveal']}\n\n"
-                                   f"Let's continue!\n\nQuestion {questions_completed + 1}: {new_q['prompt']}",
+                        tutor_text=tutor_text + f" Next question: {new_q['prompt']}",
                         intent="reveal",
                         attempt_count=attempt_count,
                         frustration_counter=3,
+                        question=new_q["prompt"],
+                        is_correct=False,
+                        done=False,
+                        expected_answer=str(expected),
                     )
 
         # COMPLETED state - session is done
@@ -508,6 +698,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
                 next_state=tutoring_pb2.FsmState.REVEAL,
                 tutor_text="This session is complete! Start a new session to practice more.",
                 intent="complete",
+                question="",
+                is_correct=False,
+                done=True,
             )
 
         # Fallback - unknown state
@@ -515,6 +708,9 @@ class TutoringServicer(tutoring_pb2_grpc.TutoringServiceServicer):
             session_id=request.session_id,
             tutor_text=f"Unknown state: {current_state}. Please start a new session.",
             intent="error",
+            question="",
+            is_correct=False,
+            done=False,
         )
 
 
@@ -562,8 +758,8 @@ def serve():
         _health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
         _health_servicer.set("TutoringService", health_pb2.HealthCheckResponse.SERVING)
 
-    _server.add_insecure_port(f"0.0.0.0:{grpc_port}")
-    print(f"GRPC_LISTENING 0.0.0.0:{grpc_port}", flush=True)
+    _server.add_insecure_port(f"127.0.0.1:{grpc_port}")
+    print(f"GRPC_LISTENING 127.0.0.1:{grpc_port}", flush=True)
 
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)
