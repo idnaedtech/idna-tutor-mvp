@@ -442,9 +442,7 @@ def generate_voice_message(name: str, study_minutes: int, accuracy: float, langu
 @app.get("/")
 async def root():
     """Home page"""
-    if os.path.exists("index.html"):
-        return FileResponse("index.html")
-    return FileResponse("web/index.html")
+    return FileResponse("static/index.html")
 
 
 @app.get("/student")
