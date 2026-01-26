@@ -1,6 +1,0 @@
-grpcio>=1.60.0
-grpcio-tools>=1.60.0
-grpcio-health-checking>=1.60.0
-protobuf>=4.25.0
-asyncpg>=0.29.0
-openai>=1.0.0
