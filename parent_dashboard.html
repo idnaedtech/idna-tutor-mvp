@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IDNA - Parent Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(180deg, #F8FAFC 0%, #EEF2FF 100%);
+            min-height: 100vh;
+            max-width: 480px;
+            margin: 0 auto;
+            padding-bottom: 100px;
+        }
+        
+        .header {
+            padding: 24px 20px;
+            border-radius: 0 0 32px 32px;
+            color: white;
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.2);
+        }
+        .header.good { background: linear-gradient(135deg, #10B981 0%, #059669 100%); }
+        .header.medium { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); }
+        .header.needs-work { background: linear-gradient(135deg, #F87171 0%, #DC2626 100%); }
+        
+        .header-content { display: flex; align-items: center; gap: 16px; }
+        .avatar {
+            width: 56px; height: 56px; border-radius: 16px;
+            background: rgba(255,255,255,0.25);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: 700;
+        }
+        .header-info { flex: 1; }
+        .student-name { font-size: 22px; font-weight: 700; }
+        .student-meta { font-size: 13px; opacity: 0.9; margin-top: 4px; }
+        .streak-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 12px; border-radius: 20px;
+            font-size: 13px; font-weight: 600;
+        }
+        
+        .voice-card {
+            margin: 20px; padding: 20px;
+            background: white; border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        }
+        .voice-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .voice-icon { font-size: 20px; }
+        .voice-title { font-size: 15px; font-weight: 600; color: #1F2937; }
+        .voice-text { font-size: 14px; color: #4B5563; line-height: 1.6; margin-bottom: 16px; }
+        .play-btn {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            color: white; border: none; border-radius: 12px;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .play-btn:active { transform: scale(0.98); }
+        .play-btn.playing { background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%); }
+        .play-btn.loading { opacity: 0.7; cursor: wait; }
+        
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr);
+            gap: 12px; padding: 0 20px; margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white; padding: 16px; border-radius: 16px;
+            text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        }
+        .stat-icon { font-size: 24px; margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #1F2937; }
+        .stat-value.green { color: #10B981; }
+        .stat-value.amber { color: #F59E0B; }
+        .stat-value.red { color: #EF4444; }
+        .stat-label { font-size: 12px; color: #6B7280; margin-top: 4px; }
+        .stat-trend { font-size: 11px; color: #10B981; margin-top: 8px; font-weight: 500; }
+        
+        .tabs { display: flex; gap: 8px; padding: 0 20px; margin-bottom: 20px; }
+        .tab {
+            flex: 1; padding: 12px 8px; border: none; border-radius: 12px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            background: white; color: #6B7280; transition: all 0.2s;
+        }
+        .tab.active { background: #4F46E5; color: white; }
+        
+        .section {
+            background: white; border-radius: 20px; padding: 20px;
+            margin: 0 20px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        }
+        .section-title { font-size: 16px; font-weight: 700; color: #1F2937; margin-bottom: 16px; }
+        
+        .activity-chart { display: flex; justify-content: space-between; align-items: flex-end; height: 140px; gap: 8px; }
+        .activity-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .activity-bar-container { height: 100px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+        .activity-bar {
+            width: 100%; max-width: 36px; border-radius: 8px 8px 4px 4px;
+            min-height: 8px; display: flex; align-items: flex-start;
+            justify-content: center; padding-top: 4px;
+            background: linear-gradient(180deg, #4F46E5 0%, #818CF8 100%);
+            transition: height 0.5s ease-out;
+        }
+        .activity-bar.empty { background: #E5E7EB; }
+        .activity-value { font-size: 9px; color: white; font-weight: 600; }
+        .activity-label { font-size: 11px; color: #6B7280; font-weight: 500; }
+        
+        .topic-card {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px; background: #F8FAFC; border-radius: 12px; margin-bottom: 8px;
+        }
+        .topic-card.attention { border-left: 4px solid #F59E0B; }
+        .topic-icon { font-size: 24px; }
+        .topic-info { flex: 1; }
+        .topic-name { display: block; font-size: 14px; font-weight: 600; color: #1F2937; text-transform: capitalize; margin-bottom: 6px; }
+        .progress-bar { height: 6px; background: #E5E7EB; border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease-out; }
+        .progress-fill.green { background: #10B981; }
+        .progress-fill.amber { background: #F59E0B; }
+        .progress-fill.red { background: #EF4444; }
+        .mastery-badge { padding: 4px 10px; border-radius: 12px; color: white; font-size: 12px; font-weight: 600; }
+        .mastery-badge.green { background: #10B981; }
+        .mastery-badge.amber { background: #F59E0B; }
+        .mastery-badge.red { background: #EF4444; }
+        .practice-btn {
+            padding: 8px 14px; background: #F59E0B; color: white;
+            border: none; border-radius: 8px; font-size: 12px;
+            font-weight: 600; cursor: pointer;
+        }
+        
+        .subject-card {
+            display: flex; align-items: center; gap: 16px;
+            padding: 16px; border-radius: 16px; margin-bottom: 12px;
+        }
+        .subject-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; color: white;
+        }
+        .subject-info { flex: 1; }
+        .subject-name { display: block; font-size: 15px; font-weight: 600; color: #1F2937; }
+        .subject-time { font-size: 13px; color: #6B7280; }
+        .subject-ring {
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .subject-perc { font-size: 12px; font-weight: 700; color: #1F2937; background: white; padding: 8px; border-radius: 50%; }
+        
+        .achievement-card {
+            display: flex; align-items: center; gap: 14px;
+            padding: 14px; background: #F8FAFC; border-radius: 14px; margin-bottom: 12px;
+        }
+        .achievement-badge {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; font-size: 24px;
+        }
+        .achievement-info { flex: 1; }
+        .achievement-name { display: block; font-size: 14px; font-weight: 600; color: #1F2937; }
+        .achievement-desc { display: block; font-size: 12px; color: #6B7280; margin: 2px 0; }
+        .achievement-date { font-size: 11px; color: #9CA3AF; }
+        .achievement-points { text-align: center; }
+        .points-value { display: block; font-size: 18px; font-weight: 700; color: #F59E0B; }
+        .points-label { font-size: 11px; color: #9CA3AF; }
+        .total-points {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 16px; padding: 16px;
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+            border-radius: 12px; font-weight: 600;
+        }
+        .total-points-value { font-size: 20px; color: #D97706; }
+        
+        .footer {
+            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 100%; max-width: 480px; display: flex; gap: 8px;
+            padding: 12px 16px; background: white;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.08); border-radius: 24px 24px 0 0;
+        }
+        .whatsapp-btn {
+            flex: 1; padding: 14px 8px;
+            background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+            color: white; border: none; border-radius: 14px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        .primary-btn {
+            flex: 1; padding: 14px 8px;
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            color: white; border: none; border-radius: 14px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        .secondary-btn {
+            flex: 1; padding: 14px 8px; background: #F3F4F6; color: #4B5563;
+            border: none; border-radius: 14px; font-size: 13px;
+            font-weight: 600; cursor: pointer;
+        }
+        
+        .loading {
+            display: flex; align-items: center; justify-content: center;
+            height: 100vh; flex-direction: column;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 4px solid #E5E7EB;
+            border-top: 4px solid #4F46E5; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 16px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .celebration {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); display: none;
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+        .celebration.show { display: flex; }
+        .celebration-content {
+            background: white; padding: 32px 48px; border-radius: 24px;
+            font-size: 28px; font-weight: 700;
+            animation: celebration 0.5s ease-in-out infinite;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+        }
+        @keyframes celebration { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        
+        #voiceAudio { display: none; }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <div style="color: #6B7280; font-size: 14px;">Loading your child's journey...</div>
+    </div>
+    
+    <div id="dashboard" style="display: none;">
+        <div id="celebration" class="celebration">
+            <div class="celebration-content">🎉 Great Progress! 🎉</div>
+        </div>
+        
+        <header id="header" class="header good">
+            <div class="header-content">
+                <div class="avatar" id="avatar">A</div>
+                <div class="header-info">
+                    <h1 class="student-name" id="studentName">Student Name</h1>
+                    <p class="student-meta" id="studentMeta">Class 5 • Age 10 • Math</p>
+                </div>
+                <div class="streak-badge" id="streakBadge">🔥 0 Days</div>
+            </div>
+        </header>
+        
+        <div class="voice-card">
+            <div class="voice-header">
+                <span class="voice-icon">🎧</span>
+                <span class="voice-title">आज की Progress Update</span>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #6B7280; margin-right: 8px;">🌐 Language:</label>
+                <select id="langSelect" onchange="changeLanguage()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #E5E7EB; font-size: 14px; background: white;">
+                    <option value="english">English</option>
+                    <option value="hindi">हिंदी (Hindi)</option>
+                    <option value="hinglish">Hinglish</option>
+                    <option value="telugu">తెలుగు (Telugu)</option>
+                    <option value="tamil">தமிழ் (Tamil)</option>
+                    <option value="marathi">मराठी (Marathi)</option>
+                </select>
+            </div>
+            <p class="voice-text" id="voiceText">Loading...</p>
+            <button class="play-btn" id="playBtn" onclick="toggleVoice()">▶️ Play Voice Message</button>
+            <audio id="voiceAudio"></audio>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">⏱️</div>
+                <div class="stat-value" id="studyTime">0</div>
+                <div class="stat-label">Minutes This Week</div>
+                <div class="stat-trend" id="timeTrend">↑ 0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-value" id="accuracy">0%</div>
+                <div class="stat-label">Accuracy</div>
+                <div class="stat-trend" id="accuracyTrend">Keep going!</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📚</div>
+                <div class="stat-value" id="sessions">0</div>
+                <div class="stat-label">Sessions</div>
+                <div class="stat-trend" id="sessionsTrend">0 per day</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-value" id="mastered">0</div>
+                <div class="stat-label">Topics Mastered</div>
+                <div class="stat-trend" id="masteredTrend">+0 this week</div>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('overview')">📊 Overview</button>
+            <button class="tab" onclick="switchTab('subjects')">📘 Subjects</button>
+            <button class="tab" onclick="switchTab('achievements')">🏆 Badges</button>
+        </div>
+        
+        <div id="overview" class="tab-content active">
+            <div class="section">
+                <h2 class="section-title">📅 Weekly Activity</h2>
+                <div class="activity-chart" id="activityChart"></div>
+            </div>
+            
+            <div class="section">
+                <h2 class="section-title">✅ Mastered Topics</h2>
+                <div id="masteredTopics"></div>
+            </div>
+            
+            <div class="section" id="focusSection" style="display: none;">
+                <h2 class="section-title">🎯 Focus Areas</h2>
+                <p style="font-size: 13px; color: #6B7280; margin: -8px 0 16px;">These topics need more practice</p>
+                <div id="focusTopics"></div>
+            </div>
+        </div>
+        
+        <div id="subjects" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">📘 Subject-wise Time</h2>
+                <div id="subjectsList"></div>
+            </div>
+        </div>
+        
+        <div id="achievements" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">🏆 Recent Achievements</h2>
+                <div id="achievementsList"></div>
+                <div class="total-points">
+                    <span>Total Points Earned</span>
+                    <span class="total-points-value" id="totalPoints">0 ⭐</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <button class="whatsapp-btn" onclick="shareToWhatsApp()">📱 WhatsApp</button>
+            <button class="primary-btn" onclick="talkToTeacher()">📞 Call Teacher</button>
+            <button class="secondary-btn" onclick="fullReport()">📊 Report</button>
+        </div>
+    </div>
+    
+    <script>
+        // Configuration
+        const API_BASE = window.location.origin;
+        const STUDENT_ID = new URLSearchParams(window.location.search).get('student') || 1;
+        
+        const subjectConfig = {
+            math: { icon: '📐', color: '#4F46E5', bgColor: '#EEF2FF', label: 'गणित' },
+            science: { icon: '🔬', color: '#059669', bgColor: '#ECFDF5', label: 'विज्ञान' },
+            english: { icon: '📚', color: '#DC2626', bgColor: '#FEF2F2', label: 'English' },
+            hindi: { icon: '📖', color: '#D97706', bgColor: '#FFFBEB', label: 'हिंदी' },
+            evs: { icon: '🌿', color: '#16A34A', bgColor: '#F0FDF4', label: 'EVS' },
+            social_studies: { icon: '🗺️', color: '#7C3AED', bgColor: '#F5F3FF', label: 'Social' }
+        };
+        
+        const sampleData = {
+            student: { id: 1, name: "Aarav Sharma", age: 10, grade: 5, current_subject: "math" },
+            dashboard: {
+                total_study_time_minutes: 245, average_accuracy: 78.5, sessions_completed: 12, streak_days: 7,
+                subjects_time: [{ subject: "math", time: 4500 }, { subject: "science", time: 3200 }],
+                topics_mastered: [{ subject: "math", topic: "addition", mastery_level: 95 }],
+                topics_needing_attention: [{ subject: "math", topic: "fractions", mastery_level: 45 }],
+                recent_achievements: [{ name: "7-Day Streak!", description: "Studied 7 days", points: 50, date: "2026-01-20", type: "streak" }],
+                daily_activity: [
+                    { date: "2026-01-17", sessions: 2, duration: 1800 },
+                    { date: "2026-01-18", sessions: 1, duration: 900 },
+                    { date: "2026-01-19", sessions: 3, duration: 2700 },
+                    { date: "2026-01-20", sessions: 2, duration: 2100 },
+                    { date: "2026-01-21", sessions: 2, duration: 1500 },
+                    { date: "2026-01-22", sessions: 1, duration: 1200 },
+                    { date: "2026-01-23", sessions: 2, duration: 1800 }
+                ]
+            },
+            voice_message: "Namaste! Aarav is doing wonderfully! 245 minutes studied with 78.5% accuracy."
+        };
+        
+        let isPlaying = false;
+        let dashboardData = null;
+        let cachedAudioBase64 = null;
+        let currentLanguage = 'english';
+        
+        async function loadDashboard() {
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/${STUDENT_ID}?lang=${currentLanguage}`);
+                if (response.ok) dashboardData = await response.json();
+            } catch (e) { console.log('Using sample data'); }
+            if (!dashboardData) dashboardData = sampleData;
+            renderDashboard();
+        }
+        
+        async function changeLanguage() {
+            const lang = document.getElementById('langSelect').value;
+            currentLanguage = lang;
+            cachedAudioBase64 = null; // Clear cached audio
+            
+            // Reload dashboard with new language
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/${STUDENT_ID}?lang=${lang}`);
+                if (response.ok) {
+                    dashboardData = await response.json();
+                    document.getElementById('voiceText').textContent = dashboardData.voice_message;
+                }
+            } catch (e) {
+                console.log('Language change error:', e);
+            }
+        }
+        
+        function renderDashboard() {
+            const { student, dashboard, voice_message } = dashboardData;
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            
+            const accuracy = dashboard.average_accuracy;
+            document.getElementById('header').className = 'header ' + (accuracy >= 80 ? 'good' : accuracy >= 60 ? 'medium' : 'needs-work');
+            document.getElementById('avatar').textContent = student.name.charAt(0);
+            document.getElementById('studentName').textContent = student.name;
+            document.getElementById('studentMeta').textContent = `Class ${student.grade} • Age ${student.age} • ${subjectConfig[student.current_subject]?.label || student.current_subject}`;
+            document.getElementById('streakBadge').textContent = `🔥 ${dashboard.streak_days || 7} Days`;
+            document.getElementById('voiceText').textContent = voice_message;
+            document.getElementById('studyTime').textContent = dashboard.total_study_time_minutes;
+            document.getElementById('accuracy').textContent = dashboard.average_accuracy + '%';
+            document.getElementById('accuracy').className = 'stat-value ' + (accuracy >= 80 ? 'green' : accuracy >= 60 ? 'amber' : 'red');
+            document.getElementById('sessions').textContent = dashboard.sessions_completed;
+            document.getElementById('mastered').textContent = dashboard.topics_mastered.length;
+            
+            renderActivityChart(dashboard.daily_activity);
+            renderTopics('masteredTopics', dashboard.topics_mastered, false);
+            if (dashboard.topics_needing_attention.length > 0) {
+                document.getElementById('focusSection').style.display = 'block';
+                renderTopics('focusTopics', dashboard.topics_needing_attention, true);
+            }
+            renderSubjects(dashboard.subjects_time);
+            renderAchievements(dashboard.recent_achievements);
+            
+            if (accuracy >= 70) {
+                setTimeout(() => {
+                    document.getElementById('celebration').classList.add('show');
+                    setTimeout(() => document.getElementById('celebration').classList.remove('show'), 3000);
+                }, 500);
+            }
+        }
+        
+        function formatDuration(s) { const m = Math.floor(s/60); return m < 60 ? m+'m' : Math.floor(m/60)+'h '+(m%60)+'m'; }
+        
+        function renderActivityChart(data) {
+            const c = document.getElementById('activityChart');
+            const max = Math.max(...data.map(d => d.duration), 1);
+            c.innerHTML = data.map(d => `
+                <div class="activity-day">
+                    <div class="activity-bar-container">
+                        <div class="activity-bar ${d.sessions===0?'empty':''}" style="height:${Math.max((d.duration/max)*100,5)}%">
+                            <span class="activity-value">${formatDuration(d.duration)}</span>
+                        </div>
+                    </div>
+                    <span class="activity-label">${new Date(d.date).toLocaleDateString('en-IN',{weekday:'short'})}</span>
+                </div>
+            `).join('');
+        }
+        
+        function renderTopics(id, topics, attn) {
+            const c = document.getElementById(id);
+            if (!topics?.length) { c.innerHTML = '<p style="color:#9CA3AF;text-align:center;padding:20px">No topics yet</p>'; return; }
+            c.innerHTML = topics.map(t => {
+                const cfg = subjectConfig[t.subject] || {icon:'📚'};
+                const clr = t.mastery_level >= 80 ? 'green' : t.mastery_level >= 60 ? 'amber' : 'red';
+                return `<div class="topic-card ${attn?'attention':''}">
+                    <span class="topic-icon">${cfg.icon}</span>
+                    <div class="topic-info"><span class="topic-name">${t.topic.replace(/_/g,' ')}</span>
+                    <div class="progress-bar"><div class="progress-fill ${clr}" style="width:${t.mastery_level}%"></div></div></div>
+                    ${attn ? `<button class="practice-btn" onclick="practice('${t.subject}','${t.topic}')">Practice</button>` : `<span class="mastery-badge ${clr}">${t.mastery_level}%</span>`}
+                </div>`;
+            }).join('');
+        }
+        
+        function renderSubjects(subjects) {
+            const c = document.getElementById('subjectsList');
+            if (!subjects?.length) { c.innerHTML = '<p style="color:#9CA3AF;text-align:center;padding:20px">No data</p>'; return; }
+            const total = subjects.reduce((s,x) => s+x.time, 0) || 1;
+            c.innerHTML = subjects.map(s => {
+                const cfg = subjectConfig[s.subject] || {icon:'📚',color:'#6B7280',bgColor:'#F3F4F6',label:s.subject};
+                const pct = Math.round((s.time/total)*100);
+                return `<div class="subject-card" style="background:${cfg.bgColor}">
+                    <div class="subject-icon" style="background:${cfg.color}">${cfg.icon}</div>
+                    <div class="subject-info"><span class="subject-name">${cfg.label}</span><span class="subject-time">${formatDuration(s.time)}</span></div>
+                    <div class="subject-ring" style="background:conic-gradient(${cfg.color} ${pct}%,#E5E7EB ${pct}%)"><span class="subject-perc">${pct}%</span></div>
+                </div>`;
+            }).join('');
+        }
+        
+        function renderAchievements(achs) {
+            const c = document.getElementById('achievementsList');
+            if (!achs?.length) { c.innerHTML = '<p style="color:#9CA3AF;text-align:center;padding:20px">No badges yet</p>'; document.getElementById('totalPoints').textContent = '0 ⭐'; return; }
+            const colors = {streak:'#F59E0B',mastery:'#8B5CF6',speed:'#3B82F6',accuracy:'#10B981'};
+            const icons = {streak:'🔥',mastery:'⭐',speed:'⚡',accuracy:'💯'};
+            c.innerHTML = achs.map(a => `<div class="achievement-card">
+                <div class="achievement-badge" style="background:${colors[a.type]||'#8B5CF6'}">${icons[a.type]||'⭐'}</div>
+                <div class="achievement-info"><span class="achievement-name">${a.name}</span><span class="achievement-desc">${a.description}</span></div>
+                <div class="achievement-points"><span class="points-value">+${a.points}</span><span class="points-label">pts</span></div>
+            </div>`).join('');
+            document.getElementById('totalPoints').textContent = achs.reduce((s,a)=>s+a.points,0) + ' ⭐';
+        }
+        
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(name).classList.add('active');
+        }
+        
+        // ===================== VOICE PLAYBACK =====================
+        async function toggleVoice() {
+            const btn = document.getElementById('playBtn');
+            const audio = document.getElementById('voiceAudio');
+            
+            if (isPlaying) {
+                audio.pause();
+                audio.currentTime = 0;
+                btn.innerHTML = '▶️ Play Voice Message';
+                btn.classList.remove('playing');
+                isPlaying = false;
+                return;
+            }
+            
+            btn.innerHTML = '⏳ Loading...';
+            btn.classList.add('loading');
+            
+            try {
+                if (cachedAudioBase64) {
+                    playAudio(cachedAudioBase64);
+                    return;
+                }
+                
+                console.log('Calling voice API with language:', currentLanguage);
+                const resp = await fetch(`${API_BASE}/api/dashboard/${STUDENT_ID}/voice-report?lang=${currentLanguage}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                console.log('Response:', resp.status);
+                const data = await resp.json();
+                console.log('Data:', data.success, data.audio ? 'has audio' : 'no audio', 'lang:', data.language);
+                
+                if (data.success && data.audio) {
+                    cachedAudioBase64 = data.audio;
+                    playAudio(data.audio);
+                } else {
+                    console.log('Error:', data.error);
+                    fallback();
+                }
+            } catch (e) {
+                console.log('Exception:', e);
+                fallback();
+            }
+        }
+        
+        function playAudio(base64) {
+            const btn = document.getElementById('playBtn');
+            const audio = document.getElementById('voiceAudio');
+            
+            audio.src = 'data:audio/mp3;base64,' + base64;
+            audio.playbackRate = 0.9;  // Slow down slightly (0.9 = 90% speed)
+            audio.onplay = () => { btn.innerHTML = '⏸️ Pause'; btn.classList.remove('loading'); btn.classList.add('playing'); isPlaying = true; };
+            audio.onended = () => { btn.innerHTML = '▶️ Play Voice Message'; btn.classList.remove('playing'); isPlaying = false; };
+            audio.onerror = () => { console.log('Audio error'); fallback(); };
+            audio.play().catch(e => { console.log('Play error:', e); fallback(); });
+        }
+        
+        function fallback() {
+            const btn = document.getElementById('playBtn');
+            console.log('Using browser TTS fallback');
+            if ('speechSynthesis' in window) {
+                btn.innerHTML = '🔊 Playing...';
+                btn.classList.remove('loading');
+                btn.classList.add('playing');
+                isPlaying = true;
+                const u = new SpeechSynthesisUtterance(dashboardData.voice_message);
+                u.lang = 'en-IN';
+                u.rate = 0.9;
+                u.onend = () => { btn.innerHTML = '▶️ Play Voice Message'; btn.classList.remove('playing'); isPlaying = false; };
+                speechSynthesis.speak(u);
+            } else {
+                btn.innerHTML = '▶️ Play Voice Message';
+                btn.classList.remove('loading');
+            }
+        }
+        
+        function practice(subj, topic) { window.location.href = `/?subject=${subj}&topic=${topic}`; }
+        
+        function shareToWhatsApp() {
+            if (!dashboardData) return;
+            
+            const { student, dashboard, voice_message } = dashboardData;
+            
+            // Create detailed WhatsApp message
+            const message = `📚 *IDNA EdTech - Progress Report*
+
+👤 *Student:* ${student.name}
+📖 *Class:* ${student.grade} | Age: ${student.age}
+
+📊 *This Week's Performance:*
+⏱️ Study Time: ${dashboard.total_study_time_minutes} minutes
+🎯 Accuracy: ${dashboard.average_accuracy}%
+📝 Sessions: ${dashboard.sessions_completed}
+🔥 Streak: ${dashboard.streak_days} days
+
+✨ *Topics Mastered:* ${dashboard.topics_mastered.length}
+${dashboard.topics_mastered.map(t => `  ✅ ${t.topic} (${t.mastery_level}%)`).join('\n')}
+
+${dashboard.topics_needing_attention.length > 0 ? `📌 *Needs Practice:*
+${dashboard.topics_needing_attention.map(t => `  ⚠️ ${t.topic} (${t.mastery_level}%)`).join('\n')}` : ''}
+
+💬 *Teacher's Message:*
+"${voice_message}"
+
+---
+🎓 Powered by IDNA EdTech
+📱 Download: idnaedtech.com`;
+
+            // Encode for URL
+            const encodedMessage = encodeURIComponent(message);
+            
+            // Open WhatsApp (works on mobile and desktop)
+            const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+            window.open(whatsappUrl, '_blank');
+        }
+        
+        function talkToTeacher() {
+            // You can replace this with actual teacher phone number
+            const teacherPhone = '919876543210'; // Example: India number
+            const message = encodeURIComponent(`Hi, I'm ${dashboardData?.student?.name}'s parent. I'd like to discuss their progress.`);
+            window.open(`https://wa.me/${teacherPhone}?text=${message}`, '_blank');
+        }
+        
+        function fullReport() {
+            if (!dashboardData) return;
+            
+            const { student, dashboard } = dashboardData;
+            
+            // Create detailed report
+            let report = `
+╔══════════════════════════════════════╗
+║     IDNA EdTech - Full Report        ║
+╚══════════════════════════════════════╝
+
+STUDENT INFORMATION
+-------------------
+Name: ${student.name}
+Class: ${student.grade}
+Age: ${student.age}
+
+WEEKLY SUMMARY
+--------------
+• Total Study Time: ${dashboard.total_study_time_minutes} minutes
+• Average Accuracy: ${dashboard.average_accuracy}%
+• Sessions Completed: ${dashboard.sessions_completed}
+• Current Streak: ${dashboard.streak_days} days
+
+TOPICS MASTERED (${dashboard.topics_mastered.length})
+-----------------
+${dashboard.topics_mastered.map(t => `• ${t.topic}: ${t.mastery_level}%`).join('\n') || 'None yet'}
+
+AREAS FOR IMPROVEMENT (${dashboard.topics_needing_attention.length})
+----------------------
+${dashboard.topics_needing_attention.map(t => `• ${t.topic}: ${t.mastery_level}%`).join('\n') || 'All good!'}
+
+DAILY ACTIVITY
+--------------
+${dashboard.daily_activity.map(d => {
+    const date = new Date(d.date).toLocaleDateString('en-IN', {weekday: 'short', day: 'numeric', month: 'short'});
+    return `${date}: ${d.sessions} sessions, ${Math.round(d.duration/60)} min`;
+}).join('\n')}
+
+---
+Generated by IDNA EdTech
+${new Date().toLocaleString('en-IN')}
+`;
+            
+            // Show in alert or download as text
+            if (confirm('Download report as text file?')) {
+                const blob = new Blob([report], {type: 'text/plain'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${student.name}_Report_${new Date().toISOString().split('T')[0]}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert(report);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => setTimeout(loadDashboard, 500));
+    </script>
+</body>
+</html>

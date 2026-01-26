@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IDNA Math Tutor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 32px 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .header-icon { font-size: 48px; margin-bottom: 8px; }
+        .header-title { font-size: 24px; font-weight: 700; color: #1F2937; }
+        .header-subtitle { font-size: 14px; color: #6B7280; }
+        
+        /* Stats Row */
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            background: #F3F4F6;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat { text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #4F46E5; }
+        .stat-label { font-size: 12px; color: #6B7280; }
+        
+        /* Chapter Selection */
+        .chapter-select {
+            margin-bottom: 24px;
+        }
+        
+        .chapter-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .chapter-dropdown {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: 'Poppins', sans-serif;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .chapter-dropdown:focus {
+            outline: none;
+            border-color: #4F46E5;
+        }
+        
+        /* Question Area */
+        .question-area {
+            background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .question-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1F2937;
+            text-align: center;
+            line-height: 1.5;
+        }
+        
+        .question-number {
+            font-size: 12px;
+            color: #6B7280;
+            margin-bottom: 8px;
+        }
+        
+        /* Answer Input */
+        .answer-section {
+            margin-bottom: 24px;
+        }
+        
+        .answer-input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            font-size: 18px;
+            font-family: 'Poppins', sans-serif;
+            text-align: center;
+        }
+        
+        .answer-input:focus {
+            outline: none;
+            border-color: #4F46E5;
+        }
+        
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Poppins', sans-serif;
+            transition: transform 0.2s;
+        }
+        
+        .btn:active { transform: scale(0.98); }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #F3F4F6;
+            color: #4B5563;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .btn-speak {
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+            color: white;
+        }
+        
+        .btn-end {
+            width: 100%;
+            background: #FEE2E2;
+            color: #DC2626;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Feedback */
+        .feedback {
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+        }
+        
+        .feedback.show { display: block; }
+        .feedback.correct { background: #D1FAE5; color: #065F46; }
+        .feedback.incorrect { background: #FEE2E2; color: #991B1B; }
+        .feedback.hint { background: #FEF3C7; color: #92400E; }
+        
+        /* Welcome Screen */
+        .welcome { text-align: center; }
+        .welcome-icon { font-size: 64px; margin-bottom: 16px; }
+        .welcome-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+        .welcome-text { color: #6B7280; margin-bottom: 24px; }
+        
+        /* Summary Screen */
+        .summary { text-align: center; display: none; }
+        .summary.show { display: block; }
+        .summary-icon { font-size: 64px; margin-bottom: 16px; }
+        .summary-score { font-size: 48px; font-weight: 700; color: #4F46E5; }
+        .summary-text { color: #6B7280; margin: 16px 0; }
+        
+        /* Hidden */
+        .hidden { display: none !important; }
+        
+        /* Loading */
+        .loading::after {
+            content: '...';
+            animation: dots 1s infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <!-- Header -->
+            <div class="header">
+                <div class="header-icon">🎓</div>
+                <div class="header-title">IDNA Math Tutor</div>
+                <div class="header-subtitle">Class 8 Mathematics</div>
+            </div>
+            
+            <!-- Welcome Screen -->
+            <div id="welcomeScreen" class="welcome">
+                <div class="welcome-icon">📚</div>
+                <div class="welcome-title">Ready to Learn?</div>
+                <div class="welcome-text">Choose a chapter and start practicing!</div>
+                
+                <div class="chapter-select">
+                    <label class="chapter-label">Select Chapter / अध्याय चुनें</label>
+                    <select id="chapterSelect" class="chapter-dropdown">
+                        <option value="">-- Select Chapter --</option>
+                    </select>
+                </div>
+                
+                <button class="btn btn-primary" style="width:100%" onclick="startSession()">
+                    🚀 Start Learning / पढ़ाई शुरू करें
+                </button>
+            </div>
+            
+            <!-- Practice Screen -->
+            <div id="practiceScreen" class="hidden">
+                <!-- Stats -->
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value" id="questionNum">1</div>
+                        <div class="stat-label">Question</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="scoreNum">0</div>
+                        <div class="stat-label">Correct ✓</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="attemptsNum">3</div>
+                        <div class="stat-label">Attempts</div>
+                    </div>
+                </div>
+                
+                <!-- Question -->
+                <div class="question-area">
+                    <div>
+                        <div class="question-number" id="qNumber">Question 1</div>
+                        <div class="question-text" id="questionText">Loading...</div>
+                    </div>
+                </div>
+                
+                <!-- Feedback -->
+                <div class="feedback" id="feedback"></div>
+                
+                <!-- Answer -->
+                <div class="answer-section">
+                    <input type="text" id="answerInput" class="answer-input" placeholder="Type your answer / जवाब लिखें" autocomplete="off">
+                </div>
+                
+                <!-- Buttons -->
+                <div class="btn-row">
+                    <button class="btn btn-speak" onclick="speakQuestion()">🔊 Listen</button>
+                    <button class="btn btn-success" onclick="submitAnswer()">✓ Submit</button>
+                </div>
+                
+                <button class="btn btn-secondary" onclick="nextQuestion()" id="nextBtn" style="width:100%; margin-bottom:12px; display:none;">
+                    Next Question →
+                </button>
+                
+                <button class="btn btn-end" onclick="endSession()">Finish Session</button>
+            </div>
+            
+            <!-- Summary Screen -->
+            <div id="summaryScreen" class="summary">
+                <div class="summary-icon">🏆</div>
+                <div class="summary-score"><span id="finalScore">0</span>/<span id="finalTotal">0</span></div>
+                <div class="summary-text" id="summaryMessage">Great job!</div>
+                <div style="margin-top:24px">
+                    <button class="btn btn-primary" style="width:100%; margin-bottom:12px;" onclick="restartSession()">
+                        🔄 Practice Again
+                    </button>
+                    <button class="btn btn-secondary" style="width:100%;" onclick="goHome()">
+                        🏠 Home
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        
+        let sessionId = null;
+        let currentChapter = null;
+        let currentQuestion = null;
+        let score = 0;
+        let total = 0;
+        let attemptsLeft = 3;
+        
+        // Load chapters on page load
+        async function loadChapters() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/chapters`);
+                const data = await resp.json();
+                
+                const select = document.getElementById('chapterSelect');
+                data.chapters.forEach(ch => {
+                    const option = document.createElement('option');
+                    option.value = ch.id;
+                    option.textContent = ch.name;
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                console.error('Failed to load chapters:', e);
+            }
+        }
+        
+        // Start session
+        async function startSession() {
+            const chapter = document.getElementById('chapterSelect').value;
+            if (!chapter) {
+                alert('Please select a chapter first!');
+                return;
+            }
+            
+            currentChapter = chapter;
+            
+            try {
+                // Start session
+                const startResp = await fetch(`${API_BASE}/api/session/start`, { method: 'POST' });
+                const startData = await startResp.json();
+                sessionId = startData.session_id;
+                
+                // Select chapter
+                const chapterResp = await fetch(`${API_BASE}/api/session/chapter`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, chapter: chapter })
+                });
+                
+                // Show practice screen
+                document.getElementById('welcomeScreen').classList.add('hidden');
+                document.getElementById('practiceScreen').classList.remove('hidden');
+                document.getElementById('summaryScreen').classList.remove('show');
+                
+                // Reset stats
+                score = 0;
+                total = 0;
+                updateStats();
+                
+                // Get first question
+                await getNextQuestion();
+                
+            } catch (e) {
+                console.error('Failed to start session:', e);
+                alert('Failed to start session. Please try again.');
+            }
+        }
+        
+        // Get next question
+        async function getNextQuestion() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/session/question`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, chapter: currentChapter })
+                });
+                
+                const data = await resp.json();
+                
+                currentQuestion = data;
+                total = data.question_number;
+                attemptsLeft = 3;
+                
+                document.getElementById('questionText').textContent = data.question_text;
+                document.getElementById('qNumber').textContent = `Question ${data.question_number}`;
+                document.getElementById('answerInput').value = '';
+                document.getElementById('answerInput').focus();
+                
+                // Hide next button, show answer input
+                document.getElementById('nextBtn').style.display = 'none';
+                document.getElementById('answerInput').disabled = false;
+                
+                hideFeedback();
+                updateStats();
+                
+            } catch (e) {
+                console.error('Failed to get question:', e);
+            }
+        }
+        
+        // Submit answer
+        async function submitAnswer() {
+            const answer = document.getElementById('answerInput').value.trim();
+            if (!answer) {
+                alert('Please enter an answer!');
+                return;
+            }
+            
+            try {
+                const resp = await fetch(`${API_BASE}/api/session/answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, answer: answer })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.correct) {
+                    score = data.score;
+                    showFeedback(data.message, 'correct');
+                    document.getElementById('nextBtn').style.display = 'block';
+                    document.getElementById('answerInput').disabled = true;
+                } else {
+                    if (data.show_answer) {
+                        showFeedback(data.message, 'incorrect');
+                        document.getElementById('nextBtn').style.display = 'block';
+                        document.getElementById('answerInput').disabled = true;
+                    } else if (data.hint) {
+                        attemptsLeft = data.attempts_left;
+                        showFeedback(data.message, 'hint');
+                    } else {
+                        attemptsLeft = data.attempts_left;
+                        showFeedback(data.message, 'incorrect');
+                    }
+                }
+                
+                updateStats();
+                
+            } catch (e) {
+                console.error('Failed to submit answer:', e);
+            }
+        }
+        
+        // Next question
+        async function nextQuestion() {
+            await getNextQuestion();
+        }
+        
+        // End session
+        async function endSession() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/session/end`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, chapter: currentChapter })
+                });
+                
+                const data = await resp.json();
+                
+                document.getElementById('finalScore').textContent = data.score;
+                document.getElementById('finalTotal').textContent = data.total;
+                document.getElementById('summaryMessage').textContent = data.message;
+                
+                document.getElementById('practiceScreen').classList.add('hidden');
+                document.getElementById('summaryScreen').classList.add('show');
+                
+            } catch (e) {
+                console.error('Failed to end session:', e);
+            }
+        }
+        
+        // Restart session
+        function restartSession() {
+            document.getElementById('summaryScreen').classList.remove('show');
+            document.getElementById('welcomeScreen').classList.remove('hidden');
+            sessionId = null;
+        }
+        
+        // Go home
+        function goHome() {
+            window.location.href = '/';
+        }
+        
+        // Update stats display
+        function updateStats() {
+            document.getElementById('questionNum').textContent = total || 1;
+            document.getElementById('scoreNum').textContent = score;
+            document.getElementById('attemptsNum').textContent = attemptsLeft;
+        }
+        
+        // Show feedback
+        function showFeedback(message, type) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = message;
+            feedback.className = `feedback show ${type}`;
+        }
+        
+        // Hide feedback
+        function hideFeedback() {
+            document.getElementById('feedback').className = 'feedback';
+        }
+        
+        // Speak question using OpenAI TTS
+        async function speakQuestion() {
+            if (!currentQuestion) return;
+            
+            const btn = document.querySelector('.btn-speak');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Loading...';
+            btn.disabled = true;
+            
+            try {
+                const resp = await fetch(`${API_BASE}/api/text-to-speech`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        text: currentQuestion.question_text,
+                        voice: 'nova'
+                    })
+                });
+                
+                const data = await resp.json();
+                
+                if (data.audio) {
+                    const audio = new Audio('data:audio/mp3;base64,' + data.audio);
+                    audio.playbackRate = 0.9;
+                    audio.play();
+                    
+                    btn.innerHTML = '🔊 Playing...';
+                    audio.onended = () => {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    };
+                } else {
+                    // Fallback to browser TTS
+                    fallbackSpeak(currentQuestion.question_text);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                console.error('TTS error:', e);
+                fallbackSpeak(currentQuestion.question_text);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        // Browser TTS fallback
+        function fallbackSpeak(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-IN';
+                utterance.rate = 0.9;
+                speechSynthesis.speak(utterance);
+            }
+        }
+        
+        // Enter key to submit
+        document.addEventListener('DOMContentLoaded', () => {
+            loadChapters();
+            
+            document.getElementById('answerInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitAnswer();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

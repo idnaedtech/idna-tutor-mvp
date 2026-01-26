@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IDNA EdTech - Learn Math</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 24px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 4px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .score-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 12px 16px;
+            background: #f3f4f6;
+            border-radius: 12px;
+        }
+        
+        .score-item {
+            text-align: center;
+        }
+        
+        .score-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .score-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        
+        .chapter-select {
+            margin-bottom: 20px;
+        }
+        
+        .chapter-select label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+        
+        .chapter-select select {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 15px;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .chapter-select select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .question-area {
+            display: none;
+        }
+        
+        .question-area.active {
+            display: block;
+        }
+        
+        .question-number {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }
+        
+        .question-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        
+        .answer-input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 18px;
+            font-family: inherit;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        
+        .answer-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            margin-top: 8px;
+        }
+        
+        .btn-start {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+        
+        .feedback {
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+        }
+        
+        .feedback.show {
+            display: block;
+        }
+        
+        .feedback.correct {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .feedback.incorrect {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .feedback.hint {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .voice-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            font-size: 28px;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .voice-btn.recording {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .home-link {
+            display: block;
+            text-align: center;
+            color: white;
+            text-decoration: none;
+            margin-top: 16px;
+            opacity: 0.8;
+        }
+        
+        .state-indicator {
+            font-size: 10px;
+            color: #9ca3af;
+            text-align: right;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 IDNA Math Tutor</h1>
+            <p>Voice-First Learning for Class 8</p>
+        </div>
+        
+        <div class="card">
+            <div class="score-bar">
+                <div class="score-item">
+                    <div class="score-value" id="score">0</div>
+                    <div class="score-label">Score</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-value" id="total">0</div>
+                    <div class="score-label">Questions</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-value" id="accuracy">0%</div>
+                    <div class="score-label">Accuracy</div>
+                </div>
+            </div>
+            
+            <div id="chapter-selection">
+                <div class="chapter-select">
+                    <label>Select Chapter (अध्याय चुनें)</label>
+                    <select id="chapter-dropdown">
+                        <option value="">-- Choose a chapter --</option>
+                    </select>
+                </div>
+                <button class="btn btn-start" id="start-btn" disabled>Start Practice 🚀</button>
+            </div>
+            
+            <div id="question-area" class="question-area">
+                <div class="question-number" id="question-number">Question 1</div>
+                <div class="question-text" id="question-text">Loading question...</div>
+                
+                <div class="feedback" id="feedback"></div>
+                
+                <input type="text" class="answer-input" id="answer-input" placeholder="Your answer..." autocomplete="off">
+                
+                <button class="btn btn-primary" id="submit-btn">Submit Answer ✓</button>
+                <button class="btn btn-secondary" id="next-btn" style="display:none;">Next Question →</button>
+                <button class="btn btn-secondary" id="end-btn">End Session</button>
+                
+                <div class="state-indicator">State: <span id="state-display">idle</span></div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Loading...</p>
+            </div>
+        </div>
+        
+        <a href="/" class="home-link">← Back to Home</a>
+    </div>
+    
+    <button class="voice-btn" id="voice-btn">🎤</button>
+    
+    <script>
+        // State
+        let sessionId = null;
+        let currentChapter = null;
+        let currentState = 'idle';
+        let isRecording = false;
+        let mediaRecorder = null;
+        
+        // Elements
+        const chapterDropdown = document.getElementById('chapter-dropdown');
+        const startBtn = document.getElementById('start-btn');
+        const chapterSelection = document.getElementById('chapter-selection');
+        const questionArea = document.getElementById('question-area');
+        const questionNumber = document.getElementById('question-number');
+        const questionText = document.getElementById('question-text');
+        const answerInput = document.getElementById('answer-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const endBtn = document.getElementById('end-btn');
+        const feedback = document.getElementById('feedback');
+        const loading = document.getElementById('loading');
+        const voiceBtn = document.getElementById('voice-btn');
+        const scoreEl = document.getElementById('score');
+        const totalEl = document.getElementById('total');
+        const accuracyEl = document.getElementById('accuracy');
+        const stateDisplay = document.getElementById('state-display');
+        
+        // API calls
+        const API_BASE = '';
+        
+        async function api(endpoint, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (body) options.body = JSON.stringify(body);
+            
+            const res = await fetch(API_BASE + endpoint, options);
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'API Error');
+            }
+            return res.json();
+        }
+        
+        function updateState(newState) {
+            currentState = newState;
+            stateDisplay.textContent = newState;
+        }
+        
+        function showFeedback(message, type) {
+            feedback.textContent = message;
+            feedback.className = 'feedback show ' + type;
+        }
+        
+        function hideFeedback() {
+            feedback.className = 'feedback';
+        }
+        
+        function updateScore(score, total) {
+            scoreEl.textContent = score;
+            totalEl.textContent = total;
+            const acc = total > 0 ? Math.round((score / total) * 100) : 0;
+            accuracyEl.textContent = acc + '%';
+        }
+        
+        // Load chapters
+        async function loadChapters() {
+            try {
+                const data = await api('/api/chapters');
+                chapterDropdown.innerHTML = '<option value="">-- Choose a chapter --</option>';
+                data.chapters.forEach(ch => {
+                    const opt = document.createElement('option');
+                    opt.value = ch.id;
+                    opt.textContent = ch.name;
+                    chapterDropdown.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Failed to load chapters:', e);
+            }
+        }
+        
+        // Start session
+        async function startSession() {
+            loading.classList.add('show');
+            try {
+                const data = await api('/api/session/start', 'POST');
+                sessionId = data.session_id;
+                updateState(data.state);
+                
+                // Select chapter
+                currentChapter = chapterDropdown.value;
+                await api('/api/session/chapter', 'POST', {
+                    session_id: sessionId,
+                    chapter: currentChapter
+                });
+                
+                // Get first question
+                await getNextQuestion();
+                
+                chapterSelection.style.display = 'none';
+                questionArea.classList.add('active');
+                
+                speak(data.message);
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            loading.classList.remove('show');
+        }
+        
+        // Get next question
+        async function getNextQuestion() {
+            hideFeedback();
+            answerInput.value = '';
+            nextBtn.style.display = 'none';
+            submitBtn.style.display = 'block';
+            
+            try {
+                const data = await api('/api/session/question', 'POST', {
+                    session_id: sessionId,
+                    chapter: currentChapter
+                });
+                
+                questionNumber.textContent = 'Question ' + data.question_number;
+                questionText.textContent = data.question_text;
+                updateState(data.state);
+                
+                speak(data.question_text);
+                answerInput.focus();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // Submit answer
+        async function submitAnswer() {
+            const answer = answerInput.value.trim();
+            if (!answer) {
+                answerInput.focus();
+                return;
+            }
+            
+            loading.classList.add('show');
+            try {
+                const data = await api('/api/session/answer', 'POST', {
+                    session_id: sessionId,
+                    answer: answer
+                });
+                
+                updateState(data.state);
+                updateScore(data.score, data.total);
+                
+                if (data.correct) {
+                    showFeedback(data.message, 'correct');
+                    submitBtn.style.display = 'none';
+                    nextBtn.style.display = 'block';
+                } else if (data.show_answer) {
+                    showFeedback(data.message, 'incorrect');
+                    submitBtn.style.display = 'none';
+                    nextBtn.style.display = 'block';
+                } else if (data.hint) {
+                    showFeedback(data.message, 'hint');
+                } else {
+                    showFeedback(data.message, 'incorrect');
+                }
+                
+                speak(data.message);
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            loading.classList.remove('show');
+        }
+        
+        // End session
+        async function endSession() {
+            if (!confirm('End this session?')) return;
+            
+            loading.classList.add('show');
+            try {
+                const data = await api('/api/session/end', 'POST', {
+                    session_id: sessionId,
+                    chapter: currentChapter
+                });
+                
+                updateState(data.state);
+                alert(data.message);
+                speak(data.message);
+                
+                // Reset
+                sessionId = null;
+                currentChapter = null;
+                chapterSelection.style.display = 'block';
+                questionArea.classList.remove('active');
+                updateScore(0, 0);
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            loading.classList.remove('show');
+        }
+        
+        // Text to Speech
+        async function speak(text) {
+            try {
+                const data = await api('/api/text-to-speech', 'POST', { text, voice: 'nova' });
+                const audio = new Audio('data:audio/mp3;base64,' + data.audio);
+                audio.play();
+            } catch (e) {
+                console.error('TTS error:', e);
+                // Fallback to browser TTS
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    speechSynthesis.speak(utterance);
+                }
+            }
+        }
+        
+        // Voice input
+        async function toggleVoice() {
+            if (isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤';
+            } else {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    const chunks = [];
+                    
+                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                    mediaRecorder.onstop = async () => {
+                        const blob = new Blob(chunks, { type: 'audio/webm' });
+                        stream.getTracks().forEach(t => t.stop());
+                        
+                        // Send to STT
+                        const formData = new FormData();
+                        formData.append('audio', blob, 'recording.webm');
+                        
+                        try {
+                            const res = await fetch('/api/speech-to-text', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            const data = await res.json();
+                            answerInput.value = data.text;
+                        } catch (e) {
+                            console.error('STT error:', e);
+                        }
+                    };
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    voiceBtn.classList.add('recording');
+                    voiceBtn.textContent = '⏹️';
+                } catch (e) {
+                    alert('Could not access microphone');
+                }
+            }
+        }
+        
+        // Event listeners
+        chapterDropdown.addEventListener('change', () => {
+            startBtn.disabled = !chapterDropdown.value;
+        });
+        
+        startBtn.addEventListener('click', startSession);
+        submitBtn.addEventListener('click', submitAnswer);
+        nextBtn.addEventListener('click', getNextQuestion);
+        endBtn.addEventListener('click', endSession);
+        voiceBtn.addEventListener('click', toggleVoice);
+        
+        answerInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') {
+                if (nextBtn.style.display === 'block') {
+                    getNextQuestion();
+                } else {
+                    submitAnswer();
+                }
+            }
+        });
+        
+        // Init
+        loadChapters();
+    </script>
+</body>
+</html>
