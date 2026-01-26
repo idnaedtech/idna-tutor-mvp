@@ -448,7 +448,7 @@ async def root():
 @app.get("/student")
 async def student_page():
     """Student learning page"""
-    return FileResponse("web/index.html")
+    return FileResponse("static/index.html")
 
 
 @app.get("/parent")
@@ -831,6 +831,12 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "database": "connected" if os.path.exists(DB_PATH) else "initializing"
     }
+
+
+@app.get("/healthz")
+async def healthz():
+    """Kubernetes-style health check"""
+    return {"status": "ok"}
 
 
 # ============================================================
