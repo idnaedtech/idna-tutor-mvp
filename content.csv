@@ -1,0 +1,4 @@
+topic_id,grade,subject,language,title,explain_text,question_id,prompt,answer_key,hint1,hint2,reveal_explain,qtype
+g6_math_add_01,6,math,en,Addition basics,"Addition combines numbers to get a total.",q_add_01,"What is 2 + 2?",4,"Count 2 more from 2.","2+2 means 2 and 2 more.","2+2=4 because adding 2 increases 2 by 2.",short
+g6_math_add_01,6,math,en,Addition basics,"Addition combines numbers to get a total.",q_add_02,"What is 7 + 3?",10,"Add 3 to 7.","7+3 means 7 then 3 more.","7+3=10.",short
+g6_math_add_01,6,math,en,Addition basics,"Addition combines numbers to get a total.",q_add_03,"What is 9 + 6?",15,"Add 6 to 9.","9+6 means 9 then 6 more.","9+6=15.",short

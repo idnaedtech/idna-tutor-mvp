@@ -1,0 +1,40 @@
+modules = ["python-3.11", "postgresql-16"]
+[agent]
+expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Run Python"
+
+[[workflows.workflow]]
+name = "Run Python"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python run_servers.py"
+waitForPort = 5000
+
+[nix]
+channel = "stable-25_05"
+packages = ["c-ares", "grpc", "openssl", "pkg-config", "postgresql", "zlib"]
+
+[userenv]
+
+[userenv.shared]
+DATABASE_URL = "postgresql://postgres:[hemant0276]@db.edbstiagplztpjcslczq.supabase.co:5432/postgres"
+
+[[ports]]
+localPort = 5000
+externalPort = 80

@@ -1,0 +1,135 @@
+Proceed with **adding a student input box**. Keeping a hardcoded student ID will block testing resume/progress properly and will break the moment you demo with 2 kids.
+
+Below is the exact slow, simple change for `static/index.html`.
+
+---
+
+# Goal
+
+Let you type a student ID, then:
+
+* **Start Session** uses that student ID
+* **Resume Last Session** uses that student ID
+
+---
+
+# Step A: Add the input box (HTML)
+
+Open `static/index.html`.
+
+Find the area near your **Start Session** button. Add this just above it:
+
+```html
+<div style="margin: 8px 0;">
+  <label for="studentIdInput">Student ID:</label>
+  <input id="studentIdInput" type="text" value="s1" style="width: 320px;" />
+</div>
+```
+
+Simple: you can type `s1`, `s2`, etc.
+
+---
+
+# Step B: Replace the hardcoded JS variable (JavaScript)
+
+Find this line (you mentioned it):
+
+```js
+let studentId = "00000000-0000-0000-0000-000000000001";
+```
+
+Replace it with:
+
+```js
+function getStudentId() {
+  const el = document.getElementById("studentIdInput");
+  return (el?.value || "").trim() || "s1";
+}
+```
+
+Now student id comes from the input box.
+
+---
+
+# Step C: Update Start Session to use typed student ID
+
+In your `start()` (or whatever function runs on Start Session), replace any use of `studentId` with:
+
+```js
+const studentId = getStudentId();
+```
+
+Example (pattern):
+
+```js
+async function start() {
+  const studentId = getStudentId();
+  const topicId = document.getElementById("topicSelect").value;
+
+  const res = await fetch("/api/start_session", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ student_id: studentId, topic_id: topicId })
+  });
+
+  const data = await res.json();
+  // ... your existing UI updates
+}
+```
+
+---
+
+# Step D: Add “Resume Last Session” button + function
+
+## 1) Add button (HTML)
+
+Place it near Start Session:
+
+```html
+<button onclick="resume()">Resume Last Session</button>
+```
+
+## 2) Add function (JS)
+
+```js
+async function resume() {
+  const studentId = getStudentId();
+  const res = await fetch(`/api/resume?student_id=${encodeURIComponent(studentId)}`);
+  const data = await res.json();
+
+  if (data.status !== "ok") {
+    addLine(`Tutor: No previous session found for student ${studentId}.`);
+    return;
+  }
+
+  // store session_id in the same variable you already use
+  sessionId = data.session_id;
+
+  addLine(`Tutor: Resumed session ${data.session_id} (topic ${data.topic_id}, state ${data.state}).`);
+}
+```
+
+⚠️ Replace `addLine()` with your real function name (you already have something that prints “Tutor: ...”).
+Also replace `sessionId` with your real global variable (you already display it at the top).
+
+---
+
+# Test (simple)
+
+1. Type `s1` → Start Session → answer 1 question.
+2. Refresh page.
+3. Type `s1` → click **Resume Last Session**.
+4. It should show the old session_id.
+
+Then test with `s2` to prove it’s separate.
+
+---
+
+## To avoid guessing variable/function names
+
+Paste these 2 small snippets from `static/index.html`:
+
+1. the `start()` function (or the function called by Start Session button)
+2. the function you use to print chat lines (the one that adds “Tutor:” / “You:”)
+
+Then I’ll tell you the exact replacements using your real names.

@@ -1,0 +1,181 @@
+Add a “content picker” in your backend (Replit)
+
+You already have db.py. We will add 3 new DB functions:
+
+pick a topic
+
+pick a question
+
+store which topic/question session is using
+
+Step C1: Upgrade the sessions table (add topic + current question)
+
+In Supabase SQL Editor, run:
+
+alter table sessions
+add column if not exists topic_id text,
+add column if not exists current_question_id text;
+
+Part D — Update backend code
+Step D1: Update db.py (add these functions at bottom)
+
+Open db.py and add:
+
+async def pick_topic(grade: int, subject: str, language: str = "en"):
+    q = """
+    select topic_id, title, explain_text
+    from concepts
+    where grade=$1 and subject=$2 and language=$3
+    order by created_at asc
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, grade, subject, language)
+
+async def pick_question(topic_id: str):
+    q = """
+    select question_id, prompt, answer_key, hint1, hint2, reveal_explain
+    from questions
+    where topic_id=$1
+    order by random()
+    limit 1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, topic_id)
+
+async def get_question(question_id: str):
+    q = """
+    select question_id, prompt, answer_key, hint1, hint2, reveal_explain
+    from questions
+    where question_id=$1
+    """
+    async with pool().acquire() as c:
+        return await c.fetchrow(q, question_id)
+
+Step D2: Update main.py logic in easy steps
+1) Import the new DB functions
+
+At the top where you import db things, add:
+
+from db import pick_topic, pick_question, get_question
+
+2) In StartSession(): pick a topic and store it
+
+Replace your current “hardcoded question” session creation with this pattern:
+
+Pick topic: grade=6, subject=math, language=en (hardcoded for MVP)
+
+Store topic_id in session row
+
+Return explain_text from concepts
+
+You will do it like this:
+
+topic = asyncio.run(pick_topic(6, "math", "en"))
+if not topic:
+    # no content loaded in DB
+    return tutoring_pb2.StartSessionResponse(
+        session_id=session_id,
+        state=tutoring_pb2.EXPLAIN,
+        tutor_text="No content found. Please add concepts/questions in Supabase."
+    )
+
+asyncio.run(update_session(session_id, topic_id=topic["topic_id"], state="EXPLAIN", attempt_count=0, frustration_counter=0))
+return tutoring_pb2.StartSessionResponse(
+    session_id=session_id,
+    state=tutoring_pb2.EXPLAIN,
+    tutor_text=topic["explain_text"]
+)
+
+
+Important: create_session() in your db currently sets a hardcoded question. You should simplify it so it doesn’t hardcode content anymore.
+
+3) In EXPLAIN → QUIZ: pick a random question from DB
+
+When user says “next”, do:
+
+fetch session row
+
+use session.topic_id
+
+pick_question(topic_id)
+
+save current_question_id
+
+return question prompt
+
+Example replacement inside EXPLAIN branch:
+
+topic_id = s["topic_id"]
+qrow = asyncio.run(pick_question(topic_id))
+asyncio.run(update_session(
+    request.session_id,
+    state="QUIZ",
+    attempt_count=0,
+    current_question_id=qrow["question_id"]
+))
+return tutoring_pb2.TurnResponse(
+    session_id=request.session_id,
+    next_state=tutoring_pb2.QUIZ,
+    tutor_text=f"Question: {qrow['prompt']}",
+    attempt_count=0,
+    frustration_counter=s["frustration_counter"],
+    intent="ask_question"
+)
+
+4) In EVALUATE: grade against the DB answer_key
+
+Instead of fixed grade_answer(), do:
+
+get current_question_id
+
+load question from DB
+
+compare user_text to answer_key
+
+Add a simple compare helper:
+
+def normalize(s: str) -> str:
+    return (s or "").strip().lower()
+
+def is_correct(user_text: str, answer_key: str) -> bool:
+    return normalize(user_text) == normalize(answer_key)
+
+
+Then inside EVALUATE:
+
+qid = s["current_question_id"]
+q = asyncio.run(get_question(qid))
+
+correct = is_correct(user_text, q["answer_key"])
+
+
+For hints:
+
+hint1 first time wrong
+
+hint2 second time wrong
+
+then reveal_explain and move on
+
+The simplest testing flow (so you don’t get lost)
+
+Supabase: confirm concept + questions exist
+
+Replit: run server
+
+Start session → you should receive explain_text from DB (not your old text)
+
+Say “next” → should pick a random question from DB
+
+Answer wrong → should use hint1/hint2 from DB
+
+One critical warning (so you don’t waste time)
+
+Replit Agent’s “production-ready” statement is not a guarantee. Your proof is:
+
+You can see rows changing in Supabase sessions
+
+current_question_id changes when you ask “next”
+
+evaluation checks DB answer_key
