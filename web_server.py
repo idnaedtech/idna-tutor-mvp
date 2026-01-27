@@ -2,6 +2,11 @@
 IDNA EdTech - Web API Backend (Production-Ready MVP)
 FastAPI server for voice-first math tutor
 
+Architecture: SINGLE ENTRY POINT
+- This is the ONLY server file needed
+- No gRPC, no orchestrator, no webapp.py
+- Railway Procfile: web: uvicorn web_server:app --host 0.0.0.0 --port $PORT
+
 Features:
 - SQLite persistence (sessions survive restart)
 - Explicit FSM (state machine with guards)
@@ -15,6 +20,9 @@ import random
 import base64
 import sqlite3
 import httpx
+import json
+import uuid
+import tempfile
 from enum import Enum
 from datetime import datetime, timedelta
 from contextlib import contextmanager
@@ -32,14 +40,17 @@ from evaluator import check_answer
 
 load_dotenv()
 
-# OpenAI client with timeout
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=30.0,  # 30 second timeout
-    max_retries=2
-)
+# ============================================================
+# APP INITIALIZATION
+# ============================================================
 
-app = FastAPI(title="IDNA Math Tutor API")
+print("### IDNA EdTech MVP - Clean Architecture ###")
+
+app = FastAPI(
+    title="IDNA Math Tutor API",
+    description="Voice-first AI math tutor for K-10 students",
+    version="1.0.0"
+)
 
 # Enable CORS
 app.add_middleware(
@@ -50,9 +61,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files
+# Mount static files
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 if os.path.exists("web"):
     app.mount("/web", StaticFiles(directory="web"), name="web")
+
+# OpenAI client with timeout
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=30.0,
+    max_retries=2
+)
 
 
 # ============================================================
@@ -61,27 +81,25 @@ if os.path.exists("web"):
 
 class SessionState(str, Enum):
     """Explicit session states - no ambiguity"""
-    IDLE = "idle"                    # Session created, no chapter selected
-    CHAPTER_SELECTED = "chapter_selected"  # Chapter chosen, ready for questions
-    WAITING_ANSWER = "waiting_answer"      # Question asked, waiting for answer
-    SHOWING_HINT = "showing_hint"          # Hint shown, waiting for retry
-    SHOWING_ANSWER = "showing_answer"      # Answer revealed, ready for next
-    COMPLETED = "completed"                # Session ended
+    IDLE = "idle"
+    CHAPTER_SELECTED = "chapter_selected"
+    WAITING_ANSWER = "waiting_answer"
+    SHOWING_HINT = "showing_hint"
+    SHOWING_ANSWER = "showing_answer"
+    COMPLETED = "completed"
 
 
-# Valid state transitions
 VALID_TRANSITIONS = {
     SessionState.IDLE: [SessionState.CHAPTER_SELECTED, SessionState.COMPLETED],
     SessionState.CHAPTER_SELECTED: [SessionState.WAITING_ANSWER, SessionState.COMPLETED],
     SessionState.WAITING_ANSWER: [SessionState.WAITING_ANSWER, SessionState.SHOWING_HINT, SessionState.SHOWING_ANSWER, SessionState.COMPLETED],
     SessionState.SHOWING_HINT: [SessionState.WAITING_ANSWER, SessionState.SHOWING_ANSWER, SessionState.COMPLETED],
     SessionState.SHOWING_ANSWER: [SessionState.WAITING_ANSWER, SessionState.COMPLETED],
-    SessionState.COMPLETED: [],  # Terminal state
+    SessionState.COMPLETED: [],
 }
 
 
 def can_transition(current: SessionState, target: SessionState) -> bool:
-    """Check if transition is allowed"""
     return target in VALID_TRANSITIONS.get(current, [])
 
 
@@ -89,7 +107,7 @@ def can_transition(current: SessionState, target: SessionState) -> bool:
 # DATABASE SETUP (SQLite)
 # ============================================================
 
-DB_PATH = "idna.db"
+DB_PATH = os.getenv("DATABASE_PATH", "idna.db")
 
 
 def init_database():
@@ -97,7 +115,6 @@ def init_database():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Sessions table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
@@ -116,7 +133,6 @@ def init_database():
         )
     """)
     
-    # Students table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS students (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,7 +143,6 @@ def init_database():
         )
     """)
     
-    # Create default student if none exists
     cursor.execute("SELECT COUNT(*) FROM students")
     if cursor.fetchone()[0] == 0:
         cursor.execute(
@@ -137,6 +152,7 @@ def init_database():
     
     conn.commit()
     conn.close()
+    print(f"[DB] Initialized: {DB_PATH}")
 
 
 @contextmanager
@@ -151,49 +167,34 @@ def get_db():
         conn.close()
 
 
-# Initialize database on startup
-init_database()
-
-
 # ============================================================
-# SESSION MANAGEMENT (SQLite-backed)
+# SESSION MANAGEMENT
 # ============================================================
-
-import json
 
 def create_session(session_id: str) -> dict:
-    """Create new session in database"""
     now = datetime.now().isoformat()
-    
     with get_db() as conn:
         conn.execute("""
             INSERT INTO sessions (id, state, started_at, updated_at, questions_asked)
             VALUES (?, ?, ?, ?, ?)
         """, (session_id, SessionState.IDLE.value, now, now, '[]'))
-    
     return get_session(session_id)
 
 
 def get_session(session_id: str) -> Optional[dict]:
-    """Get session from database"""
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM sessions WHERE id = ?", (session_id,)
         ).fetchone()
-    
-    if row:
-        return dict(row)
-    return None
+    return dict(row) if row else None
 
 
 def update_session(session_id: str, **kwargs) -> bool:
-    """Update session fields"""
     if not kwargs:
         return False
     
     kwargs['updated_at'] = datetime.now().isoformat()
     
-    # Convert lists to JSON strings
     if 'questions_asked' in kwargs and isinstance(kwargs['questions_asked'], list):
         kwargs['questions_asked'] = json.dumps(kwargs['questions_asked'])
     
@@ -201,22 +202,16 @@ def update_session(session_id: str, **kwargs) -> bool:
     values = list(kwargs.values()) + [session_id]
     
     with get_db() as conn:
-        conn.execute(
-            f"UPDATE sessions SET {set_clause} WHERE id = ?",
-            values
-        )
-    
+        conn.execute(f"UPDATE sessions SET {set_clause} WHERE id = ?", values)
     return True
 
 
 def transition_state(session_id: str, new_state: SessionState) -> bool:
-    """Transition session to new state with validation"""
     session = get_session(session_id)
     if not session:
         return False
     
     current = SessionState(session['state'])
-    
     if not can_transition(current, new_state):
         raise HTTPException(
             status_code=400,
@@ -228,13 +223,12 @@ def transition_state(session_id: str, new_state: SessionState) -> bool:
 
 
 def delete_session(session_id: str):
-    """Delete session from database"""
     with get_db() as conn:
         conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
 
 
 # ============================================================
-# DETERMINISTIC MESSAGE TEMPLATES
+# MESSAGE TEMPLATES
 # ============================================================
 
 WELCOME_MESSAGES = [
@@ -271,7 +265,6 @@ CLOSING_MESSAGES = [
 
 
 def get_random_message(messages: list, **kwargs) -> str:
-    """Get random message from template list"""
     msg = random.choice(messages)
     return msg.format(**kwargs) if kwargs else msg
 
@@ -282,7 +275,7 @@ def get_random_message(messages: list, **kwargs) -> str:
 
 class ChapterRequest(BaseModel):
     session_id: str
-    chapter: str
+    chapter: str = ""
 
 class AnswerRequest(BaseModel):
     session_id: str
@@ -294,11 +287,10 @@ class TextToSpeechRequest(BaseModel):
 
 
 # ============================================================
-# QUESTION HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def get_question_by_id(chapter: str, question_id: str) -> Optional[dict]:
-    """Get question by ID from chapter"""
     questions = ALL_CHAPTERS.get(chapter, [])
     for q in questions:
         if q["id"] == question_id:
@@ -306,16 +298,10 @@ def get_question_by_id(chapter: str, question_id: str) -> Optional[dict]:
     return None
 
 
-# ============================================================
-# PARENT DASHBOARD FUNCTIONS
-# ============================================================
-
 def get_student_dashboard_data(student_id: int, language: str = "english"):
-    """Get real dashboard data from database. Returns None if no data."""
-    
+    """Get real dashboard data from database"""
     try:
         with get_db() as conn:
-            # Get student info
             student_row = conn.execute(
                 "SELECT * FROM students WHERE id = ?", (student_id,)
             ).fetchone()
@@ -332,7 +318,6 @@ def get_student_dashboard_data(student_id: int, language: str = "english"):
                 "preferred_language": language
             }
             
-            # Get sessions from last 7 days
             seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
             
             stats = conn.execute("""
@@ -350,18 +335,16 @@ def get_student_dashboard_data(student_id: int, language: str = "english"):
             total_questions = stats['total_questions'] or 1
             session_count = stats['session_count'] or 0
             
-            # If no completed sessions, check for any sessions
             if session_count == 0:
                 any_sessions = conn.execute(
                     "SELECT COUNT(*) as cnt FROM sessions WHERE student_id = ?",
                     (student_id,)
                 ).fetchone()
                 if any_sessions['cnt'] == 0:
-                    return None  # No data at all
+                    return None
             
             accuracy = round((correct / total_questions) * 100, 1) if total_questions > 0 else 0
             
-            # Get daily activity
             daily_rows = conn.execute("""
                 SELECT DATE(started_at) as day, COUNT(*) as sessions, 
                        COALESCE(SUM(duration_seconds), 0) as duration
@@ -371,7 +354,6 @@ def get_student_dashboard_data(student_id: int, language: str = "english"):
                 ORDER BY day
             """, (student_id, seven_days_ago)).fetchall()
             
-            # Build daily activity for last 7 days
             all_days = []
             for i in range(6, -1, -1):
                 day = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
@@ -382,7 +364,6 @@ def get_student_dashboard_data(student_id: int, language: str = "english"):
                     "duration": found['duration'] if found else 0
                 })
             
-            # Calculate streak
             streak = 0
             for day_data in reversed(all_days):
                 if day_data['sessions'] > 0:
@@ -390,7 +371,6 @@ def get_student_dashboard_data(student_id: int, language: str = "english"):
                 else:
                     break
             
-            # Generate voice message
             voice_message = generate_voice_message(
                 student['name'], total_time // 60, accuracy, language
             )
@@ -417,8 +397,6 @@ def get_student_dashboard_data(student_id: int, language: str = "english"):
 
 
 def generate_voice_message(name: str, study_minutes: int, accuracy: float, language: str = "english") -> str:
-    """Generate voice message in specified language (English or Hindi only)"""
-    
     if language == "hindi":
         if accuracy >= 70:
             return f"नमस्ते! {name} बहुत अच्छा कर रहा है! इस हफ्ते उन्होंने {study_minutes} मिनट पढ़ाई की और {accuracy}% सही जवाब दिए। आपको गर्व होना चाहिए!"
@@ -436,28 +414,52 @@ def generate_voice_message(name: str, study_minutes: int, accuracy: float, langu
 
 
 # ============================================================
-# API ENDPOINTS
+# HEALTH CHECK ENDPOINTS (Railway requires /healthz)
+# ============================================================
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "database": "connected" if os.path.exists(DB_PATH) else "initializing"
+    }
+
+
+@app.get("/healthz")
+async def healthz():
+    """Railway health check endpoint"""
+    return {"status": "ok"}
+
+
+# ============================================================
+# PAGE ROUTES (Serve static HTML)
 # ============================================================
 
 @app.get("/")
 async def root():
-    """Home page"""
+    """Home page - serve static/index.html"""
     return FileResponse("static/index.html")
 
 
 @app.get("/student")
 async def student_page():
-    """Student learning page"""
-    return FileResponse("static/index.html")
+    """Student learning page - practice screen"""
+    return FileResponse("web/index.html")
 
 
 @app.get("/parent")
 async def parent_page():
-    """Parent dashboard"""
-    if os.path.exists("parent.html"):
-        return FileResponse("parent.html")
-    return JSONResponse(status_code=404, content={"error": "Parent page not found."})
+    """Parent dashboard page"""
+    if os.path.exists("static/parent.html"):
+        return FileResponse("static/parent.html")
+    # Fallback to homepage if parent.html doesn't exist yet
+    return FileResponse("static/index.html")
 
+
+# ============================================================
+# SESSION API ENDPOINTS
+# ============================================================
 
 @app.get("/api/chapters")
 async def get_chapters():
@@ -473,10 +475,7 @@ async def get_chapters():
 @app.post("/api/session/start")
 async def start_session():
     """Start a new tutoring session"""
-    import uuid
     session_id = str(uuid.uuid4())
-    
-    # Create session in database (state: IDLE)
     create_session(session_id)
     
     return {
@@ -497,106 +496,89 @@ async def select_chapter(request: ChapterRequest):
     if request.chapter not in ALL_CHAPTERS:
         raise HTTPException(status_code=400, detail="Invalid chapter")
     
-    # Validate state transition
-    current_state = SessionState(session['state'])
-    if current_state not in [SessionState.IDLE, SessionState.CHAPTER_SELECTED]:
-        raise HTTPException(status_code=400, detail=f"Cannot select chapter in state: {current_state.value}")
-    
-    # Update session
     update_session(
         request.session_id,
         chapter=request.chapter,
-        state=SessionState.CHAPTER_SELECTED.value
+        state=SessionState.CHAPTER_SELECTED.value,
+        questions_asked=[]
     )
     
-    chapter_name = CHAPTER_NAMES[request.chapter]
-    
     return {
-        "message": f"Great choice! Let's practice {chapter_name}. Here comes your first question!",
+        "message": f"Great! Let's practice {CHAPTER_NAMES[request.chapter]}!",
         "chapter": request.chapter,
-        "chapter_name": chapter_name,
         "state": SessionState.CHAPTER_SELECTED.value
     }
 
 
 @app.post("/api/session/question")
-async def get_question(request: ChapterRequest):
-    """Get the next question"""
+async def get_next_question(request: ChapterRequest):
+    """Get next question for the session"""
     session = get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    current_state = SessionState(session['state'])
+    chapter = session['chapter']
+    if not chapter:
+        raise HTTPException(status_code=400, detail="No chapter selected")
     
-    # Validate state - can get question from CHAPTER_SELECTED, SHOWING_ANSWER, or WAITING_ANSWER (retry)
-    valid_states = [SessionState.CHAPTER_SELECTED, SessionState.SHOWING_ANSWER, SessionState.WAITING_ANSWER]
-    if current_state not in valid_states:
-        raise HTTPException(status_code=400, detail=f"Cannot get question in state: {current_state.value}")
+    questions = ALL_CHAPTERS.get(chapter, [])
+    if not questions:
+        raise HTTPException(status_code=400, detail="No questions available")
     
-    chapter_questions = ALL_CHAPTERS.get(request.chapter, [])
-    if not chapter_questions:
-        raise HTTPException(status_code=400, detail="No questions in chapter")
+    asked = json.loads(session['questions_asked'] or '[]')
+    available = [q for q in questions if q['id'] not in asked]
     
-    # Get questions already asked
-    questions_asked = json.loads(session['questions_asked'] or '[]')
-    
-    # Get a question not yet asked
-    available = [q for q in chapter_questions if q["id"] not in questions_asked]
     if not available:
-        available = chapter_questions
-        questions_asked = []
+        return {
+            "completed": True,
+            "message": "You've completed all questions in this chapter! 🎉",
+            "score": session['score'],
+            "total": session['total']
+        }
     
     question = random.choice(available)
-    questions_asked.append(question["id"])
+    asked.append(question['id'])
     
-    # Update session - transition to WAITING_ANSWER
-    new_total = (session['total'] or 0) + 1
     update_session(
         request.session_id,
-        current_question_id=question["id"],
+        current_question_id=question['id'],
+        questions_asked=asked,
+        total=(session['total'] or 0) + 1,
         attempt_count=0,
-        total=new_total,
-        questions_asked=questions_asked,
         state=SessionState.WAITING_ANSWER.value
     )
     
     return {
-        "question_number": new_total,
-        "question_text": question["text"],
-        "question_id": question["id"],
+        "question_id": question['id'],
+        "question": question['question'],
+        "type": question.get('type', 'text'),
+        "options": question.get('options'),
         "state": SessionState.WAITING_ANSWER.value
     }
 
 
 @app.post("/api/session/answer")
 async def submit_answer(request: AnswerRequest):
-    """Submit an answer and get feedback"""
+    """Submit answer for current question"""
     session = get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
     current_state = SessionState(session['state'])
-    
-    # Validate state
     if current_state not in [SessionState.WAITING_ANSWER, SessionState.SHOWING_HINT]:
         raise HTTPException(status_code=400, detail=f"Cannot submit answer in state: {current_state.value}")
     
-    if not session['current_question_id']:
-        raise HTTPException(status_code=400, detail="No active question")
-    
-    # Get the question
     question = get_question_by_id(session['chapter'], session['current_question_id'])
     if not question:
-        raise HTTPException(status_code=400, detail="Question not found")
+        raise HTTPException(status_code=400, detail="No active question")
     
-    is_correct = check_answer(question["answer"], request.answer)
+    is_correct = check_answer(request.answer, question['answer'], question.get('type', 'text'))
     attempt_count = (session['attempt_count'] or 0) + 1
     
     if is_correct:
         new_score = (session['score'] or 0) + 1
         new_correct = (session['correct_answers'] or 0) + 1
         
-        # Transition to SHOWING_ANSWER (ready for next question)
         update_session(
             request.session_id,
             score=new_score,
@@ -614,7 +596,6 @@ async def submit_answer(request: AnswerRequest):
         }
     else:
         if attempt_count >= 3:
-            # Max attempts - show answer
             update_session(
                 request.session_id,
                 attempt_count=attempt_count,
@@ -631,7 +612,6 @@ async def submit_answer(request: AnswerRequest):
                 "state": SessionState.SHOWING_ANSWER.value
             }
         elif attempt_count == 2:
-            # Show hint
             hint = question.get("hint", "Think carefully!")
             
             update_session(
@@ -650,7 +630,6 @@ async def submit_answer(request: AnswerRequest):
                 "state": SessionState.SHOWING_HINT.value
             }
         else:
-            # First wrong attempt - encourage retry
             update_session(
                 request.session_id,
                 attempt_count=attempt_count,
@@ -677,11 +656,9 @@ async def end_session(request: ChapterRequest):
     score = session['score'] or 0
     total = session['total'] or 0
     
-    # Calculate duration
     started_at = datetime.fromisoformat(session['started_at'])
     duration = int((datetime.now() - started_at).total_seconds())
     
-    # Update session to COMPLETED
     update_session(
         request.session_id,
         state=SessionState.COMPLETED.value,
@@ -706,8 +683,7 @@ async def end_session(request: ChapterRequest):
 
 @app.get("/api/dashboard/{student_id}")
 async def get_dashboard(student_id: int, lang: str = "english"):
-    """Get parent dashboard data - real data only"""
-    
+    """Get parent dashboard data"""
     if lang not in ["english", "hindi"]:
         lang = "english"
     
@@ -728,8 +704,7 @@ async def get_dashboard(student_id: int, lang: str = "english"):
 
 @app.post("/api/dashboard/{student_id}/voice-report")
 async def generate_voice_report(student_id: int, lang: str = "english"):
-    """Generate voice report with timeout"""
-    
+    """Generate voice report with TTS"""
     if lang not in ["english", "hindi"]:
         lang = "english"
     
@@ -744,7 +719,6 @@ async def generate_voice_report(student_id: int, lang: str = "english"):
     voice_text = data["voice_message"]
     
     try:
-        # OpenAI call with timeout (set in client initialization)
         response = client.audio.speech.create(
             model="tts-1",
             voice="nova",
@@ -770,20 +744,18 @@ async def generate_voice_report(student_id: int, lang: str = "english"):
 
 
 # ============================================================
-# VOICE ENDPOINTS (with timeouts)
+# VOICE ENDPOINTS
 # ============================================================
 
 @app.post("/api/speech-to-text")
 async def speech_to_text(audio: UploadFile = File(...)):
-    """Convert speech to text using Whisper (with timeout)"""
+    """Convert speech to text using Whisper"""
     try:
-        import tempfile
         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
             content = await audio.read()
             tmp.write(content)
             tmp_path = tmp.name
         
-        # Whisper call (timeout set in client)
         with open(tmp_path, "rb") as f:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
@@ -802,7 +774,7 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech (with timeout)"""
+    """Convert text to speech"""
     try:
         response = client.audio.speech.create(
             model="tts-1",
@@ -820,35 +792,28 @@ async def text_to_speech(request: TextToSpeechRequest):
 
 
 # ============================================================
-# HEALTH CHECK
-# ============================================================
-
-@app.get("/health")
-async def health_check():
-    """Health check for Railway"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "database": "connected" if os.path.exists(DB_PATH) else "initializing"
-    }
-
-
-@app.get("/healthz")
-async def healthz():
-    """Kubernetes-style health check"""
-    return {"status": "ok"}
-
-
-# ============================================================
 # DEBUG ENDPOINT (remove in production)
 # ============================================================
 
 @app.get("/api/debug/sessions")
 async def debug_sessions():
-    """Debug: List all sessions (remove in production)"""
+    """Debug: List all sessions"""
     with get_db() as conn:
         rows = conn.execute("SELECT id, state, score, total, started_at FROM sessions LIMIT 20").fetchall()
     return {"sessions": [dict(r) for r in rows]}
+
+
+# ============================================================
+# STARTUP EVENT
+# ============================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize on startup"""
+    init_database()
+    print("[STARTUP] IDNA EdTech MVP ready")
+    print(f"[STARTUP] Database: {DB_PATH}")
+    print(f"[STARTUP] Static files: {'static/' if os.path.exists('static') else 'NOT FOUND'}")
 
 
 # ============================================================
@@ -859,6 +824,4 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     print(f"Starting IDNA EdTech server on port {port}")
-    print(f"Database: {DB_PATH}")
-    print(f"FSM States: {[s.value for s in SessionState]}")
     uvicorn.run(app, host="0.0.0.0", port=port)
