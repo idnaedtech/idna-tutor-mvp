@@ -550,7 +550,8 @@ async def get_next_question(request: ChapterRequest):
     
     return {
         "question_id": question['id'],
-        "question": question['text'],
+        "question_text": question['text'],
+        "question_number": (session['total'] or 0) + 1,
         "type": question.get('type', 'text'),
         "options": question.get('options'),
         "state": SessionState.WAITING_ANSWER.value
