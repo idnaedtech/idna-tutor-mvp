@@ -538,20 +538,34 @@ async def get_next_question(request: ChapterRequest):
     
     question = random.choice(available)
     asked.append(question['id'])
-    
+    question_number = (session['total'] or 0) + 1
+
     update_session(
         request.session_id,
         current_question_id=question['id'],
         questions_asked=asked,
-        total=(session['total'] or 0) + 1,
+        total=question_number,
         attempt_count=0,
         state=SessionState.WAITING_ANSWER.value
     )
-    
+
+    # Friendly intros for child-friendly experience
+    intros = [
+        "Let's try this one!",
+        "Here's your next question...",
+        "You're doing great! Next question...",
+        "Okay, here we go!",
+        "Ready? Here's the next one!",
+        "Let's solve this together!",
+        "You've got this! Question time...",
+    ]
+    intro = random.choice(intros) if question_number > 1 else "Let's start! Here's your first question..."
+
     return {
         "question_id": question['id'],
         "question_text": question['text'],
-        "question_number": (session['total'] or 0) + 1,
+        "question_number": question_number,
+        "intro": intro,
         "type": question.get('type', 'text'),
         "options": question.get('options'),
         "state": SessionState.WAITING_ANSWER.value
@@ -780,6 +794,7 @@ async def text_to_speech(request: TextToSpeechRequest):
         response = client.audio.speech.create(
             model="tts-1",
             voice=request.voice,
+            speed=0.9,  # Slower, child-friendly speech
             input=request.text
         )
         

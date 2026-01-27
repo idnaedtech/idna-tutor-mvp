@@ -450,8 +450,10 @@
                 questionNumber.textContent = 'Question ' + data.question_number;
                 questionText.textContent = data.question_text;
                 updateState(data.state);
-                
-                speak(data.question_text);
+
+                // Speak intro + question for friendly experience
+                const fullText = data.intro ? data.intro + ' ' + data.question_text : data.question_text;
+                speak(fullText);
                 answerInput.focus();
             } catch (e) {
                 alert('Error: ' + e.message);
@@ -546,40 +548,62 @@
                 mediaRecorder.stop();
                 isRecording = false;
                 voiceBtn.classList.remove('recording');
-                voiceBtn.textContent = '🎤';
+                voiceBtn.textContent = '⏳';  // Show processing
+                voiceBtn.disabled = true;
             } else {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
+
+                    // Try different MIME types for compatibility
+                    const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+                        ? 'audio/webm'
+                        : MediaRecorder.isTypeSupported('audio/mp4')
+                        ? 'audio/mp4'
+                        : 'audio/wav';
+
+                    mediaRecorder = new MediaRecorder(stream, { mimeType });
                     const chunks = [];
-                    
-                    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
+                    mediaRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+
                     mediaRecorder.onstop = async () => {
-                        const blob = new Blob(chunks, { type: 'audio/webm' });
+                        const blob = new Blob(chunks, { type: mimeType });
                         stream.getTracks().forEach(t => t.stop());
-                        
+
                         // Send to STT
                         const formData = new FormData();
-                        formData.append('audio', blob, 'recording.webm');
-                        
+                        const ext = mimeType.split('/')[1];
+                        formData.append('audio', blob, `recording.${ext}`);
+
                         try {
                             const res = await fetch('/api/speech-to-text', {
                                 method: 'POST',
                                 body: formData
                             });
+                            if (!res.ok) throw new Error('Transcription failed');
                             const data = await res.json();
-                            answerInput.value = data.text;
+                            if (data.text) {
+                                answerInput.value = data.text;
+                                answerInput.focus();
+                            }
                         } catch (e) {
                             console.error('STT error:', e);
+                            alert('Could not transcribe audio. Please type your answer.');
+                        } finally {
+                            voiceBtn.textContent = '🎤';
+                            voiceBtn.disabled = false;
                         }
                     };
-                    
+
                     mediaRecorder.start();
                     isRecording = true;
                     voiceBtn.classList.add('recording');
-                    voiceBtn.textContent = '⏹️';
+                    voiceBtn.textContent = '⏹️ Stop';
                 } catch (e) {
-                    alert('Could not access microphone');
+                    console.error('Mic error:', e);
+                    alert('Could not access microphone. Please check permissions.');
                 }
             }
         }
