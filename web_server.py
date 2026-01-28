@@ -37,6 +37,7 @@ from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
 from openai import OpenAI
+from google.cloud import texttospeech
 
 from questions import ALL_CHAPTERS, CHAPTER_NAMES
 from evaluator import check_answer
@@ -78,6 +79,49 @@ client = OpenAI(
     timeout=30.0,
     max_retries=2
 )
+
+# Google Cloud TTS client
+tts_client = None
+try:
+    tts_client = texttospeech.TextToSpeechClient()
+    print("### Google Cloud TTS: ENABLED ###")
+except Exception as e:
+    print(f"### Google Cloud TTS: DISABLED ({e}) ###")
+
+
+def google_tts(text: str, language_code: str = "en-IN", voice_name: str = "en-IN-Wavenet-A") -> bytes:
+    """Generate speech using Google Cloud TTS - clearer, louder voice
+
+    Voice options for Indian English:
+    - en-IN-Wavenet-A: Warm female (recommended)
+    - en-IN-Wavenet-B: Male
+    - en-IN-Wavenet-C: Female
+    - en-IN-Wavenet-D: Male
+    """
+    if tts_client is None:
+        raise Exception("Google Cloud TTS not configured")
+
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+
+    voice = texttospeech.VoiceSelectionParams(
+        language_code=language_code,
+        name=voice_name,
+    )
+
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=0.85,  # Slower for children
+        pitch=0.0,
+        volume_gain_db=3.0,  # LOUDER
+    )
+
+    response = tts_client.synthesize_speech(
+        input=synthesis_input,
+        voice=voice,
+        audio_config=audio_config
+    )
+
+    return response.audio_content
 
 
 # ============================================================
@@ -428,7 +472,8 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "database": "connected" if os.path.exists(DB_PATH) else "initializing",
-        "tutor_intent": "enabled"  # New field
+        "tutor_intent": "enabled",
+        "tts_provider": "google" if tts_client else "openai"
     }
 
 
@@ -761,24 +806,29 @@ async def generate_voice_report(student_id: int, lang: str = "english"):
         )
     
     voice_text = data["voice_message"]
-    
+
     try:
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="nova",
-            speed=0.85,  # SLOWER for children - was 1.0
-            input=voice_text
-        )
-        
-        audio_base64 = base64.b64encode(response.content).decode('utf-8')
-        
+        # Use Google Cloud TTS (clearer, louder voice)
+        if tts_client:
+            audio_content = google_tts(voice_text, language_code="en-IN", voice_name="en-IN-Wavenet-A")
+            audio_base64 = base64.b64encode(audio_content).decode('utf-8')
+        else:
+            # Fallback to OpenAI TTS
+            response = client.audio.speech.create(
+                model="tts-1",
+                voice="nova",
+                speed=0.85,
+                input=voice_text
+            )
+            audio_base64 = base64.b64encode(response.content).decode('utf-8')
+
         return {
             "success": True,
             "audio": audio_base64,
             "text": voice_text,
             "language": lang
         }
-        
+
     except Exception as e:
         print(f"TTS Error: {e}")
         return {
@@ -819,19 +869,24 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech with child-friendly speed"""
+    """Convert text to speech using Google Cloud TTS (clearer voice)"""
     try:
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice=request.voice,
-            speed=0.85,  # SLOWER for children - was 0.9
-            input=request.text
-        )
-        
-        audio_base64 = base64.b64encode(response.content).decode('utf-8')
-        
+        # Use Google Cloud TTS (clearer, louder voice)
+        if tts_client:
+            audio_content = google_tts(request.text, language_code="en-IN", voice_name="en-IN-Wavenet-A")
+            audio_base64 = base64.b64encode(audio_content).decode('utf-8')
+        else:
+            # Fallback to OpenAI TTS
+            response = client.audio.speech.create(
+                model="tts-1",
+                voice=request.voice,
+                speed=0.85,
+                input=request.text
+            )
+            audio_base64 = base64.b64encode(response.content).decode('utf-8')
+
         return {"audio": audio_base64, "format": "mp3"}
-        
+
     except Exception as e:
         print(f"TTS Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
