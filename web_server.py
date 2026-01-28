@@ -10,9 +10,12 @@ Architecture: SINGLE ENTRY POINT
 Features:
 - SQLite persistence (sessions survive restart)
 - Explicit FSM (state machine with guards)
+- TutorIntent layer for natural teaching behavior
+- Enhanced evaluator with spoken variant support
 - Timeouts on OpenAI calls
-- Deterministic messages (no GPT in core flow)
 - Railway-ready ($PORT support)
+
+Updated: January 28, 2026 - Added TutorIntent layer
 """
 
 import os
@@ -37,6 +40,7 @@ from openai import OpenAI
 
 from questions import ALL_CHAPTERS, CHAPTER_NAMES
 from evaluator import check_answer
+from tutor_intent import generate_tutor_response, TutorIntent, TutorVoice
 
 load_dotenv()
 
@@ -45,11 +49,12 @@ load_dotenv()
 # ============================================================
 
 print("### IDNA EdTech MVP - Clean Architecture ###")
+print("### TutorIntent Layer: ENABLED ###")
 
 app = FastAPI(
     title="IDNA Math Tutor API",
     description="Voice-first AI math tutor for K-10 students",
-    version="1.0.0"
+    version="1.1.0"  # Updated for TutorIntent
 )
 
 # Enable CORS
@@ -228,7 +233,7 @@ def delete_session(session_id: str):
 
 
 # ============================================================
-# MESSAGE TEMPLATES
+# MESSAGE TEMPLATES (Legacy - kept for backward compatibility)
 # ============================================================
 
 WELCOME_MESSAGES = [
@@ -422,7 +427,8 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "database": "connected" if os.path.exists(DB_PATH) else "initializing"
+        "database": "connected" if os.path.exists(DB_PATH) else "initializing",
+        "tutor_intent": "enabled"  # New field
     }
 
 
@@ -478,9 +484,13 @@ async def start_session():
     session_id = str(uuid.uuid4())
     create_session(session_id)
     
+    # Use TutorIntent for welcome message
+    tutor = TutorVoice()
+    welcome = tutor.get_response(TutorIntent.SESSION_START)
+    
     return {
         "session_id": session_id,
-        "message": get_random_message(WELCOME_MESSAGES),
+        "message": welcome,
         "chapters": list(ALL_CHAPTERS.keys()),
         "state": SessionState.IDLE.value
     }
@@ -512,7 +522,7 @@ async def select_chapter(request: ChapterRequest):
 
 @app.post("/api/session/question")
 async def get_next_question(request: ChapterRequest):
-    """Get next question for the session"""
+    """Get next question for the session with natural TutorIntent introduction"""
     session = get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -529,9 +539,13 @@ async def get_next_question(request: ChapterRequest):
     available = [q for q in questions if q['id'] not in asked]
     
     if not available:
+        # Use TutorIntent for session end
+        tutor = TutorVoice()
+        closing = tutor.get_response(TutorIntent.SESSION_END)
+        
         return {
             "completed": True,
-            "message": "You've completed all questions in this chapter! 🎉",
+            "message": closing,
             "score": session['score'],
             "total": session['total']
         }
@@ -549,17 +563,12 @@ async def get_next_question(request: ChapterRequest):
         state=SessionState.WAITING_ANSWER.value
     )
 
-    # Friendly intros for child-friendly experience
-    intros = [
-        "Let's try this one!",
-        "Here's your next question...",
-        "You're doing great! Next question...",
-        "Okay, here we go!",
-        "Ready? Here's the next one!",
-        "Let's solve this together!",
-        "You've got this! Question time...",
-    ]
-    intro = random.choice(intros) if question_number > 1 else "Let's start! Here's your first question..."
+    # Use TutorIntent for natural question introduction
+    tutor = TutorVoice()
+    intro = tutor.get_response(
+        intent=TutorIntent.ASK_FRESH,
+        question=question['text']
+    )
 
     return {
         "question_id": question['id'],
@@ -577,10 +586,13 @@ async def submit_answer(request: AnswerRequest):
     """
     Submit answer for current question.
 
-    Implements 3-attempt scaffolding per PRD:
-    - Attempt 1 wrong → hint_1 (conceptual nudge)
-    - Attempt 2 wrong → hint_2 (procedural hint)
-    - Attempt 3 wrong → show solution, move to next question
+    Uses TutorIntent layer for natural, human-like responses.
+    
+    FSM Transitions → TutorIntent Mapping:
+    - Correct answer → CONFIRM_CORRECT + MOVE_ON
+    - Wrong attempt 1 → GUIDE_THINKING (Socratic hint)
+    - Wrong attempt 2 → NUDGE_CORRECTION (direct hint)
+    - Wrong attempt 3 → EXPLAIN_ONCE (show solution) + MOVE_ON
     """
     session = get_session(request.session_id)
     if not session:
@@ -594,9 +606,20 @@ async def submit_answer(request: AnswerRequest):
     if not question:
         raise HTTPException(status_code=400, detail="No active question")
 
-    # FIX: Correct parameter order - check_answer(correct, student)
+    # Use enhanced evaluator (handles spoken variants like "2 by 3" → "2/3")
     is_correct = check_answer(question['answer'], request.answer)
     attempt_count = (session['attempt_count'] or 0) + 1
+
+    # Generate natural tutor response using TutorIntent layer
+    tutor_result = generate_tutor_response(
+        is_correct=is_correct,
+        attempt_number=attempt_count,
+        question=question.get('text', ''),
+        hint_1=question.get('hint_1', 'Think about the concept carefully.'),
+        hint_2=question.get('hint_2', question.get('hint', 'Think step by step!')),
+        solution=question.get('solution', f"The answer is {question['answer']}."),
+        correct_answer=question['answer'],
+    )
 
     if is_correct:
         new_score = (session['score'] or 0) + 1
@@ -612,15 +635,17 @@ async def submit_answer(request: AnswerRequest):
 
         return {
             "correct": True,
-            "message": get_random_message(PRAISE_MESSAGES),
+            "message": tutor_result["response"],
+            "intent": tutor_result["intent"],
             "score": new_score,
             "total": session['total'],
             "attempt_count": attempt_count,
+            "move_to_next": True,
             "state": SessionState.SHOWING_ANSWER.value
         }
     else:
-        # 3-attempt scaffolding per PRD
-        if attempt_count >= 3:
+        # Wrong answer - use TutorIntent scaffolding
+        if tutor_result["move_to_next"]:
             # Attempt 3: Show solution, move on
             update_session(
                 request.session_id,
@@ -628,44 +653,21 @@ async def submit_answer(request: AnswerRequest):
                 state=SessionState.SHOWING_ANSWER.value
             )
 
-            solution = question.get("solution", f"The answer is {question['answer']}")
-
             return {
                 "correct": False,
                 "show_answer": True,
                 "answer": question["answer"],
-                "solution": solution,
-                "message": f"Solution: {question['answer']}. Let's move to the next question.",
+                "solution": question.get("solution", f"The answer is {question['answer']}"),
+                "message": tutor_result["response"],
+                "intent": tutor_result["intent"],
                 "score": session['score'],
                 "total": session['total'],
                 "attempt_count": attempt_count,
+                "move_to_next": True,
                 "state": SessionState.SHOWING_ANSWER.value
             }
-        elif attempt_count == 2:
-            # Attempt 2: Procedural hint (hint_2 or more specific hint)
-            hint_2 = question.get("hint_2") or question.get("hint", "Think step by step!")
-
-            update_session(
-                request.session_id,
-                attempt_count=attempt_count,
-                state=SessionState.SHOWING_HINT.value
-            )
-
-            return {
-                "correct": False,
-                "hint": hint_2,
-                "hint_level": 2,
-                "message": f"Not quite. {hint_2} Try once more!",
-                "attempts_left": 3 - attempt_count,
-                "score": session['score'],
-                "total": session['total'],
-                "attempt_count": attempt_count,
-                "state": SessionState.SHOWING_HINT.value
-            }
         else:
-            # Attempt 1: Conceptual nudge (hint_1 or generic encouragement)
-            hint_1 = question.get("hint_1", "Think about the concept carefully.")
-
+            # Attempt 1 or 2: Show hint
             update_session(
                 request.session_id,
                 attempt_count=attempt_count,
@@ -674,13 +676,14 @@ async def submit_answer(request: AnswerRequest):
 
             return {
                 "correct": False,
-                "hint": hint_1,
-                "hint_level": 1,
-                "message": f"Not correct. {hint_1}",
+                "message": tutor_result["response"],
+                "intent": tutor_result["intent"],
+                "hint_level": attempt_count,
                 "attempts_left": 3 - attempt_count,
                 "score": session['score'],
                 "total": session['total'],
                 "attempt_count": attempt_count,
+                "move_to_next": False,
                 "state": SessionState.SHOWING_HINT.value
             }
 
@@ -704,10 +707,12 @@ async def end_session(request: ChapterRequest):
         duration_seconds=duration
     )
     
-    closing = get_random_message(CLOSING_MESSAGES, score=score, total=total)
+    # Use TutorIntent for closing message
+    tutor = TutorVoice()
+    closing = tutor.get_response(TutorIntent.SESSION_END)
     
     return {
-        "message": closing,
+        "message": f"{closing} You got {score} out of {total} correct!",
         "score": score,
         "total": total,
         "accuracy": round((score/total)*100, 1) if total > 0 else 0,
@@ -761,6 +766,7 @@ async def generate_voice_report(student_id: int, lang: str = "english"):
         response = client.audio.speech.create(
             model="tts-1",
             voice="nova",
+            speed=0.85,  # SLOWER for children - was 1.0
             input=voice_text
         )
         
@@ -813,12 +819,12 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech"""
+    """Convert text to speech with child-friendly speed"""
     try:
         response = client.audio.speech.create(
             model="tts-1",
             voice=request.voice,
-            speed=0.9,  # Slower, child-friendly speech
+            speed=0.85,  # SLOWER for children - was 0.9
             input=request.text
         )
         
@@ -852,6 +858,7 @@ async def startup_event():
     """Initialize on startup"""
     init_database()
     print("[STARTUP] IDNA EdTech MVP ready")
+    print("[STARTUP] TutorIntent layer: ENABLED")
     print(f"[STARTUP] Database: {DB_PATH}")
     print(f"[STARTUP] Static files: {'static/' if os.path.exists('static') else 'NOT FOUND'}")
 
