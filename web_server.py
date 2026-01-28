@@ -80,17 +80,38 @@ client = OpenAI(
     max_retries=2
 )
 
-# Google Cloud TTS client
-tts_client = None
-try:
-    tts_client = texttospeech.TextToSpeechClient()
-    print("### Google Cloud TTS: ENABLED ###")
-except Exception as e:
-    print(f"### Google Cloud TTS: DISABLED ({e}) ###")
+# Google Cloud TTS - handle credentials from env var JSON
+_tts_client = None
+_tts_creds_file = None
+
+def get_google_tts_client():
+    """Get Google TTS client, creating credentials file from env var if needed"""
+    global _tts_client, _tts_creds_file
+
+    if _tts_client is not None:
+        return _tts_client
+
+    # Check for JSON credentials in env var (Railway deployment)
+    creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if creds_json:
+        # Write JSON to temp file and set env var
+        _tts_creds_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        _tts_creds_file.write(creds_json)
+        _tts_creds_file.close()
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tts_creds_file.name
+        print(f"### Google TTS: Using credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON ###")
+
+    try:
+        _tts_client = texttospeech.TextToSpeechClient()
+        print("### Google Cloud TTS: ENABLED ###")
+        return _tts_client
+    except Exception as e:
+        print(f"### Google Cloud TTS: DISABLED ({e}) ###")
+        return None
 
 
 def google_tts(text: str, language_code: str = "en-IN", voice_name: str = "en-IN-Wavenet-A") -> bytes:
-    """Generate speech using Google Cloud TTS - clearer, louder voice
+    """Generate clear, loud speech using Google Cloud TTS
 
     Voice options for Indian English:
     - en-IN-Wavenet-A: Warm female (recommended)
@@ -98,6 +119,7 @@ def google_tts(text: str, language_code: str = "en-IN", voice_name: str = "en-IN
     - en-IN-Wavenet-C: Female
     - en-IN-Wavenet-D: Male
     """
+    tts_client = get_google_tts_client()
     if tts_client is None:
         raise Exception("Google Cloud TTS not configured")
 
@@ -473,7 +495,7 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "database": "connected" if os.path.exists(DB_PATH) else "initializing",
         "tutor_intent": "enabled",
-        "tts_provider": "google" if tts_client else "openai"
+        "tts_provider": "google" if get_google_tts_client() else "openai"
     }
 
 
@@ -809,8 +831,8 @@ async def generate_voice_report(student_id: int, lang: str = "english"):
 
     try:
         # Use Google Cloud TTS (clearer, louder voice)
-        if tts_client:
-            audio_content = google_tts(voice_text, language_code="en-IN", voice_name="en-IN-Wavenet-A")
+        if get_google_tts_client():
+            audio_content = google_tts(voice_text)
             audio_base64 = base64.b64encode(audio_content).decode('utf-8')
         else:
             # Fallback to OpenAI TTS
@@ -872,8 +894,8 @@ async def text_to_speech(request: TextToSpeechRequest):
     """Convert text to speech using Google Cloud TTS (clearer voice)"""
     try:
         # Use Google Cloud TTS (clearer, louder voice)
-        if tts_client:
-            audio_content = google_tts(request.text, language_code="en-IN", voice_name="en-IN-Wavenet-A")
+        if get_google_tts_client():
+            audio_content = google_tts(request.text)
             audio_base64 = base64.b64encode(audio_content).decode('utf-8')
         else:
             # Fallback to OpenAI TTS
