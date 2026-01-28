@@ -218,6 +218,11 @@
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
             animation: pulse 1s infinite;
         }
+
+        .answer-input.listening {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
         
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
@@ -329,9 +334,9 @@
         let sessionId = null;
         let currentChapter = null;
         let currentState = 'idle';
-        let isRecording = false;
-        let isProcessingVoice = false;
-        let mediaRecorder = null;
+        let isListening = false;
+        let recognition = null;
+        let autoSubmitTimer = null;
         
         // Elements
         const chapterDropdown = document.getElementById('chapter-dropdown');
@@ -414,21 +419,22 @@
                 const data = await api('/api/session/start', 'POST');
                 sessionId = data.session_id;
                 updateState(data.state);
-                
+
                 // Select chapter
                 currentChapter = chapterDropdown.value;
                 await api('/api/session/chapter', 'POST', {
                     session_id: sessionId,
                     chapter: currentChapter
                 });
-                
-                // Get first question
+
+                // Get first question (this will speak the question intro)
                 await getNextQuestion();
-                
+
                 chapterSelection.style.display = 'none';
                 questionArea.classList.add('active');
-                
-                speak(data.message);
+
+                // NOTE: Removed duplicate speak(data.message) here
+                // getNextQuestion() already speaks the question with intro
             } catch (e) {
                 alert('Error: ' + e.message);
             }
@@ -543,80 +549,122 @@
             }
         }
         
-        // Voice input
-        async function toggleVoice() {
-            // Guard against double-clicks during processing
-            if (isProcessingVoice) return;
+        // Voice input using Web Speech API with auto-submit
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.warn('Web Speech API not supported');
+                return null;
+            }
 
-            if (isRecording) {
-                mediaRecorder.stop();
-                isRecording = false;
-                isProcessingVoice = true;
+            const recog = new SpeechRecognition();
+            recog.continuous = false;
+            recog.interimResults = true;
+            recog.lang = 'en-IN';  // Indian English for better number recognition
+
+            recog.onstart = () => {
+                isListening = true;
+                voiceBtn.classList.add('recording');
+                voiceBtn.textContent = '🎙️';
+                answerInput.placeholder = 'Listening...';
+                answerInput.classList.add('listening');
+            };
+
+            recog.onresult = (event) => {
+                // Clear any pending auto-submit
+                if (autoSubmitTimer) {
+                    clearTimeout(autoSubmitTimer);
+                    autoSubmitTimer = null;
+                }
+
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                // Show interim results while speaking
+                if (interimTranscript) {
+                    answerInput.value = interimTranscript.trim();
+                    answerInput.placeholder = 'Listening...';
+                }
+
+                // Set final result
+                if (finalTranscript) {
+                    answerInput.value = finalTranscript.trim();
+                    answerInput.placeholder = 'Your answer...';
+                }
+            };
+
+            recog.onend = () => {
+                isListening = false;
                 voiceBtn.classList.remove('recording');
-                voiceBtn.textContent = '⏳';  // Show processing
-                voiceBtn.disabled = true;
+                voiceBtn.textContent = '🎤';
+                answerInput.placeholder = 'Your answer...';
+                answerInput.classList.remove('listening');
+
+                // Auto-submit if we have text (after 1 second delay)
+                const answer = answerInput.value.trim();
+                if (answer && submitBtn.style.display !== 'none') {
+                    voiceBtn.textContent = '✓';
+                    autoSubmitTimer = setTimeout(() => {
+                        submitAnswer();
+                        voiceBtn.textContent = '🎤';
+                    }, 1000);
+                }
+            };
+
+            recog.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                isListening = false;
+                voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤';
+                answerInput.placeholder = 'Your answer...';
+                answerInput.classList.remove('listening');
+
+                if (event.error === 'not-allowed') {
+                    alert('Microphone access denied. Please allow microphone permissions.');
+                }
+            };
+
+            return recog;
+        }
+
+        function toggleVoice() {
+            // Cancel any pending auto-submit when user clicks mic again
+            if (autoSubmitTimer) {
+                clearTimeout(autoSubmitTimer);
+                autoSubmitTimer = null;
+                voiceBtn.textContent = '🎤';
+            }
+
+            if (isListening) {
+                // Stop listening
+                if (recognition) {
+                    recognition.stop();
+                }
             } else {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-                    // Try different MIME types for compatibility
-                    const mimeType = MediaRecorder.isTypeSupported('audio/webm')
-                        ? 'audio/webm'
-                        : MediaRecorder.isTypeSupported('audio/mp4')
-                        ? 'audio/mp4'
-                        : 'audio/wav';
-
-                    mediaRecorder = new MediaRecorder(stream, { mimeType });
-                    const chunks = [];
-                    let hasProcessed = false;  // Guard against onstop firing twice
-
-                    mediaRecorder.ondataavailable = e => {
-                        if (e.data.size > 0) chunks.push(e.data);
-                    };
-
-                    mediaRecorder.onstop = async () => {
-                        // Prevent duplicate processing
-                        if (hasProcessed) return;
-                        hasProcessed = true;
-
-                        const blob = new Blob(chunks, { type: mimeType });
-                        stream.getTracks().forEach(t => t.stop());
-
-                        // Send to STT
-                        const formData = new FormData();
-                        const ext = mimeType.split('/')[1];
-                        formData.append('audio', blob, `recording.${ext}`);
-
-                        try {
-                            const res = await fetch('/api/speech-to-text', {
-                                method: 'POST',
-                                body: formData
-                            });
-                            if (!res.ok) throw new Error('Transcription failed');
-                            const data = await res.json();
-                            if (data.text) {
-                                // REPLACE (not append) - clear first, then set
-                                answerInput.value = '';
-                                answerInput.value = data.text.trim();
-                                answerInput.focus();
-                            }
-                        } catch (e) {
-                            console.error('STT error:', e);
-                            alert('Could not transcribe audio. Please type your answer.');
-                        } finally {
-                            voiceBtn.textContent = '🎤';
-                            voiceBtn.disabled = false;
-                            isProcessingVoice = false;
-                        }
-                    };
-
-                    mediaRecorder.start();
-                    isRecording = true;
-                    voiceBtn.classList.add('recording');
-                    voiceBtn.textContent = '⏹️ Stop';
-                } catch (e) {
-                    console.error('Mic error:', e);
-                    alert('Could not access microphone. Please check permissions.');
+                // Start listening
+                if (!recognition) {
+                    recognition = initSpeechRecognition();
+                }
+                if (recognition) {
+                    // Clear previous answer
+                    answerInput.value = '';
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.error('Recognition start error:', e);
+                        // Recognition might already be running
+                    }
+                } else {
+                    alert('Voice input not supported in this browser. Please type your answer.');
                 }
             }
         }
