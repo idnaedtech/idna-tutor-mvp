@@ -330,6 +330,7 @@
         let currentChapter = null;
         let currentState = 'idle';
         let isRecording = false;
+        let isProcessingVoice = false;
         let mediaRecorder = null;
         
         // Elements
@@ -544,9 +545,13 @@
         
         // Voice input
         async function toggleVoice() {
+            // Guard against double-clicks during processing
+            if (isProcessingVoice) return;
+
             if (isRecording) {
                 mediaRecorder.stop();
                 isRecording = false;
+                isProcessingVoice = true;
                 voiceBtn.classList.remove('recording');
                 voiceBtn.textContent = '⏳';  // Show processing
                 voiceBtn.disabled = true;
@@ -563,12 +568,17 @@
 
                     mediaRecorder = new MediaRecorder(stream, { mimeType });
                     const chunks = [];
+                    let hasProcessed = false;  // Guard against onstop firing twice
 
                     mediaRecorder.ondataavailable = e => {
                         if (e.data.size > 0) chunks.push(e.data);
                     };
 
                     mediaRecorder.onstop = async () => {
+                        // Prevent duplicate processing
+                        if (hasProcessed) return;
+                        hasProcessed = true;
+
                         const blob = new Blob(chunks, { type: mimeType });
                         stream.getTracks().forEach(t => t.stop());
 
@@ -585,7 +595,9 @@
                             if (!res.ok) throw new Error('Transcription failed');
                             const data = await res.json();
                             if (data.text) {
-                                answerInput.value = data.text;
+                                // REPLACE (not append) - clear first, then set
+                                answerInput.value = '';
+                                answerInput.value = data.text.trim();
                                 answerInput.focus();
                             }
                         } catch (e) {
@@ -594,6 +606,7 @@
                         } finally {
                             voiceBtn.textContent = '🎤';
                             voiceBtn.disabled = false;
+                            isProcessingVoice = false;
                         }
                     };
 
