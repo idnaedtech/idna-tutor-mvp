@@ -574,26 +574,34 @@ async def get_next_question(request: ChapterRequest):
 
 @app.post("/api/session/answer")
 async def submit_answer(request: AnswerRequest):
-    """Submit answer for current question"""
+    """
+    Submit answer for current question.
+
+    Implements 3-attempt scaffolding per PRD:
+    - Attempt 1 wrong → hint_1 (conceptual nudge)
+    - Attempt 2 wrong → hint_2 (procedural hint)
+    - Attempt 3 wrong → show solution, move to next question
+    """
     session = get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     current_state = SessionState(session['state'])
     if current_state not in [SessionState.WAITING_ANSWER, SessionState.SHOWING_HINT]:
         raise HTTPException(status_code=400, detail=f"Cannot submit answer in state: {current_state.value}")
-    
+
     question = get_question_by_id(session['chapter'], session['current_question_id'])
     if not question:
         raise HTTPException(status_code=400, detail="No active question")
-    
-    is_correct = check_answer(request.answer, question['answer'], question.get('type', 'text'))
+
+    # FIX: Correct parameter order - check_answer(correct, student)
+    is_correct = check_answer(question['answer'], request.answer)
     attempt_count = (session['attempt_count'] or 0) + 1
-    
+
     if is_correct:
         new_score = (session['score'] or 0) + 1
         new_correct = (session['correct_answers'] or 0) + 1
-        
+
         update_session(
             request.session_id,
             score=new_score,
@@ -601,63 +609,79 @@ async def submit_answer(request: AnswerRequest):
             attempt_count=attempt_count,
             state=SessionState.SHOWING_ANSWER.value
         )
-        
+
         return {
             "correct": True,
             "message": get_random_message(PRAISE_MESSAGES),
             "score": new_score,
             "total": session['total'],
+            "attempt_count": attempt_count,
             "state": SessionState.SHOWING_ANSWER.value
         }
     else:
+        # 3-attempt scaffolding per PRD
         if attempt_count >= 3:
+            # Attempt 3: Show solution, move on
             update_session(
                 request.session_id,
                 attempt_count=attempt_count,
                 state=SessionState.SHOWING_ANSWER.value
             )
-            
+
+            solution = question.get("solution", f"The answer is {question['answer']}")
+
             return {
                 "correct": False,
                 "show_answer": True,
                 "answer": question["answer"],
-                "message": f"The correct answer is {question['answer']}. Let's move on!",
+                "solution": solution,
+                "message": f"Solution: {question['answer']}. Let's move to the next question.",
                 "score": session['score'],
                 "total": session['total'],
+                "attempt_count": attempt_count,
                 "state": SessionState.SHOWING_ANSWER.value
             }
         elif attempt_count == 2:
-            hint = question.get("hint", "Think carefully!")
-            
+            # Attempt 2: Procedural hint (hint_2 or more specific hint)
+            hint_2 = question.get("hint_2") or question.get("hint", "Think step by step!")
+
             update_session(
                 request.session_id,
                 attempt_count=attempt_count,
                 state=SessionState.SHOWING_HINT.value
             )
-            
+
             return {
                 "correct": False,
-                "hint": hint,
-                "message": get_random_message(HINT_MESSAGES) + hint,
+                "hint": hint_2,
+                "hint_level": 2,
+                "message": f"Not quite. {hint_2} Try once more!",
                 "attempts_left": 3 - attempt_count,
                 "score": session['score'],
                 "total": session['total'],
+                "attempt_count": attempt_count,
                 "state": SessionState.SHOWING_HINT.value
             }
         else:
+            # Attempt 1: Conceptual nudge (hint_1 or generic encouragement)
+            hint_1 = question.get("hint_1", "Think about the concept carefully.")
+
             update_session(
                 request.session_id,
                 attempt_count=attempt_count,
-                state=SessionState.WAITING_ANSWER.value
+                state=SessionState.SHOWING_HINT.value
             )
-            
+
             return {
                 "correct": False,
-                "message": get_random_message(ENCOURAGEMENT_MESSAGES),
+                "hint": hint_1,
+                "hint_level": 1,
+                "message": f"Not correct. {hint_1}",
                 "attempts_left": 3 - attempt_count,
                 "score": session['score'],
                 "total": session['total'],
-                "state": SessionState.WAITING_ANSWER.value
+                "attempt_count": attempt_count,
+                "state": SessionState.SHOWING_HINT.value
             }
 
 
