@@ -707,13 +707,13 @@
         
         // Text to Speech (supports SSML for warmer voice)
         async function speak(text, ssml = null) {
-            try {
-                // Stop any currently playing audio
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
+            // Stop any currently playing audio
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
 
+            try {
                 setStatus('speaking');
                 // Pass SSML if available for warmer voice with pauses
                 const payload = { text, voice: 'nova' };
@@ -722,7 +722,21 @@
                 }
                 const data = await api('/api/text-to-speech', 'POST', payload);
                 currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
-                currentAudio.onended = () => setStatus('ready');
+
+                // Auto-listen when tutor finishes speaking
+                currentAudio.onended = () => {
+                    setStatus('ready');
+                    // Only auto-listen if we're in question mode and submit button is visible
+                    if (submitBtn.style.display !== 'none' && questionArea.classList.contains('active')) {
+                        // Small delay before listening
+                        setTimeout(() => {
+                            if (!isListening) {
+                                startListening();
+                            }
+                        }, 500);
+                    }
+                };
+
                 currentAudio.play();
             } catch (e) {
                 console.error('TTS error:', e);
@@ -732,7 +746,16 @@
                     speechSynthesis.cancel();
                     setStatus('speaking');
                     const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.onend = () => setStatus('ready');
+                    utterance.onend = () => {
+                        setStatus('ready');
+                        if (submitBtn.style.display !== 'none' && questionArea.classList.contains('active')) {
+                            setTimeout(() => {
+                                if (!isListening) {
+                                    startListening();
+                                }
+                            }, 500);
+                        }
+                    };
                     speechSynthesis.speak(utterance);
                 } else {
                     setStatus('ready');
@@ -830,8 +853,41 @@
             return recog;
         }
 
+        function startListening() {
+            if (isListening) return;
+
+            // Barge-in: Stop any playing TTS
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            // Also stop browser TTS if running
+            if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+            }
+
+            if (!recognition) {
+                recognition = initSpeechRecognition();
+            }
+            if (recognition) {
+                answerInput.value = '';
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.error('Recognition start error:', e);
+                }
+            } else {
+                alert('Voice input not supported in this browser.');
+            }
+        }
+
+        function stopListening() {
+            if (recognition && isListening) {
+                recognition.stop();
+            }
+        }
+
         function toggleVoice() {
-            // Cancel any pending auto-submit when user clicks mic again
             if (autoSubmitTimer) {
                 clearTimeout(autoSubmitTimer);
                 autoSubmitTimer = null;
@@ -839,37 +895,9 @@
             }
 
             if (isListening) {
-                // Stop listening
-                if (recognition) {
-                    recognition.stop();
-                }
+                stopListening();
             } else {
-                // Start listening
-                // Barge-in: Stop any playing TTS
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
-                // Also stop browser TTS if running
-                if ('speechSynthesis' in window) {
-                    speechSynthesis.cancel();
-                }
-
-                if (!recognition) {
-                    recognition = initSpeechRecognition();
-                }
-                if (recognition) {
-                    // Clear previous answer
-                    answerInput.value = '';
-                    try {
-                        recognition.start();
-                    } catch (e) {
-                        console.error('Recognition start error:', e);
-                        // Recognition might already be running
-                    }
-                } else {
-                    alert('Voice input not supported in this browser. Please type your answer.');
-                }
+                startListening();
             }
         }
         
