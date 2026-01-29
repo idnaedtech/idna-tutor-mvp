@@ -174,27 +174,23 @@ def get_google_tts_client():
 
 def google_tts(
     text: str,
-    language_code: str = "en-US",
-    voice_name: str = "en-US-Journey-F",
+    language_code: str = "en-IN",
+    voice_name: str = "en-IN-Neural2-A",
     ssml: Optional[str] = None
 ) -> bytes:
-    """Generate warm, natural speech using Google Cloud TTS
+    """Generate natural speech using Google Cloud TTS
 
     Args:
         text: Plain text to speak (used if ssml is None)
-        language_code: Language code (default: en-US for clear American English)
-        voice_name: Voice to use (default: en-US-Journey-F, most natural)
-        ssml: Optional SSML markup for warmer, more natural speech
+        language_code: Language code (default: en-IN for Indian English)
+        voice_name: Voice to use (default: en-IN-Neural2-A, Indian female)
+        ssml: Optional SSML markup for natural speech
 
-    Voice Settings (optimized for warmth, reduced nasality):
-    - Speaking rate: 0.92 (slightly slower for clarity)
-    - Pitch: -1.0 (slightly lower reduces nasality)
-    - Effects profile: small-bluetooth-speaker (optimized for mobile)
-
-    Best voices for natural, non-nasal sound:
-    - en-US-Journey-F: Female - MOST NATURAL, like a real person
-    - en-US-Journey-D: Male - very natural
-    - en-US-Neural2-F: Female - natural, clear (fallback)
+    Indian English voices:
+    - en-IN-Neural2-A: Female - clear Indian accent
+    - en-IN-Neural2-B: Male - clear Indian accent
+    - en-IN-Neural2-C: Female - alternative
+    - en-IN-Neural2-D: Male - alternative
     """
     tts_client = get_google_tts_client()
     if tts_client is None:
@@ -227,11 +223,11 @@ def google_tts(
         )
         return response.audio_content
     except Exception as e:
-        # Fallback to Neural2 if Journey not available
-        print(f"Journey voice failed, trying Neural2: {e}")
+        # Fallback to alternative Indian voice
+        print(f"Primary voice failed, trying fallback: {e}")
         voice = texttospeech.VoiceSelectionParams(
-            language_code="en-US",
-            name="en-US-Neural2-F",
+            language_code="en-IN",
+            name="en-IN-Neural2-C",
         )
         response = tts_client.synthesize_speech(
             input=synthesis_input,
