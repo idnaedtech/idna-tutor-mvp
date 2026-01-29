@@ -169,31 +169,34 @@
         }
         
         .feedback {
-            padding: 16px;
-            border-radius: 12px;
-            margin-bottom: 16px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
             text-align: center;
-            font-weight: 500;
+            font-weight: 600;
+            font-size: 14px;
             display: none;
         }
-        
+
         .feedback.show {
             display: block;
         }
-        
+
         .feedback.correct {
             background: #d1fae5;
             color: #065f46;
         }
-        
+
         .feedback.incorrect {
             background: #fee2e2;
             color: #991b1b;
+            font-weight: 500;
         }
-        
+
         .feedback.hint {
             background: #fef3c7;
             color: #92400e;
+            font-weight: 500;
         }
         
         .voice-btn {
@@ -325,13 +328,13 @@
         }
 
         .steps-area {
-            margin-top: 12px;
-            padding: 12px 16px;
-            border-left: 4px solid #667eea;
+            margin: 16px 0;
+            padding: 16px;
             background: #f8fafc;
-            border-radius: 0 8px 8px 0;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
             font-size: 14px;
-            color: #475569;
+            color: #334155;
             display: none;
         }
 
@@ -340,8 +343,11 @@
         }
 
         .steps-area .step {
-            margin-bottom: 8px;
-            padding-left: 8px;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            background: white;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
         }
 
         .steps-area .step:last-child {
@@ -351,9 +357,10 @@
         .steps-area .step-label {
             font-weight: 600;
             color: #667eea;
-            font-size: 12px;
+            font-size: 11px;
             text-transform: uppercase;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
+            letter-spacing: 0.5px;
         }
     </style>
 </head>
@@ -649,11 +656,13 @@
                 }
 
                 if (data.correct) {
-                    showFeedback(data.message, 'correct');
+                    // Show simple success - tutor's words are spoken, not displayed
+                    showFeedback('✓ Correct!', 'correct');
                     submitBtn.style.display = 'none';
                     nextBtn.style.display = 'block';
                 } else if (data.show_answer) {
-                    showFeedback(data.message, 'incorrect');
+                    // Show the correct answer, not tutor's spoken words
+                    showFeedback('Answer: ' + data.answer, 'incorrect');
                     submitBtn.style.display = 'none';
                     nextBtn.style.display = 'block';
                     // Add solution to steps
@@ -661,12 +670,17 @@
                         addStep('Solution', data.solution);
                     }
                 } else if (data.hint) {
-                    showFeedback(data.message, 'hint');
+                    // Show simple "try again" - hint goes in steps area
+                    showFeedback('Try again...', 'hint');
                     // Add hint to steps area (accumulates)
                     const hintLabel = 'Hint ' + (data.attempt_count ? data.attempt_count - 1 : '');
                     addStep(hintLabel, data.hint);
+                } else if (data.is_help) {
+                    // Help request - show in steps area
+                    hideFeedback();
+                    addStep('Explanation', data.message);
                 } else {
-                    showFeedback(data.message, 'incorrect');
+                    showFeedback('Try again...', 'hint');
                 }
 
                 // Use SSML for warmer voice if available
