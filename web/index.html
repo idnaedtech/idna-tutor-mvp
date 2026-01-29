@@ -614,9 +614,9 @@
                 questionText.textContent = data.question_text;
                 updateState(data.state);
 
-                // Speak intro + question for friendly experience
-                const fullText = data.intro ? data.intro + ' ' + data.question_text : data.question_text;
-                speak(fullText);
+                // Speak intro with SSML for warm, natural voice
+                const fullText = data.intro ? data.intro : data.question_text;
+                speak(fullText, data.intro_ssml);
                 answerInput.focus();
             } catch (e) {
                 alert('Error: ' + e.message);

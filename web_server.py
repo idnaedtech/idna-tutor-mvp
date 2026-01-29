@@ -41,7 +41,7 @@ from google.cloud import texttospeech
 
 from questions import ALL_CHAPTERS, CHAPTER_NAMES
 from evaluator import check_answer
-from tutor_intent import generate_tutor_response, TutorIntent, TutorVoice
+from tutor_intent import generate_tutor_response, generate_gpt_response, wrap_in_ssml, TutorIntent, TutorVoice
 
 load_dotenv()
 
@@ -129,22 +129,24 @@ def get_google_tts_client():
 def google_tts(
     text: str,
     language_code: str = "en-IN",
-    voice_name: str = "en-IN-Wavenet-A",
+    voice_name: str = "en-IN-Neural2-A",
     ssml: Optional[str] = None
 ) -> bytes:
-    """Generate clear, loud speech using Google Cloud TTS
+    """Generate warm, natural speech using Google Cloud TTS
 
     Args:
         text: Plain text to speak (used if ssml is None)
         language_code: Language code (default: en-IN for Indian English)
-        voice_name: Voice to use (default: en-IN-Wavenet-A, warm female)
+        voice_name: Voice to use (default: en-IN-Neural2-A, warm and natural)
         ssml: Optional SSML markup for warmer, more natural speech
 
-    Voice options for Indian English:
-    - en-IN-Wavenet-A: Warm female (recommended)
-    - en-IN-Wavenet-B: Male
-    - en-IN-Wavenet-C: Female
-    - en-IN-Wavenet-D: Male
+    Voice options for Indian English (best to worst):
+    - en-IN-Neural2-A: Female - MOST NATURAL, warm teacher voice
+    - en-IN-Neural2-B: Male - natural
+    - en-IN-Neural2-C: Female - natural
+    - en-IN-Neural2-D: Male - natural
+    - en-IN-Wavenet-A: Female - good but more robotic
+    - en-IN-Standard-A: Female - basic, robotic
     """
     tts_client = get_google_tts_client()
     if tts_client is None:
@@ -163,9 +165,9 @@ def google_tts(
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.85,  # Slower for children
-        pitch=0.0,
-        volume_gain_db=3.0,  # LOUDER
+        speaking_rate=0.92,  # Slightly slower, but natural pace
+        pitch=1.0,  # Slightly higher pitch - warmer, friendlier
+        volume_gain_db=2.0,  # Good volume
     )
 
     response = tts_client.synthesize_speech(
@@ -582,14 +584,15 @@ async def start_session():
     """Start a new tutoring session"""
     session_id = str(uuid.uuid4())
     create_session(session_id)
-    
-    # Use TutorIntent for welcome message
-    tutor = TutorVoice()
-    welcome = tutor.get_response(TutorIntent.SESSION_START)
-    
+
+    # Use GPT for warm, natural welcome
+    welcome = generate_gpt_response(TutorIntent.SESSION_START)
+    welcome_ssml = wrap_in_ssml(welcome)
+
     return {
         "session_id": session_id,
         "message": welcome,
+        "ssml": welcome_ssml,
         "chapters": list(ALL_CHAPTERS.keys()),
         "state": SessionState.IDLE.value
     }
@@ -662,18 +665,19 @@ async def get_next_question(request: ChapterRequest):
         state=SessionState.WAITING_ANSWER.value
     )
 
-    # Use TutorIntent for natural question introduction
-    tutor = TutorVoice()
-    intro = tutor.get_response(
+    # Use GPT for natural, warm question introduction
+    intro = generate_gpt_response(
         intent=TutorIntent.ASK_FRESH,
         question=question['text']
     )
+    intro_ssml = wrap_in_ssml(intro)
 
     return {
         "question_id": question['id'],
         "question_text": question['text'],
         "question_number": question_number,
         "intro": intro,
+        "intro_ssml": intro_ssml,
         "type": question.get('type', 'text'),
         "options": question.get('options'),
         "state": SessionState.WAITING_ANSWER.value
@@ -810,12 +814,14 @@ async def end_session(request: ChapterRequest):
         duration_seconds=duration
     )
     
-    # Use TutorIntent for closing message
-    tutor = TutorVoice()
-    closing = tutor.get_response(TutorIntent.SESSION_END)
-    
+    # Use GPT for warm, encouraging closing
+    closing = generate_gpt_response(TutorIntent.SESSION_END)
+    full_message = f"{closing} You got {score} out of {total} correct!"
+    closing_ssml = wrap_in_ssml(full_message)
+
     return {
-        "message": f"{closing} You got {score} out of {total} correct!",
+        "message": full_message,
+        "ssml": closing_ssml,
         "score": score,
         "total": total,
         "accuracy": round((score/total)*100, 1) if total > 0 else 0,

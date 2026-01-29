@@ -13,11 +13,55 @@ Key Principles:
 2. One idea per sentence
 3. Avoid robotic transitions ("Now," "Therefore," "Next,")
 4. Warm, encouraging tone for Tier 2/3 Indian students
+5. USE GPT for natural phrasing - never sound robotic
 """
 
 from enum import Enum
 from typing import Optional, Dict, Any
 import random
+import os
+from openai import OpenAI
+
+# Initialize OpenAI client for natural response generation
+_openai_client = None
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=10.0,
+            max_retries=1
+        )
+    return _openai_client
+
+
+# System prompt for the tutor persona
+TUTOR_PERSONA = """You are a warm, encouraging math tutor for Class 8 students in India.
+
+Your personality:
+- You're like a caring older sibling or favorite teacher
+- You use gentle Hinglish naturally (mix of Hindi and English)
+- You call students "beta" affectionately
+- You NEVER say "wrong" or "incorrect" - instead guide them
+- You celebrate small wins enthusiastically
+- You're patient and never frustrated
+
+Voice rules (CRITICAL - this will be spoken aloud):
+- Maximum 2 short sentences
+- Use simple words a 13-year-old understands
+- Add natural pauses with "..." or "hmm"
+- Sound conversational, not textbook-like
+- NO emojis (this is for voice)
+
+Hindi phrases you naturally use:
+- "Bahut accha!" (Very good!)
+- "Shabash!" (Well done!)
+- "Koi baat nahi" (No problem)
+- "Sochke batao" (Think and tell)
+- "Bilkul sahi!" (Exactly right!)
+- "Aage badhte hain" (Let's move forward)
+"""
 
 
 class TutorIntent(Enum):
@@ -444,6 +488,77 @@ class TutorVoice:
         }
 
 
+def generate_gpt_response(
+    intent: TutorIntent,
+    question: str = "",
+    student_answer: str = "",
+    hint: str = "",
+    solution: str = "",
+    correct_answer: str = "",
+    attempt_number: int = 1,
+) -> str:
+    """
+    Use GPT-4o-mini to generate a warm, natural tutor response.
+
+    This is the key to making the tutor sound human, not robotic.
+    The FSM decides WHAT to say (intent), GPT decides HOW to say it.
+    """
+
+    # Build the context for GPT
+    intent_instructions = {
+        TutorIntent.ASK_FRESH: f"Introduce this new question warmly: '{question}'. Make the student feel ready and confident.",
+
+        TutorIntent.CONFIRM_CORRECT: f"The student got it right! The answer was {correct_answer}. Celebrate genuinely - mention what they did well if you can tell from the question '{question}'.",
+
+        TutorIntent.GUIDE_THINKING: f"The student's answer was not correct (attempt {attempt_number}/3). Guide them with this hint: '{hint}'. Don't say 'wrong' - be encouraging and ask a guiding question.",
+
+        TutorIntent.NUDGE_CORRECTION: f"Attempt {attempt_number}/3. Give more direct help using: '{hint}'. Be supportive - they're trying hard.",
+
+        TutorIntent.EXPLAIN_ONCE: f"After 3 attempts, gently explain the solution: '{solution}'. Don't make them feel bad - learning is a process.",
+
+        TutorIntent.MOVE_ON: "Smoothly transition to the next question. Keep energy positive.",
+
+        TutorIntent.SESSION_START: "Welcome the student warmly. They're about to practice math. Make them feel comfortable.",
+
+        TutorIntent.SESSION_END: "End the session positively. They worked hard today.",
+    }
+
+    user_prompt = intent_instructions.get(intent, "Respond helpfully.")
+
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": TUTOR_PERSONA},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=100,
+            temperature=0.8,  # More creative/varied
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"GPT response error: {e}")
+        # Fallback to template if GPT fails
+        tutor = TutorVoice()
+        return tutor.get_response(intent, question=question, hint=hint, solution=solution)
+
+
+def wrap_in_ssml(text: str) -> str:
+    """
+    Wrap plain text in SSML with natural pauses.
+    """
+    # Add pauses after sentences
+    import re
+    # Add break after periods, question marks, exclamation points
+    text = re.sub(r'([.!?])\s+', r'\1<break time="400ms"/> ', text)
+    # Add break after "..."
+    text = re.sub(r'\.\.\.', '<break time="300ms"/>', text)
+    # Add break after commas
+    text = re.sub(r',\s+', ',<break time="200ms"/> ', text)
+    return f"<speak>{text}</speak>"
+
+
 # Convenience function for API integration
 def generate_tutor_response(
     is_correct: bool,
@@ -453,42 +568,61 @@ def generate_tutor_response(
     hint_2: str = "",
     solution: str = "",
     correct_answer: str = "",
+    student_answer: str = "",
 ) -> Dict[str, Any]:
     """
-    Generate a tutor response. Call this from the API endpoint.
-    
-    Example usage in web_server.py:
-    
-        from tutor_intent import generate_tutor_response
-        
-        result = generate_tutor_response(
-            is_correct=False,
-            attempt_number=1,
-            question=question['question'],
-            hint_1=question.get('hint_1', ''),
-            hint_2=question.get('hint_2', ''),
-            solution=question.get('solution', ''),
-            correct_answer=question['answer'],
-        )
-        
-        return {
-            "correct": result["move_to_next"] and is_correct,
-            "message": result["response"],
-            "show_answer": result["show_answer"],
-            ...
-        }
+    Generate a tutor response using GPT for natural phrasing.
+
+    The FSM decides the intent (WHAT to say).
+    GPT decides the phrasing (HOW to say it).
+
+    This makes every response unique, warm, and human-like.
     """
+    # Determine intent from FSM state
     tutor = TutorVoice()
-    return tutor.build_full_response(
+    intent = tutor.determine_intent(
         is_correct=is_correct,
         attempt_number=attempt_number,
-        question=question,
-        hint_1=hint_1,
-        hint_2=hint_2,
-        solution=solution,
-        correct_answer=correct_answer,
-        move_to_next=True,
     )
+
+    # Select appropriate hint based on attempt
+    hint = ""
+    if intent == TutorIntent.GUIDE_THINKING:
+        hint = hint_1 or "Think about what operation you need."
+    elif intent == TutorIntent.NUDGE_CORRECTION:
+        hint = hint_2 or hint_1 or "Check your calculation carefully."
+
+    # Generate natural response using GPT
+    response = generate_gpt_response(
+        intent=intent,
+        question=question,
+        student_answer=student_answer,
+        hint=hint,
+        solution=solution or f"The answer is {correct_answer}",
+        correct_answer=correct_answer,
+        attempt_number=attempt_number,
+    )
+
+    # Wrap in SSML for natural voice pauses
+    ssml = wrap_in_ssml(response)
+
+    # Determine if we should move to next question
+    should_move = is_correct or attempt_number >= 3
+
+    # If moving on, add transition
+    if should_move:
+        move_response = generate_gpt_response(TutorIntent.MOVE_ON)
+        response = f"{response} {move_response}"
+        ssml = wrap_in_ssml(response)
+
+    return {
+        "intent": intent.value,
+        "response": response,
+        "ssml": ssml,
+        "move_to_next": should_move,
+        "show_answer": intent == TutorIntent.EXPLAIN_ONCE,
+        "attempt_number": attempt_number,
+    }
 
 
 # For testing
