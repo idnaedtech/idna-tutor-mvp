@@ -37,37 +37,36 @@ def get_openai_client():
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You're chatting with a student about math. Sound like a real person, not a robot or formal teacher.
+TUTOR_PERSONA = """You're a friend helping with math homework. Chat naturally, don't teach formally.
 
-SOUND HUMAN - use these patterns:
-- Start casually: "So...", "Okay...", "Alright...", "Hmm...", "Oh!", "Ah..."
-- Filler sounds: "umm", "like", "you know", "basically", "actually"
-- Self-corrections: "wait no I mean...", "or actually...", "well..."
-- Thinking out loud: "let's see...", "hmm what if...", "okay so basically..."
-- Short reactions: "oh nice!", "yep!", "ah gotcha", "ooh close!", "right right"
+BE SPONTANEOUS:
+- Never start two responses the same way
+- React in the moment, don't follow a script
+- Sometimes just "yep!" or "mmhmm" or "oh I see"
+- Interrupt yourself: "so you— wait actually let's try..."
+- Think out loud: "hmm okay so if we..."
 
-KEEP IT SUPER SHORT:
-- Max 1-2 sentences
-- Speak in fragments sometimes, like real speech
-- "Nice! That's it." not "That is correct, well done on solving that."
+SOUND REAL:
+- Use "like", "kinda", "sorta", "basically", "right?"
+- Pause words: "umm", "uh", "hmm", "soo..."
+- Reactions: "ooh!", "ah!", "wait—", "oh okay"
+- Casual Hindi: "accha", "haan", "theek", "sahi"
 
-VIBE:
-- Like texting a friend but spoken
-- Warm, not formal
-- Mix Hindi casually: "accha", "haan", "theek hai", "sahi hai"
-- Never say "incorrect" or "wrong" - just guide forward
+KEEP SUPER SHORT - this is spoken:
+- 1 sentence usually, 2 max
+- Fragments are fine: "Nice one!" "Hmm close though."
+- Don't over-explain
 
-GOOD EXAMPLES:
-- "Oh yeah! That's it, nice one!"
-- "Hmm okay so like... what if you try adding these first?"
-- "Ah so close! Think about the denominator though..."
-- "Right so basically... you just do this and boom, that's your answer."
-- "Accha let's see... try this one."
+WHEN EXPLAINING STEPS:
+- Walk through like you're figuring it out together
+- "okay so first we... then... and that gives us..."
+- Make it feel collaborative, not lecturing
 
-BAD (too robotic):
-- "Correct! Well done."
-- "That is not the right answer."
-- "Let us now move to the next question."
+NEVER SOUND LIKE:
+- A textbook: "The correct answer is..."
+- A robot: "Well done. That is correct."
+- A formal teacher: "Let us proceed to..."
+- Reading a script: same openings every time
 """
 
 
@@ -81,10 +80,29 @@ class TutorIntent(Enum):
     GUIDE_THINKING = "guide_thinking"    # Hint 1 - Socratic nudge
     NUDGE_CORRECTION = "nudge_correction"  # Hint 2 - Direct guidance
     EXPLAIN_ONCE = "explain_once"        # Show solution after 3 attempts
+    EXPLAIN_STEPS = "explain_steps"      # Student asked for step-by-step help
     MOVE_ON = "move_on"                  # Transition to next question
     ENCOURAGE_RETRY = "encourage_retry"  # Gentle encouragement to try again
     SESSION_START = "session_start"      # Welcome message
     SESSION_END = "session_end"          # Closing message
+
+
+# Phrases that indicate student wants help, not submitting an answer
+HELP_REQUEST_PHRASES = [
+    "explain", "help", "don't understand", "dont understand",
+    "how do i", "how do you", "show me", "what do you mean",
+    "i'm confused", "im confused", "can you explain",
+    "step by step", "simple terms", "break it down",
+    "i don't get it", "i dont get it", "what does that mean",
+    "how does", "why does", "tell me how", "teach me",
+    "hint", "clue", "stuck", "lost", "confused"
+]
+
+
+def is_help_request(text: str) -> bool:
+    """Check if student is asking for help rather than submitting an answer."""
+    text_lower = text.lower().strip()
+    return any(phrase in text_lower for phrase in HELP_REQUEST_PHRASES)
 
 
 # Phrasing templates for each intent
@@ -523,6 +541,19 @@ def generate_gpt_response(
 
         TutorIntent.EXPLAIN_ONCE: f"Just explain it simply: '{solution}'. No big deal tone - 'So basically...' or 'Right so you just...' Keep it short.",
 
+        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help understanding. Walk them through step by step in a friendly way.
+
+Question: {question}
+Solution: {solution}
+Answer: {correct_answer}
+
+Explain it like talking to a friend:
+- Start with 'Okay so basically...' or 'Right so here's the thing...'
+- Break it into simple steps they can follow
+- Use casual language, not textbook language
+- End with something like 'and that gives us {correct_answer}' or 'so the answer is {correct_answer}'
+- Keep it conversational, not lecture-y""",
+
         TutorIntent.MOVE_ON: "Super quick transition. Just 'Okay next!' or 'Alright...' 3-4 words max.",
 
         TutorIntent.SESSION_START: "Quick casual hi. 'Hey!' or 'Yo ready for some math?' 4-5 words.",
@@ -534,13 +565,17 @@ def generate_gpt_response(
 
     try:
         client = get_openai_client()
+
+        # More tokens for explanations, fewer for quick reactions
+        max_tokens = 150 if intent == TutorIntent.EXPLAIN_STEPS else 60
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": TUTOR_PERSONA},
                 {"role": "user", "content": user_prompt}
             ],
-            max_tokens=60,  # Keep responses short
+            max_tokens=max_tokens,
             temperature=0.95,  # High creativity for varied responses
         )
         result = response.choices[0].message.content.strip()
@@ -610,6 +645,32 @@ def wrap_in_ssml(text: str) -> str:
         text = f'<prosody rate="95%">{text}</prosody>'
 
     return f"<speak>{text}</speak>"
+
+
+def generate_step_explanation(
+    question: str,
+    solution: str,
+    correct_answer: str,
+) -> Dict[str, Any]:
+    """
+    Generate a step-by-step explanation when student asks for help.
+    Uses GPT to explain in simple, conversational terms.
+    """
+    response = generate_gpt_response(
+        intent=TutorIntent.EXPLAIN_STEPS,
+        question=question,
+        solution=solution,
+        correct_answer=correct_answer,
+    )
+
+    ssml = wrap_in_ssml(response)
+
+    return {
+        "intent": TutorIntent.EXPLAIN_STEPS.value,
+        "response": response,
+        "ssml": ssml,
+        "is_help_response": True,
+    }
 
 
 # Convenience function for API integration

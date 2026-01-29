@@ -41,7 +41,15 @@ from google.cloud import texttospeech
 
 from questions import ALL_CHAPTERS, CHAPTER_NAMES
 from evaluator import check_answer
-from tutor_intent import generate_tutor_response, generate_gpt_response, wrap_in_ssml, TutorIntent, TutorVoice
+from tutor_intent import (
+    generate_tutor_response,
+    generate_gpt_response,
+    generate_step_explanation,
+    wrap_in_ssml,
+    is_help_request,
+    TutorIntent,
+    TutorVoice
+)
 
 load_dotenv()
 
@@ -722,6 +730,28 @@ async def submit_answer(request: AnswerRequest):
     question = get_question_by_id(session['chapter'], session['current_question_id'])
     if not question:
         raise HTTPException(status_code=400, detail="No active question")
+
+    # Check if student is asking for help (not submitting an answer)
+    if is_help_request(request.answer):
+        # Generate step-by-step explanation
+        help_result = generate_step_explanation(
+            question=question.get('text', ''),
+            solution=question.get('solution', f"The answer is {question['answer']}"),
+            correct_answer=question['answer'],
+        )
+
+        return {
+            "correct": False,
+            "is_help": True,
+            "message": help_result["response"],
+            "ssml": help_result.get("ssml"),
+            "intent": help_result["intent"],
+            "score": session['score'],
+            "total": session['total'],
+            "attempt_count": session['attempt_count'] or 0,  # Don't increment for help
+            "move_to_next": False,
+            "state": current_state.value
+        }
 
     # Use enhanced evaluator (handles spoken variants like "2 by 3" → "2/3")
     is_correct = check_answer(question['answer'], request.answer)
