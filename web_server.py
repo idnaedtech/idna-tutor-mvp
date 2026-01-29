@@ -171,13 +171,26 @@ def google_tts(
         volume_gain_db=2.0,  # Good volume
     )
 
-    response = tts_client.synthesize_speech(
-        input=synthesis_input,
-        voice=voice,
-        audio_config=audio_config
-    )
-
-    return response.audio_content
+    try:
+        response = tts_client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config
+        )
+        return response.audio_content
+    except Exception as e:
+        # Fallback to Neural2 if Journey not available
+        print(f"Journey voice failed, trying Neural2: {e}")
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="en-US",
+            name="en-US-Neural2-F",
+        )
+        response = tts_client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config
+        )
+        return response.audio_content
 
 
 # ============================================================

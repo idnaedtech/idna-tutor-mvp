@@ -37,32 +37,37 @@ def get_openai_client():
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You are a friendly math tutor talking to a Class 8 student. Speak like you're having a casual conversation.
+TUTOR_PERSONA = """You're chatting with a student about math. Sound like a real person, not a robot or formal teacher.
 
-HOW TO SOUND NATURAL:
-- Talk like a friend, not a teacher giving a lecture
-- Use filler words: "okay so...", "alright...", "hmm let's see...", "you know what..."
-- React naturally: "oh nice!", "ah I see what you did there", "ooh close one!"
-- Keep it SHORT: 1-2 sentences max, this is spoken not written
-- Use contractions: "you're", "that's", "let's", "don't"
-- Sound like you're thinking out loud with the student
+SOUND HUMAN - use these patterns:
+- Start casually: "So...", "Okay...", "Alright...", "Hmm...", "Oh!", "Ah..."
+- Filler sounds: "umm", "like", "you know", "basically", "actually"
+- Self-corrections: "wait no I mean...", "or actually...", "well..."
+- Thinking out loud: "let's see...", "hmm what if...", "okay so basically..."
+- Short reactions: "oh nice!", "yep!", "ah gotcha", "ooh close!", "right right"
 
-PERSONALITY:
-- Warm and encouraging, like a cool older sibling
-- Mix in some Hindi words naturally: "accha", "beta", "bahut accha", "theek hai"
-- NEVER say "wrong", "incorrect", "no" - just guide them forward
-- Celebrate wins genuinely, not robotically
+KEEP IT SUPER SHORT:
+- Max 1-2 sentences
+- Speak in fragments sometimes, like real speech
+- "Nice! That's it." not "That is correct, well done on solving that."
 
-EXAMPLES OF GOOD RESPONSES:
-- "Oh nice! Yeah that's exactly right, you got it!"
-- "Hmm okay so... think about what happens when we add these fractions..."
-- "Ah almost! You're super close though. What if we try finding the common denominator first?"
-- "Alright so let me show you... first we do this, then that gives us the answer."
+VIBE:
+- Like texting a friend but spoken
+- Warm, not formal
+- Mix Hindi casually: "accha", "haan", "theek hai", "sahi hai"
+- Never say "incorrect" or "wrong" - just guide forward
 
-EXAMPLES OF BAD RESPONSES (too formal/robotic):
-- "That is correct. Well done."
-- "Your answer is incorrect. Please try again."
-- "Now let us proceed to the next question."
+GOOD EXAMPLES:
+- "Oh yeah! That's it, nice one!"
+- "Hmm okay so like... what if you try adding these first?"
+- "Ah so close! Think about the denominator though..."
+- "Right so basically... you just do this and boom, that's your answer."
+- "Accha let's see... try this one."
+
+BAD (too robotic):
+- "Correct! Well done."
+- "That is not the right answer."
+- "Let us now move to the next question."
 """
 
 
@@ -508,21 +513,21 @@ def generate_gpt_response(
 
     # Build the context for GPT
     intent_instructions = {
-        TutorIntent.ASK_FRESH: f"Say the question casually like you're just chatting: '{question}'. Something like 'Okay so here's one...' or 'Alright let's try this...' Keep it super short.",
+        TutorIntent.ASK_FRESH: f"Toss out this question super casually: '{question}'. Like 'Okay so...' or 'Alright here's one...' Just say it naturally, don't introduce it formally.",
 
-        TutorIntent.CONFIRM_CORRECT: f"They got it right! Answer was {correct_answer}. React naturally like 'Oh nice!' or 'Yeah!' - genuine excitement, not formal praise. One short sentence.",
+        TutorIntent.CONFIRM_CORRECT: f"They nailed it! React like you would to a friend - 'Oh nice!' or 'Yep that's it!' Keep it to like 5 words max.",
 
-        TutorIntent.GUIDE_THINKING: f"They didn't get it yet (try {attempt_number} of 3). Nudge them with: '{hint}'. Sound like you're thinking together. 'Hmm okay so...' or 'Ah let's see...' NO saying wrong.",
+        TutorIntent.GUIDE_THINKING: f"Not quite right yet, attempt {attempt_number}. Use this hint: '{hint}'. Sound like you're puzzling it out together - 'Hmm so like...' or 'Okay what if...'",
 
-        TutorIntent.NUDGE_CORRECTION: f"Try {attempt_number}/3. Help more directly with: '{hint}'. Keep it friendly like 'Okay so here's the thing...' or 'Alright let me help more...'",
+        TutorIntent.NUDGE_CORRECTION: f"Attempt {attempt_number}, give bigger help: '{hint}'. Be direct but chill - 'Okay so basically...' or 'Right so the thing is...'",
 
-        TutorIntent.EXPLAIN_ONCE: f"Show the solution casually: '{solution}'. Like 'Okay so basically...' or 'Alright let me show you...' - no big deal, just explaining.",
+        TutorIntent.EXPLAIN_ONCE: f"Just explain it simply: '{solution}'. No big deal tone - 'So basically...' or 'Right so you just...' Keep it short.",
 
-        TutorIntent.MOVE_ON: "Quick transition like 'Okay next one!' or 'Alright moving on...' Super short.",
+        TutorIntent.MOVE_ON: "Super quick transition. Just 'Okay next!' or 'Alright...' 3-4 words max.",
 
-        TutorIntent.SESSION_START: "Casual hello like 'Hey! Ready to do some math?' Keep it light and friendly. One sentence.",
+        TutorIntent.SESSION_START: "Quick casual hi. 'Hey!' or 'Yo ready for some math?' 4-5 words.",
 
-        TutorIntent.SESSION_END: "Casual bye like 'Nice work today!' or 'Good stuff, see you!' One short sentence.",
+        TutorIntent.SESSION_END: "Quick bye. 'Nice one, later!' or 'Good stuff!' 3-4 words.",
     }
 
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
@@ -535,10 +540,13 @@ def generate_gpt_response(
                 {"role": "system", "content": TUTOR_PERSONA},
                 {"role": "user", "content": user_prompt}
             ],
-            max_tokens=100,
-            temperature=0.8,  # More creative/varied
+            max_tokens=60,  # Keep responses short
+            temperature=0.95,  # High creativity for varied responses
         )
-        return response.choices[0].message.content.strip()
+        result = response.choices[0].message.content.strip()
+        # Remove quotes if GPT wrapped the response
+        result = result.strip('"').strip("'")
+        return result
     except Exception as e:
         print(f"GPT response error: {e}")
         # Fallback to template if GPT fails
@@ -548,16 +556,59 @@ def generate_gpt_response(
 
 def wrap_in_ssml(text: str) -> str:
     """
-    Wrap plain text in SSML with natural pauses.
+    Wrap plain text in SSML with natural prosody for human-like speech.
+
+    Uses pitch variations, emphasis, and varied pauses to sound less robotic.
     """
-    # Add pauses after sentences
     import re
-    # Add break after periods, question marks, exclamation points
-    text = re.sub(r'([.!?])\s+', r'\1<break time="400ms"/> ', text)
-    # Add break after "..."
-    text = re.sub(r'\.\.\.', '<break time="300ms"/>', text)
-    # Add break after commas
-    text = re.sub(r',\s+', ',<break time="200ms"/> ', text)
+    import random
+
+    # Vary pause lengths for naturalness (not uniform)
+    short_pause = random.choice(["150ms", "200ms", "180ms"])
+    med_pause = random.choice(["300ms", "350ms", "280ms"])
+    long_pause = random.choice(["450ms", "500ms", "400ms"])
+
+    # Add varied pauses after sentences
+    def varied_sentence_pause(match):
+        pause = random.choice(["350ms", "400ms", "450ms", "300ms"])
+        return f'{match.group(1)}<break time="{pause}"/> '
+
+    text = re.sub(r'([.!?])\s+', varied_sentence_pause, text)
+
+    # Natural pause for "..." (thinking)
+    text = re.sub(r'\.\.\.', f'<break time="{med_pause}"/>', text)
+
+    # Shorter varied pauses after commas
+    def varied_comma_pause(match):
+        pause = random.choice(["120ms", "150ms", "180ms", "100ms"])
+        return f',<break time="{pause}"/> '
+
+    text = re.sub(r',\s+', varied_comma_pause, text)
+
+    # Add emphasis to excited words
+    excitement_words = ["nice", "great", "awesome", "perfect", "exactly", "yes", "yeah", "accha", "bahut", "shabash"]
+    for word in excitement_words:
+        # Case insensitive replacement with emphasis
+        pattern = re.compile(re.escape(word), re.IGNORECASE)
+        text = pattern.sub(f'<emphasis level="moderate">{word}</emphasis>', text)
+
+    # Add slight pitch rise for questions
+    if "?" in text:
+        # Wrap the question part with rising pitch
+        text = re.sub(
+            r'([^.!?]+\?)',
+            r'<prosody pitch="+5%">\1</prosody>',
+            text
+        )
+
+    # Add natural speech rate variation - slightly faster for excitement, slower for explanation
+    if any(w in text.lower() for w in ["nice", "great", "yes", "yeah", "correct"]):
+        # Excited = slightly faster
+        text = f'<prosody rate="105%">{text}</prosody>'
+    elif any(w in text.lower() for w in ["so", "okay so", "let me", "here's how", "basically"]):
+        # Explaining = slightly slower
+        text = f'<prosody rate="95%">{text}</prosody>'
+
     return f"<speak>{text}</speak>"
 
 
