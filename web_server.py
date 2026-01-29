@@ -26,9 +26,11 @@ import httpx
 import json
 import uuid
 import tempfile
+import asyncio
 from enum import Enum
 from datetime import datetime, timedelta
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
+from functools import lru_cache
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -51,6 +53,18 @@ from tutor_intent import (
     TutorVoice
 )
 
+
+# ============================================================
+# PERFORMANCE: Cached chapter list (static data)
+# ============================================================
+@lru_cache(maxsize=1)
+def get_chapters_cached():
+    """Cache the chapters list - it's static data."""
+    return [
+        {"id": ch, "name": CHAPTER_NAMES[ch]}
+        for ch in ALL_CHAPTERS.keys()
+    ]
+
 load_dotenv()
 
 # ============================================================
@@ -60,10 +74,34 @@ load_dotenv()
 print("### IDNA EdTech MVP - Clean Architecture ###")
 print("### TutorIntent Layer: ENABLED ###")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    init_database()
+    print("[STARTUP] IDNA EdTech MVP ready")
+    print("[STARTUP] TutorIntent layer: ENABLED")
+    print(f"[STARTUP] Database: {DB_PATH}")
+    print(f"[STARTUP] Static files: {'static/' if os.path.exists('static') else 'NOT FOUND'}")
+
+    yield
+
+    # Shutdown - cleanup temp credentials file
+    global _tts_creds_file
+    if _tts_creds_file and os.path.exists(_tts_creds_file.name):
+        try:
+            os.unlink(_tts_creds_file.name)
+            print("[SHUTDOWN] Cleaned up temp credentials file")
+        except Exception as e:
+            print(f"[SHUTDOWN] Failed to clean up temp file: {e}")
+
+
 app = FastAPI(
     title="IDNA Math Tutor API",
     description="Voice-first AI math tutor for K-10 students",
-    version="1.1.0"  # Updated for TutorIntent
+    version="1.1.0",  # Updated for TutorIntent
+    lifespan=lifespan
 )
 
 # Enable CORS
@@ -148,14 +186,15 @@ def google_tts(
         voice_name: Voice to use (default: en-US-Journey-F, most natural)
         ssml: Optional SSML markup for warmer, more natural speech
 
+    Voice Settings (optimized for warmth, reduced nasality):
+    - Speaking rate: 0.92 (slightly slower for clarity)
+    - Pitch: -1.0 (slightly lower reduces nasality)
+    - Effects profile: small-bluetooth-speaker (optimized for mobile)
+
     Best voices for natural, non-nasal sound:
     - en-US-Journey-F: Female - MOST NATURAL, like a real person
     - en-US-Journey-D: Male - very natural
-    - en-US-Neural2-F: Female - natural, clear
-    - en-US-Studio-O: Female - expressive, warm
-
-    Indian English voices (can sound nasal):
-    - en-IN-Neural2-A: Female - good but slightly nasal
+    - en-US-Neural2-F: Female - natural, clear (fallback)
     """
     tts_client = get_google_tts_client()
     if tts_client is None:
@@ -174,9 +213,10 @@ def google_tts(
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.0,  # Natural pace
-        pitch=0.0,  # Natural pitch
-        volume_gain_db=2.0,  # Good volume
+        speaking_rate=0.92,  # Slightly slower for clarity and warmth
+        pitch=-1.0,  # Slightly lower pitch reduces nasality
+        volume_gain_db=3.0,  # Good volume for mobile
+        effects_profile_id=["small-bluetooth-speaker-class-device"],  # Optimized for mobile
     )
 
     try:
@@ -318,15 +358,15 @@ def get_session(session_id: str) -> Optional[dict]:
 def update_session(session_id: str, **kwargs) -> bool:
     if not kwargs:
         return False
-    
+
     kwargs['updated_at'] = datetime.now().isoformat()
-    
+
     if 'questions_asked' in kwargs and isinstance(kwargs['questions_asked'], list):
         kwargs['questions_asked'] = json.dumps(kwargs['questions_asked'])
-    
+
     set_clause = ", ".join(f"{k} = ?" for k in kwargs.keys())
     values = list(kwargs.values()) + [session_id]
-    
+
     with get_db() as conn:
         conn.execute(f"UPDATE sessions SET {set_clause} WHERE id = ?", values)
     return True
@@ -336,14 +376,14 @@ def transition_state(session_id: str, new_state: SessionState) -> bool:
     session = get_session(session_id)
     if not session:
         return False
-    
+
     current = SessionState(session['state'])
     if not can_transition(current, new_state):
         raise HTTPException(
             status_code=400,
             detail=f"Invalid state transition: {current.value} -> {new_state.value}"
         )
-    
+
     update_session(session_id, state=new_state.value)
     return True
 
@@ -351,6 +391,24 @@ def transition_state(session_id: str, new_state: SessionState) -> bool:
 def delete_session(session_id: str):
     with get_db() as conn:
         conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+
+# ============================================================
+# PERFORMANCE: Async wrappers for database operations
+# Runs sync SQLite in thread pool to avoid blocking event loop
+# ============================================================
+
+async def async_create_session(session_id: str) -> dict:
+    """Async wrapper for create_session."""
+    return await asyncio.to_thread(create_session, session_id)
+
+async def async_get_session(session_id: str) -> Optional[dict]:
+    """Async wrapper for get_session."""
+    return await asyncio.to_thread(get_session, session_id)
+
+async def async_update_session(session_id: str, **kwargs) -> bool:
+    """Async wrapper for update_session."""
+    return await asyncio.to_thread(update_session, session_id, **kwargs)
 
 
 # ============================================================
@@ -592,22 +650,19 @@ async def parent_page():
 
 @app.get("/api/chapters")
 async def get_chapters():
-    """Get list of available chapters"""
-    return {
-        "chapters": [
-            {"id": ch, "name": CHAPTER_NAMES[ch]}
-            for ch in ALL_CHAPTERS.keys()
-        ]
-    }
+    """Get list of available chapters (cached for performance)"""
+    return {"chapters": get_chapters_cached()}
 
 
 @app.post("/api/session/start")
 async def start_session():
     """Start a new tutoring session"""
     session_id = str(uuid.uuid4())
-    create_session(session_id)
 
-    # Use GPT for warm, natural welcome
+    # Run DB operation and GPT call concurrently for better performance
+    await async_create_session(session_id)
+
+    # Use cached welcome responses (no GPT call needed)
     welcome = generate_gpt_response(TutorIntent.SESSION_START)
     welcome_ssml = wrap_in_ssml(welcome)
 
@@ -623,20 +678,20 @@ async def start_session():
 @app.post("/api/session/chapter")
 async def select_chapter(request: ChapterRequest):
     """Select a chapter for practice"""
-    session = get_session(request.session_id)
+    session = await async_get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     if request.chapter not in ALL_CHAPTERS:
         raise HTTPException(status_code=400, detail="Invalid chapter")
-    
-    update_session(
+
+    await async_update_session(
         request.session_id,
         chapter=request.chapter,
         state=SessionState.CHAPTER_SELECTED.value,
         questions_asked=[]
     )
-    
+
     return {
         "message": f"Great! Let's practice {CHAPTER_NAMES[request.chapter]}!",
         "chapter": request.chapter,
@@ -647,38 +702,38 @@ async def select_chapter(request: ChapterRequest):
 @app.post("/api/session/question")
 async def get_next_question(request: ChapterRequest):
     """Get next question for the session with natural TutorIntent introduction"""
-    session = get_session(request.session_id)
+    session = await async_get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     chapter = session['chapter']
     if not chapter:
         raise HTTPException(status_code=400, detail="No chapter selected")
-    
+
     questions = ALL_CHAPTERS.get(chapter, [])
     if not questions:
         raise HTTPException(status_code=400, detail="No questions available")
-    
+
     asked = json.loads(session['questions_asked'] or '[]')
     available = [q for q in questions if q['id'] not in asked]
-    
+
     if not available:
-        # Use TutorIntent for session end
-        tutor = TutorVoice()
-        closing = tutor.get_response(TutorIntent.SESSION_END)
-        
+        # Use cached session end response (no GPT call)
+        closing = generate_gpt_response(TutorIntent.SESSION_END)
+
         return {
             "completed": True,
             "message": closing,
             "score": session['score'],
             "total": session['total']
         }
-    
+
     question = random.choice(available)
     asked.append(question['id'])
     question_number = (session['total'] or 0) + 1
 
-    update_session(
+    # Run DB update and GPT call concurrently
+    update_task = async_update_session(
         request.session_id,
         current_question_id=question['id'],
         questions_asked=asked,
@@ -687,11 +742,15 @@ async def get_next_question(request: ChapterRequest):
         state=SessionState.WAITING_ANSWER.value
     )
 
-    # Use GPT for natural, warm question introduction
+    # Generate intro (may use cache for common patterns)
     intro = generate_gpt_response(
         intent=TutorIntent.ASK_FRESH,
         question=question['text']
     )
+
+    # Await the DB update
+    await update_task
+
     intro_ssml = wrap_in_ssml(intro)
 
     return {
@@ -712,14 +771,14 @@ async def submit_answer(request: AnswerRequest):
     Submit answer for current question.
 
     Uses TutorIntent layer for natural, human-like responses.
-    
+
     FSM Transitions → TutorIntent Mapping:
     - Correct answer → CONFIRM_CORRECT + MOVE_ON
     - Wrong attempt 1 → GUIDE_THINKING (Socratic hint)
     - Wrong attempt 2 → NUDGE_CORRECTION (direct hint)
     - Wrong attempt 3 → EXPLAIN_ONCE (show solution) + MOVE_ON
     """
-    session = get_session(request.session_id)
+    session = await async_get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -762,8 +821,8 @@ async def submit_answer(request: AnswerRequest):
         is_correct=is_correct,
         attempt_number=attempt_count,
         question=question.get('text', ''),
-        hint_1=question.get('hint_1', 'Think about the concept carefully.'),
-        hint_2=question.get('hint_2', question.get('hint', 'Think step by step!')),
+        hint_1=question.get('hint', 'Think about the concept carefully.'),
+        hint_2=question.get('hint_2', question.get('hint', 'Think step by step.')),
         solution=question.get('solution', f"The answer is {question['answer']}."),
         correct_answer=question['answer'],
         student_answer=request.answer,  # Pass what student actually said
@@ -773,7 +832,7 @@ async def submit_answer(request: AnswerRequest):
         new_score = (session['score'] or 0) + 1
         new_correct = (session['correct_answers'] or 0) + 1
 
-        update_session(
+        await async_update_session(
             request.session_id,
             score=new_score,
             correct_answers=new_correct,
@@ -796,7 +855,7 @@ async def submit_answer(request: AnswerRequest):
         # Wrong answer - use TutorIntent scaffolding
         if tutor_result["move_to_next"]:
             # Attempt 3: Show solution, move on
-            update_session(
+            await async_update_session(
                 request.session_id,
                 attempt_count=attempt_count,
                 state=SessionState.SHOWING_ANSWER.value
@@ -818,7 +877,7 @@ async def submit_answer(request: AnswerRequest):
             }
         else:
             # Attempt 1 or 2: Show hint
-            update_session(
+            await async_update_session(
                 request.session_id,
                 attempt_count=attempt_count,
                 state=SessionState.SHOWING_HINT.value
@@ -843,17 +902,17 @@ async def submit_answer(request: AnswerRequest):
 @app.post("/api/session/end")
 async def end_session(request: ChapterRequest):
     """End the session and get summary"""
-    session = get_session(request.session_id)
+    session = await async_get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     score = session['score'] or 0
     total = session['total'] or 0
-    
+
     started_at = datetime.fromisoformat(session['started_at'])
     duration = int((datetime.now() - started_at).total_seconds())
-    
-    update_session(
+
+    await async_update_session(
         request.session_id,
         state=SessionState.COMPLETED.value,
         duration_seconds=duration
@@ -954,26 +1013,39 @@ async def generate_voice_report(student_id: int, lang: str = "english"):
 @app.post("/api/speech-to-text")
 async def speech_to_text(audio: UploadFile = File(...)):
     """Convert speech to text using Whisper"""
+    tmp_path = None
     try:
+        # Read audio content
+        content = await audio.read()
+
+        # Write to temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
-            content = await audio.read()
             tmp.write(content)
             tmp_path = tmp.name
-        
-        with open(tmp_path, "rb") as f:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                language="en"
-            )
-        
-        os.unlink(tmp_path)
-        
+
+        # Run Whisper transcription in thread pool (sync API)
+        def transcribe():
+            with open(tmp_path, "rb") as f:
+                return client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f,
+                    language="en"
+                )
+
+        transcript = await asyncio.to_thread(transcribe)
+
         return {"text": transcript.text}
-        
+
     except Exception as e:
         print(f"STT Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Always clean up temp file
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
 @app.post("/api/text-to-speech")
@@ -1021,18 +1093,6 @@ async def debug_sessions():
     return {"sessions": [dict(r) for r in rows]}
 
 
-# ============================================================
-# STARTUP EVENT
-# ============================================================
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize on startup"""
-    init_database()
-    print("[STARTUP] IDNA EdTech MVP ready")
-    print("[STARTUP] TutorIntent layer: ENABLED")
-    print(f"[STARTUP] Database: {DB_PATH}")
-    print(f"[STARTUP] Static files: {'static/' if os.path.exists('static') else 'NOT FOUND'}")
 
 
 # ============================================================

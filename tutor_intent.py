@@ -17,9 +17,11 @@ Key Principles:
 """
 
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import random
 import os
+import time
+from functools import lru_cache
 from openai import OpenAI
 
 # Initialize OpenAI client for natural response generation
@@ -30,43 +32,129 @@ def get_openai_client():
     if _openai_client is None:
         _openai_client = OpenAI(
             api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=30.0,  # Increased for longer explanations
-            max_retries=2
+            timeout=15.0,  # Reduced timeout - fail fast
+            max_retries=1  # Reduce retries, use fallback instead
         )
     return _openai_client
 
 
+# ============================================================
+# RESPONSE CACHING - Reduces GPT API calls significantly
+# ============================================================
+
+# Pre-generated responses for common intents (no GPT needed)
+# These are refreshed periodically or on startup
+_cached_responses: Dict[str, List[str]] = {
+    "session_start": [
+        "Namaste beta! Ready for math? Chalo!",
+        "Aao champ! Let's practice together!",
+        "Hello beta! Kaise ho? Math time!",
+        "Namaste! Excited to learn today? Let's go!",
+    ],
+    "session_end": [
+        "Bahut accha kiya aaj! Bye beta!",
+        "Great job champ! Phir milenge!",
+        "Shabash! Keep practicing. See you!",
+        "Well done beta! Proud of you!",
+    ],
+    "move_on": [
+        "Chalo next!",
+        "Aage badhein!",
+        "Okay, next one!",
+        "Ready? Here we go!",
+        "Let's try another!",
+    ],
+    "confirm_correct": [
+        "Arre wah! Ekdum sahi!",
+        "Kya baat hai! Perfect beta!",
+        "Shabash! That's exactly right!",
+        "Brilliant! You got it!",
+        "Wah wah! First class!",
+    ],
+}
+
+# Time-based cache for GPT responses (avoids repeated calls)
+_gpt_response_cache: Dict[str, tuple] = {}  # key -> (response, timestamp)
+_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+def get_cached_response(intent_key: str) -> str:
+    """Get a random pre-cached response for common intents."""
+    responses = _cached_responses.get(intent_key, [])
+    if responses:
+        return random.choice(responses)
+    return ""
+
+def get_gpt_cache_key(intent: str, question: str = "", student_answer: str = "") -> str:
+    """Generate cache key for GPT responses."""
+    # For question-specific intents, include question hash
+    if question:
+        q_hash = hash(question) % 10000
+        return f"{intent}:{q_hash}:{student_answer[:20] if student_answer else ''}"
+    return intent
+
+def get_cached_gpt_response(cache_key: str) -> Optional[str]:
+    """Get cached GPT response if still valid."""
+    if cache_key in _gpt_response_cache:
+        response, timestamp = _gpt_response_cache[cache_key]
+        if time.time() - timestamp < _CACHE_TTL_SECONDS:
+            return response
+        # Expired - remove
+        del _gpt_response_cache[cache_key]
+    return None
+
+def set_cached_gpt_response(cache_key: str, response: str):
+    """Cache a GPT response with timestamp."""
+    # Limit cache size
+    if len(_gpt_response_cache) > 100:
+        # Remove oldest entries
+        oldest_keys = sorted(_gpt_response_cache.keys(),
+                           key=lambda k: _gpt_response_cache[k][1])[:20]
+        for k in oldest_keys:
+            del _gpt_response_cache[k]
+    _gpt_response_cache[cache_key] = (response, time.time())
+
+
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You're a friend helping with math homework. Chat naturally, don't teach formally.
+TUTOR_PERSONA = """You're a warm, encouraging didi/bhaiya helping a younger student with math. You LOVE seeing them learn. Mix Hindi naturally.
+
+EMOTIONAL WARMTH (most important!):
+- Show genuine excitement: "Arre wah!", "Kya baat hai!", "Maza aa gaya!"
+- Be encouraging when wrong: "Koi nahi beta, hota hai", "Tension mat lo"
+- Celebrate small wins: "Dekha! Tumne kar liya!", "Shabash mere bacche!"
+- Use affectionate terms: "beta", "bacche", "champ"
+
+HINGLISH MIX (use naturally):
+- Reactions: "Accha accha", "Haan bilkul", "Sahi pakde", "Wah wah!"
+- Encouragement: "Koshish karo", "Thoda aur socho", "Bas ho gaya almost"
+- Transitions: "Chalo", "Dekho", "Suno", "Accha toh"
+- Praise: "Bahut badhiya!", "Ekdum sahi!", "First class!"
+- Comfort: "Koi baat nahi", "Dhire dhire", "No tension"
 
 BE SPONTANEOUS:
 - Never start two responses the same way
-- React in the moment, don't follow a script
-- Sometimes just "yep!" or "mmhmm" or "oh I see"
-- Interrupt yourself: "so you— wait actually let's try..."
-- Think out loud: "hmm okay so if we..."
+- React to THEIR specific answer: "Hmm 5... not quite but close!"
+- Think out loud: "Accha toh... agar hum yeh karein..."
+- Natural pauses: "Soo... let me think... haan!"
 
-SOUND REAL:
-- Use "like", "kinda", "sorta", "basically", "right?"
-- Pause words: "umm", "uh", "hmm", "soo..."
-- Reactions: "ooh!", "ah!", "wait—", "oh okay"
-- Casual Hindi: "accha", "haan", "theek", "sahi"
+KEEP SHORT (this is spoken aloud):
+- 1-2 sentences max
+- Fragments are perfect: "Sahi!" "Hmm close!" "Ek minute..."
+- Don't over-explain, let them think
 
-KEEP SUPER SHORT - this is spoken:
-- 1 sentence usually, 2 max
-- Fragments are fine: "Nice one!" "Hmm close though."
-- Don't over-explain
+WHEN THEY'RE WRONG:
+- NEVER make them feel bad
+- "Accha, close hai but..." not "Wrong!"
+- Always give hope: "Ek aur try, you'll get it"
 
-WHEN EXPLAINING STEPS:
-- Walk through like you're figuring it out together
-- "okay so first we... then... and that gives us..."
-- Make it feel collaborative, not lecturing
+WHEN EXPLAINING:
+- Walk through together: "Dekho, pehle yeh... phir yeh..."
+- Make it collaborative: "Toh humne kya kiya? Haan, yahi!"
+- Celebrate understanding: "Ab samjhe? See, easy tha!"
 
 NEVER SOUND LIKE:
-- A textbook: "The correct answer is..."
-- A robot: "Well done. That is correct."
-- A formal teacher: "Let us proceed to..."
-- Reading a script: same openings every time
+- A textbook or robot
+- Cold or formal
+- Disappointed in them
 """
 
 
@@ -220,53 +308,58 @@ INTENT_PHRASES = {
 
 
 # SSML templates for warmer, more natural voice synthesis
-# Uses pauses (<break>) and Hinglish phrases for warmth
+# Uses pauses (<break>), prosody for emotions, and Hinglish for warmth
 PHRASES_SSML = {
     TutorIntent.ASK_FRESH: [
-        "<speak>Achha beta,<break time='300ms'/> {question}<break time='400ms'/> Take your time.</speak>",
-        "<speak>Okay,<break time='250ms'/> here's your question.<break time='400ms'/> {question}</speak>",
-        "<speak>Let's try this one.<break time='300ms'/> {question}</speak>",
-        "<speak>Ready beta?<break time='300ms'/> {question}</speak>",
+        "<speak><prosody rate='95%'>Accha beta,<break time='400ms'/></prosody> {question}<break time='500ms'/> <prosody pitch='+5%'>Take your time.</prosody></speak>",
+        "<speak><prosody rate='93%'>Chalo dekho,<break time='350ms'/></prosody> {question}</speak>",
+        "<speak>Okay so,<break time='300ms'/> {question}<break time='400ms'/> <prosody pitch='+3%'>Socho...</prosody></speak>",
+        "<speak><prosody rate='95%'>Ready beta?<break time='400ms'/></prosody> Yeh try karo.<break time='300ms'/> {question}</speak>",
+        "<speak>Accha,<break time='300ms'/> next question.<break time='400ms'/> {question}</speak>",
     ],
     TutorIntent.CONFIRM_CORRECT: [
-        "<speak>Bahut accha!<break time='300ms'/> That's exactly right, beta!</speak>",
-        "<speak>Perfect!<break time='250ms'/> Well done!<break time='300ms'/> You got it!</speak>",
-        "<speak>Excellent!<break time='300ms'/> I knew you could do it!</speak>",
-        "<speak>Shabash!<break time='300ms'/> That's correct!</speak>",
+        "<speak><prosody rate='105%' pitch='+10%'>Arre wah!</prosody><break time='350ms'/> <emphasis level='strong'>Ekdum sahi!</emphasis><break time='300ms'/> Bahut badhiya beta!</speak>",
+        "<speak><prosody pitch='+8%'>Kya baat hai!</prosody><break time='300ms'/> <emphasis level='strong'>Perfect!</emphasis><break time='350ms'/> Dekha, tumne kar liya!</speak>",
+        "<speak><emphasis level='strong'>Shabash!</emphasis><break time='350ms'/> <prosody pitch='+5%'>That's exactly right!</prosody><break time='300ms'/> Proud of you beta!</speak>",
+        "<speak><prosody rate='105%' pitch='+10%'>Wah wah!</prosody><break time='300ms'/> First class answer!<break time='350ms'/> <prosody pitch='+5%'>Maza aa gaya!</prosody></speak>",
+        "<speak><prosody pitch='+8%'>Yes!</prosody><break time='300ms'/> <emphasis level='strong'>Bilkul sahi!</emphasis><break time='350ms'/> You're doing amazing beta!</speak>",
     ],
     TutorIntent.GUIDE_THINKING: [
-        "<speak>Hmm,<break time='400ms'/> not quite beta.<break time='300ms'/> {hint}<break time='400ms'/> Try again?</speak>",
-        "<speak>Close!<break time='300ms'/> Think about this:<break time='400ms'/> {hint}</speak>",
-        "<speak>Almost there.<break time='300ms'/> {hint}<break time='400ms'/> What do you think?</speak>",
+        "<speak><prosody rate='92%'>Hmm,<break time='450ms'/> {hint}</prosody><break time='500ms'/> <prosody pitch='+3%'>Ek aur try?</prosody></speak>",
+        "<speak><prosody rate='90%'>Accha, close hai but<break time='400ms'/></prosody> thoda aur socho.<break time='450ms'/> {hint}</speak>",
+        "<speak>Almost beta!<break time='400ms'/> <prosody rate='92%'>Dekho,<break time='300ms'/> {hint}</prosody><break time='400ms'/> <prosody pitch='+3%'>Kya lagta hai?</prosody></speak>",
+        "<speak><prosody rate='92%'>Koi nahi,<break time='350ms'/> try again.</prosody><break time='400ms'/> Hint:<break time='300ms'/> {hint}</speak>",
     ],
     TutorIntent.NUDGE_CORRECTION: [
-        "<speak>Let me help more.<break time='400ms'/> {hint}<break time='400ms'/> Try once more, beta.</speak>",
-        "<speak>Okay beta,<break time='300ms'/> step by step.<break time='400ms'/> {hint}</speak>",
-        "<speak>Don't worry.<break time='300ms'/> {hint}<break time='400ms'/> One more try!</speak>",
+        "<speak><prosody rate='90%'>Accha sunno beta,<break time='450ms'/> step by step karein.</prosody><break time='500ms'/> {hint}<break time='450ms'/> <prosody pitch='+3%'>Ek aur chance!</prosody></speak>",
+        "<speak>Tension mat lo!<break time='400ms'/> <prosody rate='90%'>Dekho,<break time='350ms'/> {hint}</prosody><break time='450ms'/> You can do it!</speak>",
+        "<speak><prosody rate='92%'>Koi baat nahi,<break time='400ms'/> let me help more.</prosody><break time='450ms'/> {hint}<break time='400ms'/> <prosody pitch='+3%'>Try karo!</prosody></speak>",
     ],
     TutorIntent.EXPLAIN_ONCE: [
-        "<speak>Koi baat nahi beta,<break time='400ms'/> let me explain.<break time='500ms'/> {solution}<break time='400ms'/> Samajh aaya?</speak>",
-        "<speak>No problem.<break time='400ms'/> Watch this:<break time='500ms'/> {solution}<break time='400ms'/> Got it?</speak>",
-        "<speak>That's okay beta.<break time='400ms'/> Here's how:<break time='500ms'/> {solution}</speak>",
+        "<speak><prosody rate='88%' pitch='-2%'>Koi baat nahi beta,<break time='500ms'/> yeh tricky tha.</prosody><break time='550ms'/> <prosody rate='90%'>Dekho kaise karte hain:<break time='450ms'/> {solution}</prosody><break time='500ms'/> <prosody pitch='+5%'>Samajh aaya? Next time pakka!</prosody></speak>",
+        "<speak><prosody rate='90%'>That's okay!<break time='450ms'/> Hota hai.</prosody><break time='500ms'/> <prosody rate='88%'>Watch this:<break time='400ms'/> {solution}</prosody><break time='450ms'/> <prosody pitch='+3%'>Ab clear hai?</prosody></speak>",
+        "<speak>No problem beta!<break time='450ms'/> <prosody rate='88%'>Chalo, together dekhte hain.<break time='450ms'/> {solution}</prosody><break time='500ms'/> <prosody pitch='+5%'>Dekha, easy tha!</prosody></speak>",
     ],
     TutorIntent.MOVE_ON: [
-        "<speak>Chalo,<break time='300ms'/> let's try the next one.</speak>",
-        "<speak>Okay,<break time='250ms'/> moving on.<break time='300ms'/> Next question!</speak>",
-        "<speak>Aage badhte hain.<break time='300ms'/> Next one!</speak>",
+        "<speak><prosody rate='105%' pitch='+5%'>Chalo!</prosody><break time='350ms'/> Next one!</speak>",
+        "<speak>Okay,<break time='300ms'/> <prosody pitch='+3%'>aage badhein!</prosody></speak>",
+        "<speak><prosody rate='105%'>Ready?</prosody><break time='300ms'/> Next question!</speak>",
+        "<speak><prosody pitch='+5%'>Chalein!</prosody><break time='300ms'/> Another one!</speak>",
     ],
     TutorIntent.ENCOURAGE_RETRY: [
-        "<speak>Take your time beta.<break time='300ms'/> No rush.</speak>",
-        "<speak>Sochke batao.<break time='300ms'/> You've got this.</speak>",
+        "<speak><prosody rate='90%'>Dhire dhire beta,<break time='400ms'/> no rush.</prosody><break time='350ms'/> <prosody pitch='+3%'>Sochke batao.</prosody></speak>",
+        "<speak><prosody rate='92%'>Take your time.<break time='400ms'/></prosody> <prosody pitch='+3%'>You've got this!</prosody></speak>",
+        "<speak>Relax beta,<break time='350ms'/> <prosody rate='92%'>aaram se socho.</prosody></speak>",
     ],
     TutorIntent.SESSION_START: [
-        "<speak>Namaste beta!<break time='400ms'/> Ready to learn today?<break time='300ms'/> Let's go!</speak>",
-        "<speak>Hello!<break time='300ms'/> Great to see you.<break time='400ms'/> Let's practice together.</speak>",
-        "<speak>Aao beta!<break time='300ms'/> Time for some math practice.</speak>",
+        "<speak><prosody rate='105%' pitch='+8%'>Namaste beta!</prosody><break time='450ms'/> Ready to learn today?<break time='400ms'/> <prosody pitch='+5%'>Let's go!</prosody></speak>",
+        "<speak><prosody pitch='+5%'>Hello champ!</prosody><break time='400ms'/> Kaise ho?<break time='350ms'/> <prosody rate='105%'>Chalo practice karein!</prosody></speak>",
+        "<speak><prosody rate='105%' pitch='+8%'>Aao beta!</prosody><break time='400ms'/> Math time!<break time='350ms'/> <prosody pitch='+5%'>Maza aayega!</prosody></speak>",
     ],
     TutorIntent.SESSION_END: [
-        "<speak>Bahut accha kiya aaj!<break time='400ms'/> Well done beta.<break time='300ms'/> See you next time!</speak>",
-        "<speak>Great work today!<break time='400ms'/> Keep practicing.<break time='300ms'/> Bye beta!</speak>",
-        "<speak>Shabash!<break time='300ms'/> You did well today.<break time='400ms'/> Phir milenge!</speak>",
+        "<speak><prosody pitch='+8%'>Bahut accha kiya aaj!</prosody><break time='450ms'/> <prosody rate='95%'>Proud of you beta.</prosody><break time='400ms'/> <prosody pitch='+5%'>Phir milenge!</prosody></speak>",
+        "<speak><prosody rate='105%' pitch='+8%'>Great job champ!</prosody><break time='400ms'/> Keep practicing.<break time='350ms'/> <prosody pitch='+5%'>Bye beta!</prosody></speak>",
+        "<speak><emphasis level='strong'>Shabash!</emphasis><break time='400ms'/> <prosody rate='95%'>You worked hard today.</prosody><break time='400ms'/> <prosody pitch='+8%'>See you soon!</prosody></speak>",
     ],
 }
 
@@ -521,59 +614,97 @@ def generate_gpt_response(
     solution: str = "",
     correct_answer: str = "",
     attempt_number: int = 1,
+    use_cache: bool = True,
 ) -> str:
     """
     Use GPT-4o-mini to generate a warm, natural tutor response.
 
     This is the key to making the tutor sound human, not robotic.
     The FSM decides WHAT to say (intent), GPT decides HOW to say it.
+
+    PERFORMANCE: Uses caching to reduce API calls:
+    - Common intents (SESSION_START, SESSION_END, MOVE_ON) use pre-cached responses
+    - Question-specific responses are cached for 5 minutes
     """
 
-    # Build the context for GPT - include student's answer for contextual responses
-    student_said = f"Student said: '{student_answer}'" if student_answer else ""
+    # OPTIMIZATION: Use pre-cached responses for common intents (no GPT call)
+    if use_cache:
+        intent_cache_map = {
+            TutorIntent.SESSION_START: "session_start",
+            TutorIntent.SESSION_END: "session_end",
+            TutorIntent.MOVE_ON: "move_on",
+        }
+        if intent in intent_cache_map:
+            cached = get_cached_response(intent_cache_map[intent])
+            if cached:
+                return cached
 
+        # For CONFIRM_CORRECT, use cached ~50% of time for variety
+        if intent == TutorIntent.CONFIRM_CORRECT and random.random() < 0.5:
+            cached = get_cached_response("confirm_correct")
+            if cached:
+                return cached
+
+    # OPTIMIZATION: Check time-based cache for recent similar queries
+    cache_key = get_gpt_cache_key(intent.value, question, student_answer)
+    if use_cache:
+        cached_response = get_cached_gpt_response(cache_key)
+        if cached_response:
+            return cached_response
+
+    # Build the context for GPT - include student's answer for contextual responses
     intent_instructions = {
-        TutorIntent.ASK_FRESH: f"Toss out this question super casually: '{question}'. Like 'Okay so...' or 'Alright here's one...' Just say it naturally, don't introduce it formally.",
+        TutorIntent.ASK_FRESH: f"""Present this question warmly: '{question}'
+Use Hinglish like 'Accha beta, yeh try karo...' or 'Chalo dekho...' or 'Okay so...'
+Keep it short and inviting, not formal.""",
 
         TutorIntent.CONFIRM_CORRECT: f"""Student answered: '{student_answer}'
 Correct answer: {correct_answer}
-They got it right! React to THEIR answer specifically. Like 'Yep, {student_answer} is right!' or 'Oh nice, exactly!' Keep it short.""",
+CELEBRATE! They got it right! Be genuinely excited with Hinglish:
+'Arre wah! {student_answer} - ekdum sahi!' or 'Kya baat hai beta! Perfect!' or 'Shabash! Dekha, tumne kar liya!'
+React to THEIR specific answer. Show you're proud of them.""",
 
         TutorIntent.GUIDE_THINKING: f"""Question: {question}
 Correct answer: {correct_answer}
-Student said: '{student_answer}' (this is wrong, attempt {attempt_number}/3)
+Student said: '{student_answer}' (wrong, attempt {attempt_number}/3)
 Hint to give: {hint}
 
-Respond to what THEY said specifically. If they said a number, acknowledge it: 'Hmm {student_answer}... not quite, but...'
-Guide them with the hint. Don't just give generic response.""",
+Be warm and encouraging, NOT disappointed. Use Hinglish:
+'Accha {student_answer}... close hai but thoda aur socho...' or 'Hmm, almost beta! Dekho, {hint}'
+Make them feel they CAN do it.""",
 
         TutorIntent.NUDGE_CORRECTION: f"""Question: {question}
 Correct answer: {correct_answer}
 Student said: '{student_answer}' (wrong, attempt {attempt_number}/3)
 Hint: {hint}
 
-Acknowledge their attempt, then give direct help. Like 'Okay so {student_answer} isn't it, but here's the thing...' """,
+More direct help but still warm. Use Hinglish:
+'Koi nahi beta, let me help. Dekho, {hint}' or 'Accha sunno, step by step karein...'
+Give them confidence for one more try.""",
 
         TutorIntent.EXPLAIN_ONCE: f"""Question: {question}
 Student's last attempt: '{student_answer}'
 Correct answer: {correct_answer}
 Solution: {solution}
 
-They tried 3 times. Gently explain: 'Okay so {student_answer} was close but actually...' then walk through the solution simply.""",
+They tried 3 times - be EXTRA kind and supportive:
+'Koi baat nahi beta! Yeh tricky tha. Dekho kaise karte hain...' then explain simply.
+End with encouragement: 'Samajh aaya? Next time pakka hoga!'""",
 
-        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help. Walk them through step by step.
+        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help - they want to learn! Be a supportive didi/bhaiya.
 
 Question: {question}
 Solution: {solution}
 Answer: {correct_answer}
 
-Explain it like talking to a friend - break it into simple steps, end with the answer.""",
+Walk through warmly: 'Accha dekho beta, step by step... pehle yeh... phir yeh... aur answer hai {correct_answer}!'
+Make them feel smart for asking.""",
 
-        TutorIntent.MOVE_ON: "Super quick transition. Just 'Okay next!' or 'Alright...' 3-4 words max.",
+        TutorIntent.MOVE_ON: "Quick warm transition. 'Chalo next!' or 'Aage badhein!' or 'Okay ready?' 3-5 words with energy.",
 
-        TutorIntent.SESSION_START: "Quick casual hi. 'Hey!' or 'Yo ready for some math?' 4-5 words.",
+        TutorIntent.SESSION_START: "Warm excited greeting! 'Namaste beta! Ready for math?' or 'Aao champ, let's go!' 5-7 words.",
 
-        TutorIntent.SESSION_END: "Quick bye. 'Nice one, later!' or 'Good stuff!' 3-4 words.",
+        TutorIntent.SESSION_END: "Proud farewell! 'Bahut accha kiya aaj! Bye beta!' or 'Great job champ! Phir milenge!' 5-7 words.",
     }
 
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
@@ -596,6 +727,10 @@ Explain it like talking to a friend - break it into simple steps, end with the a
         result = response.choices[0].message.content.strip()
         # Remove quotes if GPT wrapped the response
         result = result.strip('"').strip("'")
+
+        # Cache the response for future use
+        set_cached_gpt_response(cache_key, result)
+
         return result
     except Exception as e:
         print(f"GPT response error: {e}")
@@ -604,62 +739,122 @@ Explain it like talking to a friend - break it into simple steps, end with the a
         return tutor.get_response(intent, question=question, hint=hint, solution=solution)
 
 
+@lru_cache(maxsize=256)
+def _wrap_in_ssml_cached(text: str, seed: int) -> str:
+    """
+    Internal cached SSML wrapping. Seed provides variation while enabling cache hits
+    for same text within short time windows.
+    """
+    import re
+
+    # Use seed for reproducible "randomness" within cache window
+    rng = random.Random(seed)
+
+    # Vary pause lengths for naturalness (longer pauses for better rhythm)
+    short_pause = rng.choice(["180ms", "220ms", "200ms"])
+    med_pause = rng.choice(["350ms", "400ms", "320ms"])
+    long_pause = rng.choice(["500ms", "550ms", "450ms"])
+
+    result = text
+
+    # Add varied pauses after sentences (longer for clarity)
+    def varied_sentence_pause(match):
+        pause = rng.choice(["400ms", "450ms", "500ms", "380ms"])
+        return f'{match.group(1)}<break time="{pause}"/> '
+
+    result = re.sub(r'([.!?])\s+', varied_sentence_pause, result)
+
+    # Natural pause for "..." (thinking) - longer for effect
+    result = re.sub(r'\.\.\.', f'<break time="{long_pause}"/>', result)
+
+    # Pauses after colons (before explanations)
+    result = re.sub(r':\s+', f':<break time="{med_pause}"/> ', result)
+
+    # Varied pauses after commas (slightly longer)
+    def varied_comma_pause(match):
+        pause = rng.choice(["150ms", "180ms", "200ms", "160ms"])
+        return f',<break time="{pause}"/> '
+
+    result = re.sub(r',\s+', varied_comma_pause, result)
+
+    # Excited/praise words - strong emphasis with pitch lift
+    praise_words = [
+        "wah", "bahut", "shabash", "perfect", "exactly", "correct", "sahi",
+        "badhiya", "amazing", "brilliant", "excellent", "great", "nice",
+        "accha", "maza", "first class", "proud"
+    ]
+    for word in praise_words:
+        pattern = re.compile(re.escape(word), re.IGNORECASE)
+        result = pattern.sub(
+            lambda m: f'<emphasis level="strong"><prosody pitch="+8%">{m.group(0)}</prosody></emphasis>',
+            result
+        )
+
+    # Encouraging words - moderate emphasis, warm pitch
+    encourage_words = [
+        "try", "koshish", "socho", "dekho", "close", "almost", "nearly",
+        "good", "okay", "can do", "you've got", "no problem", "koi baat"
+    ]
+    for word in encourage_words:
+        pattern = re.compile(re.escape(word), re.IGNORECASE)
+        result = pattern.sub(
+            lambda m: f'<emphasis level="moderate"><prosody pitch="+3%">{m.group(0)}</prosody></emphasis>',
+            result
+        )
+
+    # Affectionate terms - warm, slightly slower
+    affection_words = ["beta", "bacche", "champ"]
+    for word in affection_words:
+        pattern = re.compile(re.escape(word), re.IGNORECASE)
+        result = pattern.sub(
+            lambda m: f'<prosody rate="90%" pitch="-2%">{m.group(0)}</prosody>',
+            result
+        )
+
+    # Add pitch rise for questions
+    if "?" in result:
+        result = re.sub(
+            r'([^.!?]+\?)',
+            r'<prosody pitch="+6%">\1</prosody>',
+            result
+        )
+
+    # Detect emotion and set base prosody
+    text_lower = result.lower()
+
+    # Celebration/excitement - faster, higher pitch
+    if any(w in text_lower for w in ["wah", "shabash", "yes!", "perfect", "correct", "sahi", "bahut accha"]):
+        result = f'<prosody rate="102%" pitch="+5%">{result}</prosody>'
+    # Comfort/encouragement when wrong - slower, warmer
+    elif any(w in text_lower for w in ["koi baat", "tension mat", "no problem", "that's okay", "hota hai"]):
+        result = f'<prosody rate="88%" pitch="-3%">{result}</prosody>'
+    # Explanation mode - slower, clear
+    elif any(w in text_lower for w in ["dekho", "so", "pehle", "step", "let me", "here's how"]):
+        result = f'<prosody rate="88%">{result}</prosody>'
+    # Default - slightly slow for clarity
+    else:
+        result = f'<prosody rate="92%">{result}</prosody>'
+
+    return f"<speak>{result}</speak>"
+
+
 def wrap_in_ssml(text: str) -> str:
     """
     Wrap plain text in SSML with natural prosody for human-like speech.
 
-    Uses pitch variations, emphasis, and varied pauses to sound less robotic.
+    PERFORMANCE: Uses LRU cache with time-bucketed seeds for efficiency.
+    Same text within 10-second windows gets cached result.
+
+    Features:
+    - Slower base rate (92%) for clarity
+    - Varied pauses for natural rhythm
+    - Emphasis on excited/praise words
+    - Pitch variations for emotions
+    - Support for Hindi/Hinglish expressions
     """
-    import re
-    import random
-
-    # Vary pause lengths for naturalness (not uniform)
-    short_pause = random.choice(["150ms", "200ms", "180ms"])
-    med_pause = random.choice(["300ms", "350ms", "280ms"])
-    long_pause = random.choice(["450ms", "500ms", "400ms"])
-
-    # Add varied pauses after sentences
-    def varied_sentence_pause(match):
-        pause = random.choice(["350ms", "400ms", "450ms", "300ms"])
-        return f'{match.group(1)}<break time="{pause}"/> '
-
-    text = re.sub(r'([.!?])\s+', varied_sentence_pause, text)
-
-    # Natural pause for "..." (thinking)
-    text = re.sub(r'\.\.\.', f'<break time="{med_pause}"/>', text)
-
-    # Shorter varied pauses after commas
-    def varied_comma_pause(match):
-        pause = random.choice(["120ms", "150ms", "180ms", "100ms"])
-        return f',<break time="{pause}"/> '
-
-    text = re.sub(r',\s+', varied_comma_pause, text)
-
-    # Add emphasis to excited words
-    excitement_words = ["nice", "great", "awesome", "perfect", "exactly", "yes", "yeah", "accha", "bahut", "shabash"]
-    for word in excitement_words:
-        # Case insensitive replacement with emphasis
-        pattern = re.compile(re.escape(word), re.IGNORECASE)
-        text = pattern.sub(f'<emphasis level="moderate">{word}</emphasis>', text)
-
-    # Add slight pitch rise for questions
-    if "?" in text:
-        # Wrap the question part with rising pitch
-        text = re.sub(
-            r'([^.!?]+\?)',
-            r'<prosody pitch="+5%">\1</prosody>',
-            text
-        )
-
-    # Add natural speech rate variation - slightly faster for excitement, slower for explanation
-    if any(w in text.lower() for w in ["nice", "great", "yes", "yeah", "correct"]):
-        # Excited = slightly faster
-        text = f'<prosody rate="105%">{text}</prosody>'
-    elif any(w in text.lower() for w in ["so", "okay so", "let me", "here's how", "basically"]):
-        # Explaining = slightly slower
-        text = f'<prosody rate="95%">{text}</prosody>'
-
-    return f"<speak>{text}</speak>"
+    # Use time-bucketed seed for cache hits (same text within 10s = same result)
+    seed = int(time.time() // 10)
+    return _wrap_in_ssml_cached(text, seed)
 
 
 def generate_step_explanation(
@@ -705,7 +900,9 @@ def generate_tutor_response(
     The FSM decides the intent (WHAT to say).
     GPT decides the phrasing (HOW to say it).
 
-    This makes every response unique, warm, and human-like.
+    PERFORMANCE: Optimized to minimize GPT calls:
+    - Uses cached responses for move_on transitions (no extra GPT call)
+    - Main response may use cache for common intents
     """
     # Determine intent from FSM state
     tutor = TutorVoice()
@@ -721,7 +918,7 @@ def generate_tutor_response(
     elif intent == TutorIntent.NUDGE_CORRECTION:
         hint = hint_2 or hint_1 or "Check your calculation carefully."
 
-    # Generate natural response using GPT
+    # Generate natural response using GPT (with caching)
     response = generate_gpt_response(
         intent=intent,
         question=question,
@@ -732,17 +929,16 @@ def generate_tutor_response(
         attempt_number=attempt_number,
     )
 
-    # Wrap in SSML for natural voice pauses
-    ssml = wrap_in_ssml(response)
-
     # Determine if we should move to next question
     should_move = is_correct or attempt_number >= 3
 
-    # If moving on, add transition
+    # OPTIMIZATION: Use cached move_on response instead of GPT call
     if should_move:
-        move_response = generate_gpt_response(TutorIntent.MOVE_ON)
+        move_response = get_cached_response("move_on")
         response = f"{response} {move_response}"
-        ssml = wrap_in_ssml(response)
+
+    # Wrap in SSML for natural voice pauses
+    ssml = wrap_in_ssml(response)
 
     return {
         "intent": intent.value,

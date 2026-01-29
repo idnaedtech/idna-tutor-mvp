@@ -276,7 +276,7 @@ def check_answer(correct_answer: str, student_answer: str) -> bool:
             # Allow small floating point tolerance
             if abs(correct_val - student_val) < 0.0001:
                 return True
-    except:
+    except Exception:
         pass
     
     return False
@@ -296,9 +296,12 @@ def eval_safe(expr: str) -> Optional[float]:
         if "/" in expr:
             parts = expr.split("/")
             if len(parts) == 2:
-                return float(parts[0]) / float(parts[1])
+                denom = float(parts[1])
+                if denom == 0:
+                    return None
+                return float(parts[0]) / denom
         return float(expr)
-    except:
+    except Exception:
         return None
 
 
