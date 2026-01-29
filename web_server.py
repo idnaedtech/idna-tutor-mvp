@@ -128,25 +128,26 @@ def get_google_tts_client():
 
 def google_tts(
     text: str,
-    language_code: str = "en-IN",
-    voice_name: str = "en-IN-Neural2-A",
+    language_code: str = "en-US",
+    voice_name: str = "en-US-Journey-F",
     ssml: Optional[str] = None
 ) -> bytes:
     """Generate warm, natural speech using Google Cloud TTS
 
     Args:
         text: Plain text to speak (used if ssml is None)
-        language_code: Language code (default: en-IN for Indian English)
-        voice_name: Voice to use (default: en-IN-Neural2-A, warm and natural)
+        language_code: Language code (default: en-US for clear American English)
+        voice_name: Voice to use (default: en-US-Journey-F, most natural)
         ssml: Optional SSML markup for warmer, more natural speech
 
-    Voice options for Indian English (best to worst):
-    - en-IN-Neural2-A: Female - MOST NATURAL, warm teacher voice
-    - en-IN-Neural2-B: Male - natural
-    - en-IN-Neural2-C: Female - natural
-    - en-IN-Neural2-D: Male - natural
-    - en-IN-Wavenet-A: Female - good but more robotic
-    - en-IN-Standard-A: Female - basic, robotic
+    Best voices for natural, non-nasal sound:
+    - en-US-Journey-F: Female - MOST NATURAL, like a real person
+    - en-US-Journey-D: Male - very natural
+    - en-US-Neural2-F: Female - natural, clear
+    - en-US-Studio-O: Female - expressive, warm
+
+    Indian English voices (can sound nasal):
+    - en-IN-Neural2-A: Female - good but slightly nasal
     """
     tts_client = get_google_tts_client()
     if tts_client is None:
@@ -165,8 +166,8 @@ def google_tts(
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.92,  # Slightly slower, but natural pace
-        pitch=1.0,  # Slightly higher pitch - warmer, friendlier
+        speaking_rate=1.0,  # Natural pace
+        pitch=0.0,  # Natural pitch
         volume_gain_db=2.0,  # Good volume
     )
 
