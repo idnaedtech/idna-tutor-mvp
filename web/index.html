@@ -197,21 +197,53 @@
         }
         
         .voice-btn {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 64px;
-            height: 64px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             color: white;
-            font-size: 28px;
+            font-size: 32px;
             box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
+            margin: 20px auto 8px;
+        }
+
+        .voice-btn-container {
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .voice-btn-label {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .attempt-indicator {
+            text-align: center;
+            padding: 8px 16px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .attempt-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 4px;
+            background: #d1d5db;
+        }
+
+        .attempt-dot.used {
+            background: #ef4444;
         }
         
         .voice-btn.recording {
@@ -262,11 +294,66 @@
             opacity: 0.8;
         }
         
-        .state-indicator {
-            font-size: 10px;
-            color: #9ca3af;
-            text-align: right;
-            margin-top: 8px;
+        .status-indicator {
+            text-align: center;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-top: 16px;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator.listening {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+        .status-indicator.thinking {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status-indicator.speaking {
+            background: #ede9fe;
+            color: #7c3aed;
+        }
+
+        .status-indicator.ready {
+            background: #ecfdf5;
+            color: #059669;
+        }
+
+        .steps-area {
+            margin-top: 12px;
+            padding: 12px 16px;
+            border-left: 4px solid #667eea;
+            background: #f8fafc;
+            border-radius: 0 8px 8px 0;
+            font-size: 14px;
+            color: #475569;
+            display: none;
+        }
+
+        .steps-area.show {
+            display: block;
+        }
+
+        .steps-area .step {
+            margin-bottom: 8px;
+            padding-left: 8px;
+        }
+
+        .steps-area .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .steps-area .step-label {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 2px;
         }
     </style>
 </head>
@@ -306,16 +393,30 @@
             <div id="question-area" class="question-area">
                 <div class="question-number" id="question-number">Question 1</div>
                 <div class="question-text" id="question-text">Loading question...</div>
-                
+
+                <div class="attempt-indicator" id="attempt-indicator">
+                    Attempt: <span id="attempt-count">1</span>/3
+                    <span class="attempt-dot" id="dot1"></span>
+                    <span class="attempt-dot" id="dot2"></span>
+                    <span class="attempt-dot" id="dot3"></span>
+                </div>
+
                 <div class="feedback" id="feedback"></div>
-                
+
+                <div class="steps-area" id="steps-area"></div>
+
                 <input type="text" class="answer-input" id="answer-input" placeholder="Your answer..." autocomplete="off">
-                
+
+                <div class="voice-btn-container">
+                    <button class="voice-btn" id="voice-btn">🎤</button>
+                    <div class="voice-btn-label">Tap to speak</div>
+                </div>
+
                 <button class="btn btn-primary" id="submit-btn">Submit Answer ✓</button>
                 <button class="btn btn-secondary" id="next-btn" style="display:none;">Next Question →</button>
                 <button class="btn btn-secondary" id="end-btn">End Session</button>
-                
-                <div class="state-indicator">State: <span id="state-display">idle</span></div>
+
+                <div class="status-indicator ready" id="status-indicator">✏️ Your turn</div>
             </div>
             
             <div class="loading" id="loading">
@@ -326,9 +427,7 @@
         
         <a href="/" class="home-link">← Back to Home</a>
     </div>
-    
-    <button class="voice-btn" id="voice-btn">🎤</button>
-    
+
     <script>
         // State
         let sessionId = null;
@@ -337,6 +436,7 @@
         let isListening = false;
         let recognition = null;
         let autoSubmitTimer = null;
+        let currentAudio = null;
         
         // Elements
         const chapterDropdown = document.getElementById('chapter-dropdown');
@@ -355,7 +455,8 @@
         const scoreEl = document.getElementById('score');
         const totalEl = document.getElementById('total');
         const accuracyEl = document.getElementById('accuracy');
-        const stateDisplay = document.getElementById('state-display');
+        const statusIndicator = document.getElementById('status-indicator');
+        const stepsArea = document.getElementById('steps-area');
         
         // API calls
         const API_BASE = '';
@@ -377,7 +478,38 @@
         
         function updateState(newState) {
             currentState = newState;
-            stateDisplay.textContent = newState;
+        }
+
+        function setStatus(type) {
+            statusIndicator.className = 'status-indicator ' + type;
+            switch(type) {
+                case 'listening':
+                    statusIndicator.textContent = '🎤 Listening...';
+                    break;
+                case 'thinking':
+                    statusIndicator.textContent = '🤔 Thinking...';
+                    break;
+                case 'speaking':
+                    statusIndicator.textContent = '🔊 Speaking...';
+                    break;
+                case 'ready':
+                default:
+                    statusIndicator.textContent = '✏️ Your turn';
+                    break;
+            }
+        }
+
+        function addStep(label, text) {
+            const step = document.createElement('div');
+            step.className = 'step';
+            step.innerHTML = '<div class="step-label">' + label + '</div><div>' + text + '</div>';
+            stepsArea.appendChild(step);
+            stepsArea.classList.add('show');
+        }
+
+        function clearSteps() {
+            stepsArea.innerHTML = '';
+            stepsArea.classList.remove('show');
         }
         
         function showFeedback(message, type) {
@@ -394,6 +526,26 @@
             totalEl.textContent = total;
             const acc = total > 0 ? Math.round((score / total) * 100) : 0;
             accuracyEl.textContent = acc + '%';
+        }
+
+        function updateAttemptIndicator(attemptCount) {
+            const count = attemptCount || 1;
+            document.getElementById('attempt-count').textContent = count;
+            // Update dots: used dots are red, unused are gray
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById('dot' + i);
+                if (dot) {
+                    if (i < count) {
+                        dot.classList.add('used');
+                    } else {
+                        dot.classList.remove('used');
+                    }
+                }
+            }
+        }
+
+        function resetAttemptIndicator() {
+            updateAttemptIndicator(1);
         }
         
         // Load chapters
@@ -415,6 +567,7 @@
         // Start session
         async function startSession() {
             loading.classList.add('show');
+            setStatus('thinking');
             try {
                 const data = await api('/api/session/start', 'POST');
                 sessionId = data.session_id;
@@ -444,9 +597,12 @@
         // Get next question
         async function getNextQuestion() {
             hideFeedback();
+            clearSteps();
             answerInput.value = '';
             nextBtn.style.display = 'none';
             submitBtn.style.display = 'block';
+            resetAttemptIndicator();
+            setStatus('thinking');
             
             try {
                 const data = await api('/api/session/question', 'POST', {
@@ -464,6 +620,7 @@
                 answerInput.focus();
             } catch (e) {
                 alert('Error: ' + e.message);
+                setStatus('ready');
             }
         }
         
@@ -476,15 +633,21 @@
             }
             
             loading.classList.add('show');
+            setStatus('thinking');
             try {
                 const data = await api('/api/session/answer', 'POST', {
                     session_id: sessionId,
                     answer: answer
                 });
-                
+
                 updateState(data.state);
                 updateScore(data.score, data.total);
-                
+
+                // Update attempt indicator
+                if (data.attempt_count !== undefined) {
+                    updateAttemptIndicator(data.attempt_count);
+                }
+
                 if (data.correct) {
                     showFeedback(data.message, 'correct');
                     submitBtn.style.display = 'none';
@@ -493,15 +656,23 @@
                     showFeedback(data.message, 'incorrect');
                     submitBtn.style.display = 'none';
                     nextBtn.style.display = 'block';
+                    // Add solution to steps
+                    if (data.solution) {
+                        addStep('Solution', data.solution);
+                    }
                 } else if (data.hint) {
                     showFeedback(data.message, 'hint');
+                    // Add hint to steps area (accumulates)
+                    const hintLabel = 'Hint ' + (data.attempt_count ? data.attempt_count - 1 : '');
+                    addStep(hintLabel, data.hint);
                 } else {
                     showFeedback(data.message, 'incorrect');
                 }
-                
+
                 speak(data.message);
             } catch (e) {
                 alert('Error: ' + e.message);
+                setStatus('ready');
             }
             loading.classList.remove('show');
         }
@@ -536,15 +707,29 @@
         // Text to Speech
         async function speak(text) {
             try {
+                // Stop any currently playing audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+
+                setStatus('speaking');
                 const data = await api('/api/text-to-speech', 'POST', { text, voice: 'nova' });
-                const audio = new Audio('data:audio/mp3;base64,' + data.audio);
-                audio.play();
+                currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
+                currentAudio.onended = () => setStatus('ready');
+                currentAudio.play();
             } catch (e) {
                 console.error('TTS error:', e);
                 // Fallback to browser TTS
                 if ('speechSynthesis' in window) {
+                    // Stop any browser TTS as well
+                    speechSynthesis.cancel();
+                    setStatus('speaking');
                     const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.onend = () => setStatus('ready');
                     speechSynthesis.speak(utterance);
+                } else {
+                    setStatus('ready');
                 }
             }
         }
@@ -568,6 +753,7 @@
                 voiceBtn.textContent = '🎙️';
                 answerInput.placeholder = 'Listening...';
                 answerInput.classList.add('listening');
+                setStatus('listening');
             };
 
             recog.onresult = (event) => {
@@ -608,6 +794,7 @@
                 voiceBtn.textContent = '🎤';
                 answerInput.placeholder = 'Your answer...';
                 answerInput.classList.remove('listening');
+                setStatus('ready');
 
                 // Auto-submit if we have text (after 1 second delay)
                 const answer = answerInput.value.trim();
@@ -627,6 +814,7 @@
                 voiceBtn.textContent = '🎤';
                 answerInput.placeholder = 'Your answer...';
                 answerInput.classList.remove('listening');
+                setStatus('ready');
 
                 if (event.error === 'not-allowed') {
                     alert('Microphone access denied. Please allow microphone permissions.');
@@ -651,6 +839,16 @@
                 }
             } else {
                 // Start listening
+                // Barge-in: Stop any playing TTS
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                // Also stop browser TTS if running
+                if ('speechSynthesis' in window) {
+                    speechSynthesis.cancel();
+                }
+
                 if (!recognition) {
                     recognition = initSpeechRecognition();
                 }
