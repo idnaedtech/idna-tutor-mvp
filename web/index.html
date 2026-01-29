@@ -600,8 +600,8 @@
             return res.json();
         }
 
-        // Add message to chat
-        function addMessage(content, type = 'tutor', extraClass = '') {
+        // Add message to chat with optional streaming effect
+        function addMessage(content, type = 'tutor', extraClass = '', stream = false) {
             const msg = document.createElement('div');
             msg.className = `message ${type}`;
 
@@ -611,15 +611,22 @@
 
             const contentDiv = document.createElement('div');
             contentDiv.className = `message-content ${extraClass}`;
-            contentDiv.textContent = content;
 
             msg.appendChild(avatar);
             msg.appendChild(contentDiv);
             messages.appendChild(msg);
             messages.scrollTop = messages.scrollHeight;
+
+            if (stream && type === 'tutor') {
+                streamText(contentDiv, content);
+            } else {
+                contentDiv.textContent = content;
+            }
+
+            return contentDiv;
         }
 
-        function addLabeledMessage(label, content, type = 'tutor', extraClass = '') {
+        function addLabeledMessage(label, content, type = 'tutor', extraClass = '', stream = false) {
             const msg = document.createElement('div');
             msg.className = `message ${type}`;
 
@@ -629,12 +636,44 @@
 
             const contentDiv = document.createElement('div');
             contentDiv.className = `message-content ${extraClass}`;
-            contentDiv.innerHTML = `<div class="message-label">${label}</div>${content}`;
+
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'message-label';
+            labelDiv.textContent = label;
+            contentDiv.appendChild(labelDiv);
+
+            const textSpan = document.createElement('span');
+            contentDiv.appendChild(textSpan);
 
             msg.appendChild(avatar);
             msg.appendChild(contentDiv);
             messages.appendChild(msg);
             messages.scrollTop = messages.scrollHeight;
+
+            if (stream && type === 'tutor') {
+                streamText(textSpan, content);
+            } else {
+                textSpan.textContent = content;
+            }
+
+            return textSpan;
+        }
+
+        // Streaming text effect - reveals text character by character
+        function streamText(element, text, speed = 20) {
+            let index = 0;
+            element.textContent = '';
+
+            function addChar() {
+                if (index < text.length) {
+                    element.textContent += text[index];
+                    index++;
+                    messages.scrollTop = messages.scrollHeight;
+                    setTimeout(addChar, speed);
+                }
+            }
+
+            addChar();
         }
 
         function showTyping() {
@@ -709,12 +748,12 @@
                 hideTyping();
 
                 if (data.completed) {
-                    addMessage(data.message);
+                    addMessage(data.message, 'tutor', '', true);
                     inputArea.style.display = 'none';
                     return;
                 }
 
-                addLabeledMessage(`Question ${data.question_number}`, data.question_text, 'tutor', 'question');
+                addLabeledMessage(`Question ${data.question_number}`, data.question_text, 'tutor', 'question', true);
                 speak(data.intro, data.intro_ssml);
                 answerInput.focus();
             } catch (e) {
@@ -742,15 +781,15 @@
                 updateScore(data.score, data.total);
 
                 if (data.correct) {
-                    addMessage(data.message, 'tutor', 'correct');
+                    addMessage(data.message, 'tutor', 'correct', true);
                     speak(data.message, data.ssml);
-                    setTimeout(() => getNextQuestion(), 2000);
+                    setTimeout(() => getNextQuestion(), 2500);
                 } else if (data.show_answer) {
-                    addLabeledMessage('Solution', `The answer is ${data.answer}. ${data.solution || ''}`, 'tutor', 'incorrect');
+                    addLabeledMessage('Solution', `The answer is ${data.answer}. ${data.solution || ''}`, 'tutor', 'incorrect', true);
                     speak(data.message, data.ssml);
-                    setTimeout(() => getNextQuestion(), 3000);
+                    setTimeout(() => getNextQuestion(), 4000);
                 } else {
-                    addLabeledMessage(`Hint ${data.attempt_count}`, data.message, 'tutor', 'hint');
+                    addLabeledMessage(`Hint ${data.attempt_count}`, data.message, 'tutor', 'hint', true);
                     speak(data.message, data.ssml);
                 }
             } catch (e) {

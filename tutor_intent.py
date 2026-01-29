@@ -42,34 +42,34 @@ def get_openai_client():
 # RESPONSE CACHING - Reduces GPT API calls significantly
 # ============================================================
 
-# Pre-generated responses for common intents (no GPT needed)
-# English only for clear pronunciation with US English TTS voice
+# Pre-generated responses for common intents (fallback when GPT unavailable)
+# Keep these natural and varied
 _cached_responses: Dict[str, List[str]] = {
     "session_start": [
-        "Hello! Ready for math? Let's go!",
-        "Hi there! Let's practice together!",
-        "Welcome! Time to learn. Let's start!",
-        "Hey! Excited to learn today? Let's go!",
+        "Hey! Ready to do some math together?",
+        "Hi! Let's get started!",
+        "Hello! Excited to practice with you today!",
+        "Hey there! Let's dive in!",
     ],
     "session_end": [
-        "Great work today! See you next time!",
-        "Well done! Keep practicing!",
-        "Good job! See you soon!",
-        "Nice effort today! Bye!",
+        "Great job today! See you next time!",
+        "You did well! Keep it up!",
+        "Nice work! See you soon!",
+        "Good effort today! Take care!",
     ],
     "move_on": [
-        "Okay, next one!",
+        "Alright, next one!",
         "Let's try another!",
-        "Ready? Here we go!",
-        "Next question!",
-        "Moving on!",
+        "Okay, here's the next one!",
+        "Ready for another?",
+        "On to the next!",
     ],
     "confirm_correct": [
-        "Yes! That's correct!",
-        "Perfect! Well done!",
-        "Excellent! You got it!",
-        "Brilliant! That's right!",
-        "Great job! Correct!",
+        "Yes! You got it!",
+        "That's right! Nice work!",
+        "Exactly! Well done!",
+        "Perfect! You nailed it!",
+        "Correct! Great thinking!",
     ],
 }
 
@@ -115,32 +115,42 @@ def set_cached_gpt_response(cache_key: str, response: str):
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You're a warm, encouraging tutor helping a student with math.
+TUTOR_PERSONA = """You are a friendly, patient math tutor having a real conversation with a student. You genuinely care about helping them understand.
 
-TONE:
-- Friendly and encouraging, like a supportive older sibling
-- Celebrate correct answers: "Yes! That's right!", "Perfect!", "Excellent!"
-- Be kind when wrong: "Not quite, but good try!", "Almost there!"
+YOUR PERSONALITY:
+- Warm and encouraging, like a favorite teacher
+- You get excited when they succeed
+- You're patient and kind when they struggle
+- You explain things simply, like talking to a friend
 
-RULES:
-- Keep it SHORT: 1-2 sentences max (this is spoken aloud)
-- Use simple, clear English ONLY - no Hindi words at all
-- React to their specific answer when relevant
+CONVERSATION STYLE:
+- Be natural and conversational, not scripted
+- React genuinely to what they say
+- Use contractions (you're, that's, let's)
+- Vary your responses - never repeat the same phrase twice
+- Sound like a real person, not a robot
 
-WHEN WRONG:
-- Never make them feel bad
-- Give encouragement: "Close! Try again", "Good thinking, but check once more"
-- Provide the hint naturally
+WHEN THEY'RE RIGHT:
+- Show genuine enthusiasm
+- Acknowledge their specific answer
+- Keep it brief but warm
+
+WHEN THEY'RE WRONG:
+- Be encouraging, never discouraging
+- Acknowledge their attempt
+- Guide them gently with hints
+- Make them feel they can do it
 
 WHEN EXPLAINING:
-- Be clear and simple
-- Walk through step by step
-- End positively: "See? Not so hard!", "You've got this!"
+- Break it down simply
+- Use "we" language: "Let's think about this..."
+- Connect to what they might already know
+- End on an encouraging note
 
-AVOID:
-- Any Hindi or Hinglish words
-- Robotic or formal language
-- Long explanations
+IMPORTANT:
+- Keep responses SHORT (1-3 sentences) - this will be spoken aloud
+- Use simple, clear English
+- Be genuine, not generic
 """
 
 
@@ -613,7 +623,8 @@ def generate_gpt_response(
     - Question-specific responses are cached for 5 minutes
     """
 
-    # OPTIMIZATION: Use pre-cached responses for common intents (no GPT call)
+    # OPTIMIZATION: Use pre-cached responses only for simple transitions
+    # Let GPT handle substantive responses for more natural conversation
     if use_cache:
         intent_cache_map = {
             TutorIntent.SESSION_START: "session_start",
@@ -622,12 +633,6 @@ def generate_gpt_response(
         }
         if intent in intent_cache_map:
             cached = get_cached_response(intent_cache_map[intent])
-            if cached:
-                return cached
-
-        # For CONFIRM_CORRECT, use cached ~50% of time for variety
-        if intent == TutorIntent.CONFIRM_CORRECT and random.random() < 0.5:
-            cached = get_cached_response("confirm_correct")
             if cached:
                 return cached
 
@@ -640,58 +645,78 @@ def generate_gpt_response(
 
     # Build the context for GPT - include student's answer for contextual responses
     intent_instructions = {
-        TutorIntent.ASK_FRESH: f"""Present this question warmly: '{question}'
-Keep it short: "Okay, here's your question..." or "Alright, try this one..."
-Use English only. Be inviting, not formal.""",
+        TutorIntent.ASK_FRESH: f"""You're presenting a new math question to the student.
 
-        TutorIntent.CONFIRM_CORRECT: f"""Student answered: '{student_answer}'
+Question: {question}
+
+Introduce it naturally - like you're just chatting. Examples of natural intros:
+- "Alright, here's one for you..."
+- "Okay, let's try this..."
+- "Here's your next challenge..."
+
+Then state the question. Keep it conversational, 1-2 sentences total.""",
+
+        TutorIntent.CONFIRM_CORRECT: f"""The student got it RIGHT! Their answer: "{student_answer}"
+
+Be genuinely happy for them! React naturally like a real person would.
+- Show real enthusiasm
+- Acknowledge their specific answer if relevant
+- Keep it short but warm (1-2 sentences)
+
+Don't be generic - make it feel like a real moment of celebration.""",
+
+        TutorIntent.GUIDE_THINKING: f"""The student answered "{student_answer}" but it's not quite right.
+The correct answer is: {correct_answer}
+This is attempt {attempt_number} of 3.
+
+Here's a hint you can use: {hint}
+
+Respond naturally:
+- Acknowledge their attempt kindly
+- Weave in the hint conversationally
+- Encourage them to try again
+- Keep it to 2-3 sentences max""",
+
+        TutorIntent.NUDGE_CORRECTION: f"""The student answered "{student_answer}" - still not quite right.
 Correct answer: {correct_answer}
-CELEBRATE! They got it right! Be excited:
-"Yes! That's correct!" or "Perfect! Well done!" or "Excellent! You got it!"
-Keep it short - 1-2 sentences. English only.""",
+This is attempt {attempt_number} of 3 - they need more help.
 
-        TutorIntent.GUIDE_THINKING: f"""Question: {question}
+Stronger hint: {hint}
+
+Be more direct but still supportive:
+- Give clearer guidance
+- Make them feel they're close
+- Keep encouraging them
+- 2-3 sentences max""",
+
+        TutorIntent.EXPLAIN_ONCE: f"""The student tried 3 times and couldn't get it. Their last answer: "{student_answer}"
 Correct answer: {correct_answer}
-Student said: '{student_answer}' (wrong, attempt {attempt_number}/3)
-Hint to give: {hint}
 
-Be encouraging, not disappointed:
-"Close! {hint}" or "Not quite. {hint} Try again!"
-English only. Keep it short.""",
+Solution explanation: {solution}
 
-        TutorIntent.NUDGE_CORRECTION: f"""Question: {question}
-Correct answer: {correct_answer}
-Student said: '{student_answer}' (wrong, attempt {attempt_number}/3)
-Hint: {hint}
+Now explain it kindly:
+- Don't make them feel bad - this was a learning moment
+- Walk through the solution simply
+- End with encouragement for next time
+- Keep it clear and not too long""",
 
-More direct help, still encouraging:
-"Let me help. {hint}" or "Here's a bigger hint: {hint}"
-Give them confidence. English only.""",
-
-        TutorIntent.EXPLAIN_ONCE: f"""Question: {question}
-Student's last attempt: '{student_answer}'
-Correct answer: {correct_answer}
-Solution: {solution}
-
-They tried 3 times - be kind:
-"No problem, this was tricky. Here's how: {solution}"
-End positively: "You'll get it next time!" English only.""",
-
-        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help.
+        TutorIntent.EXPLAIN_STEPS: f"""The student asked for help understanding this problem.
 
 Question: {question}
 Solution: {solution}
 Answer: {correct_answer}
 
-Walk through step by step in simple English.
-End with: "So the answer is {correct_answer}. Makes sense?"
-English only.""",
+Walk them through it like you're sitting next to them:
+- Break it into simple steps
+- Use "we" language
+- Make sure each step is clear
+- End by confirming the answer""",
 
-        TutorIntent.MOVE_ON: "Quick transition: 'Okay, next one!' or 'Let's move on!' or 'Ready? Next question!' 3-5 words. English only.",
+        TutorIntent.MOVE_ON: "Give a quick, natural transition to the next question. Just a few words - casual and friendly.",
 
-        TutorIntent.SESSION_START: "Friendly greeting: 'Hello! Ready for math? Let's go!' or 'Hi! Let's practice!' 5-7 words. English only.",
+        TutorIntent.SESSION_START: "Greet the student warmly. Be friendly and set a positive tone. Just 1-2 short sentences.",
 
-        TutorIntent.SESSION_END: "Friendly goodbye: 'Great work today! See you!' or 'Well done! Bye!' 5-7 words. English only.",
+        TutorIntent.SESSION_END: "Say goodbye warmly. Acknowledge their effort today. Keep it brief and positive.",
     }
 
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
@@ -699,8 +724,8 @@ English only.""",
     try:
         client = get_openai_client()
 
-        # More tokens for explanations, fewer for quick reactions
-        max_tokens = 150 if intent == TutorIntent.EXPLAIN_STEPS else 60
+        # More tokens for explanations
+        max_tokens = 200 if intent in [TutorIntent.EXPLAIN_STEPS, TutorIntent.EXPLAIN_ONCE] else 100
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -709,7 +734,7 @@ English only.""",
                 {"role": "user", "content": user_prompt}
             ],
             max_tokens=max_tokens,
-            temperature=0.95,  # High creativity for varied responses
+            temperature=0.85,  # Balanced creativity and consistency
         )
         result = response.choices[0].message.content.strip()
         # Remove quotes if GPT wrapped the response
