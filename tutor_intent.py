@@ -529,30 +529,45 @@ def generate_gpt_response(
     The FSM decides WHAT to say (intent), GPT decides HOW to say it.
     """
 
-    # Build the context for GPT
+    # Build the context for GPT - include student's answer for contextual responses
+    student_said = f"Student said: '{student_answer}'" if student_answer else ""
+
     intent_instructions = {
         TutorIntent.ASK_FRESH: f"Toss out this question super casually: '{question}'. Like 'Okay so...' or 'Alright here's one...' Just say it naturally, don't introduce it formally.",
 
-        TutorIntent.CONFIRM_CORRECT: f"They nailed it! React like you would to a friend - 'Oh nice!' or 'Yep that's it!' Keep it to like 5 words max.",
+        TutorIntent.CONFIRM_CORRECT: f"""Student answered: '{student_answer}'
+Correct answer: {correct_answer}
+They got it right! React to THEIR answer specifically. Like 'Yep, {student_answer} is right!' or 'Oh nice, exactly!' Keep it short.""",
 
-        TutorIntent.GUIDE_THINKING: f"Not quite right yet, attempt {attempt_number}. Use this hint: '{hint}'. Sound like you're puzzling it out together - 'Hmm so like...' or 'Okay what if...'",
+        TutorIntent.GUIDE_THINKING: f"""Question: {question}
+Correct answer: {correct_answer}
+Student said: '{student_answer}' (this is wrong, attempt {attempt_number}/3)
+Hint to give: {hint}
 
-        TutorIntent.NUDGE_CORRECTION: f"Attempt {attempt_number}, give bigger help: '{hint}'. Be direct but chill - 'Okay so basically...' or 'Right so the thing is...'",
+Respond to what THEY said specifically. If they said a number, acknowledge it: 'Hmm {student_answer}... not quite, but...'
+Guide them with the hint. Don't just give generic response.""",
 
-        TutorIntent.EXPLAIN_ONCE: f"Just explain it simply: '{solution}'. No big deal tone - 'So basically...' or 'Right so you just...' Keep it short.",
+        TutorIntent.NUDGE_CORRECTION: f"""Question: {question}
+Correct answer: {correct_answer}
+Student said: '{student_answer}' (wrong, attempt {attempt_number}/3)
+Hint: {hint}
 
-        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help understanding. Walk them through step by step in a friendly way.
+Acknowledge their attempt, then give direct help. Like 'Okay so {student_answer} isn't it, but here's the thing...' """,
+
+        TutorIntent.EXPLAIN_ONCE: f"""Question: {question}
+Student's last attempt: '{student_answer}'
+Correct answer: {correct_answer}
+Solution: {solution}
+
+They tried 3 times. Gently explain: 'Okay so {student_answer} was close but actually...' then walk through the solution simply.""",
+
+        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help. Walk them through step by step.
 
 Question: {question}
 Solution: {solution}
 Answer: {correct_answer}
 
-Explain it like talking to a friend:
-- Start with 'Okay so basically...' or 'Right so here's the thing...'
-- Break it into simple steps they can follow
-- Use casual language, not textbook language
-- End with something like 'and that gives us {correct_answer}' or 'so the answer is {correct_answer}'
-- Keep it conversational, not lecture-y""",
+Explain it like talking to a friend - break it into simple steps, end with the answer.""",
 
         TutorIntent.MOVE_ON: "Super quick transition. Just 'Okay next!' or 'Alright...' 3-4 words max.",
 

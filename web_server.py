@@ -766,6 +766,7 @@ async def submit_answer(request: AnswerRequest):
         hint_2=question.get('hint_2', question.get('hint', 'Think step by step!')),
         solution=question.get('solution', f"The answer is {question['answer']}."),
         correct_answer=question['answer'],
+        student_answer=request.answer,  # Pass what student actually said
     )
 
     if is_correct:
