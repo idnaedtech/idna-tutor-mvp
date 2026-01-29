@@ -175,7 +175,7 @@ def get_google_tts_client():
 def google_tts(
     text: str,
     language_code: str = "en-IN",
-    voice_name: str = "en-IN-Neural2-A",
+    voice_name: str = "en-IN-Wavenet-A",
     ssml: Optional[str] = None
 ) -> bytes:
     """Generate natural speech using Google Cloud TTS
@@ -183,14 +183,14 @@ def google_tts(
     Args:
         text: Plain text to speak (used if ssml is None)
         language_code: Language code (default: en-IN for Indian English)
-        voice_name: Voice to use (default: en-IN-Neural2-A, Indian female)
+        voice_name: Voice to use (default: en-IN-Wavenet-A, natural Indian female)
         ssml: Optional SSML markup for natural speech
 
-    Indian English voices:
-    - en-IN-Neural2-A: Female - clear Indian accent
-    - en-IN-Neural2-B: Male - clear Indian accent
-    - en-IN-Neural2-C: Female - alternative
-    - en-IN-Neural2-D: Male - alternative
+    Indian English voices (Wavenet = most natural):
+    - en-IN-Wavenet-A: Female - most natural
+    - en-IN-Wavenet-B: Male - most natural
+    - en-IN-Wavenet-C: Female - alternative
+    - en-IN-Wavenet-D: Male - alternative
     """
     tts_client = get_google_tts_client()
     if tts_client is None:
@@ -209,10 +209,9 @@ def google_tts(
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.0,  # Normal pace
-        pitch=-0.5,  # Slightly lower pitch for warmth
-        volume_gain_db=3.0,  # Good volume for mobile
-        effects_profile_id=["small-bluetooth-speaker-class-device"],  # Optimized for mobile
+        speaking_rate=1.05,  # Slightly faster for natural flow
+        pitch=0.0,  # Neutral pitch - no modification
+        volume_gain_db=2.0,  # Good volume
     )
 
     try:
@@ -227,7 +226,7 @@ def google_tts(
         print(f"Primary voice failed, trying fallback: {e}")
         voice = texttospeech.VoiceSelectionParams(
             language_code="en-IN",
-            name="en-IN-Neural2-C",
+            name="en-IN-Wavenet-C",
         )
         response = tts_client.synthesize_speech(
             input=synthesis_input,
