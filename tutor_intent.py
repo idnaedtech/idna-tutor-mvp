@@ -30,8 +30,8 @@ def get_openai_client():
     if _openai_client is None:
         _openai_client = OpenAI(
             api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=10.0,
-            max_retries=1
+            timeout=30.0,  # Increased for longer explanations
+            max_retries=2
         )
     return _openai_client
 
