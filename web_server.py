@@ -88,18 +88,34 @@ def get_google_tts_client():
     """Get Google TTS client, creating credentials file from env var if needed"""
     global _tts_client, _tts_creds_file
 
-    if _tts_client is not None:
+    if _tts_client:
         return _tts_client
 
-    # Check for JSON credentials in env var (Railway deployment)
     creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+
     if creds_json:
-        # Write JSON to temp file and set env var
-        _tts_creds_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-        _tts_creds_file.write(creds_json)
-        _tts_creds_file.close()
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tts_creds_file.name
-        print(f"### Google TTS: Using credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON ###")
+        try:
+            # Validate it's valid JSON
+            json.loads(creds_json)
+
+            # Write to temp file
+            _tts_creds_file = tempfile.NamedTemporaryFile(
+                mode='w',
+                suffix='.json',
+                delete=False
+            )
+            _tts_creds_file.write(creds_json)
+            _tts_creds_file.close()
+
+            # Set the env var that Google client looks for
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tts_creds_file.name
+            print(f"### Google Cloud TTS: Credentials loaded from env var ###")
+        except json.JSONDecodeError as e:
+            print(f"### Google Cloud TTS: Invalid JSON in credentials: {e} ###")
+            return None
+        except Exception as e:
+            print(f"### Google Cloud TTS: Error setting up credentials: {e} ###")
+            return None
 
     try:
         _tts_client = texttospeech.TextToSpeechClient()
