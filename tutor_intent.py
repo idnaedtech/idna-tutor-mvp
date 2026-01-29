@@ -43,7 +43,7 @@ def get_openai_client():
 # ============================================================
 
 # Pre-generated responses for common intents (no GPT needed)
-# Balance: Mostly English with occasional Hindi for warmth
+# English only for clear pronunciation with US English TTS voice
 _cached_responses: Dict[str, List[str]] = {
     "session_start": [
         "Hello! Ready for math? Let's go!",
@@ -115,7 +115,7 @@ def set_cached_gpt_response(cache_key: str, response: str):
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You're a warm, encouraging tutor helping a student with math. Keep responses mostly in English.
+TUTOR_PERSONA = """You're a warm, encouraging tutor helping a student with math.
 
 TONE:
 - Friendly and encouraging, like a supportive older sibling
@@ -124,8 +124,7 @@ TONE:
 
 RULES:
 - Keep it SHORT: 1-2 sentences max (this is spoken aloud)
-- Use simple, clear English
-- Only use occasional Hindi words for warmth (maybe 1 per response max): "Great job!", "Well done!"
+- Use simple, clear English ONLY - no Hindi words at all
 - React to their specific answer when relevant
 
 WHEN WRONG:
@@ -139,7 +138,7 @@ WHEN EXPLAINING:
 - End positively: "See? Not so hard!", "You've got this!"
 
 AVOID:
-- Too much Hindi/Hinglish
+- Any Hindi or Hinglish words
 - Robotic or formal language
 - Long explanations
 """
@@ -294,59 +293,59 @@ INTENT_PHRASES = {
 }
 
 
-# SSML templates for warmer, more natural voice synthesis
-# Uses pauses (<break>), prosody for emotions, and Hinglish for warmth
+# SSML templates for natural voice synthesis
+# Uses pauses (<break>) and prosody for natural speech
 PHRASES_SSML = {
     TutorIntent.ASK_FRESH: [
-        "<speak><prosody rate='95%'>Accha beta,<break time='400ms'/></prosody> {question}<break time='500ms'/> <prosody pitch='+5%'>Take your time.</prosody></speak>",
-        "<speak><prosody rate='93%'>Chalo dekho,<break time='350ms'/></prosody> {question}</speak>",
-        "<speak>Okay so,<break time='300ms'/> {question}<break time='400ms'/> <prosody pitch='+3%'>Socho...</prosody></speak>",
-        "<speak><prosody rate='95%'>Ready beta?<break time='400ms'/></prosody> Yeh try karo.<break time='300ms'/> {question}</speak>",
-        "<speak>Accha,<break time='300ms'/> next question.<break time='400ms'/> {question}</speak>",
+        "<speak>Okay,<break time='200ms'/> {question}<break time='300ms'/> Take your time.</speak>",
+        "<speak>Here's your question.<break time='200ms'/> {question}</speak>",
+        "<speak>Alright,<break time='200ms'/> {question}<break time='300ms'/> Think about it.</speak>",
+        "<speak>Ready?<break time='200ms'/> {question}</speak>",
+        "<speak>Next question.<break time='200ms'/> {question}</speak>",
     ],
     TutorIntent.CONFIRM_CORRECT: [
-        "<speak><prosody rate='105%' pitch='+10%'>Arre wah!</prosody><break time='350ms'/> <emphasis level='strong'>Ekdum sahi!</emphasis><break time='300ms'/> Bahut badhiya beta!</speak>",
-        "<speak><prosody pitch='+8%'>Kya baat hai!</prosody><break time='300ms'/> <emphasis level='strong'>Perfect!</emphasis><break time='350ms'/> Dekha, tumne kar liya!</speak>",
-        "<speak><emphasis level='strong'>Shabash!</emphasis><break time='350ms'/> <prosody pitch='+5%'>That's exactly right!</prosody><break time='300ms'/> Proud of you beta!</speak>",
-        "<speak><prosody rate='105%' pitch='+10%'>Wah wah!</prosody><break time='300ms'/> First class answer!<break time='350ms'/> <prosody pitch='+5%'>Maza aa gaya!</prosody></speak>",
-        "<speak><prosody pitch='+8%'>Yes!</prosody><break time='300ms'/> <emphasis level='strong'>Bilkul sahi!</emphasis><break time='350ms'/> You're doing amazing beta!</speak>",
+        "<speak><prosody pitch='+5%'>Yes!</prosody><break time='200ms'/> That's correct! Well done!</speak>",
+        "<speak><prosody pitch='+5%'>Perfect!</prosody><break time='200ms'/> You got it!</speak>",
+        "<speak><prosody pitch='+5%'>Excellent!</prosody><break time='200ms'/> That's exactly right!</speak>",
+        "<speak><prosody pitch='+5%'>Great job!</prosody><break time='200ms'/> That's the answer!</speak>",
+        "<speak><prosody pitch='+5%'>Brilliant!</prosody><break time='200ms'/> Well done!</speak>",
     ],
     TutorIntent.GUIDE_THINKING: [
-        "<speak><prosody rate='92%'>Hmm,<break time='450ms'/> {hint}</prosody><break time='500ms'/> <prosody pitch='+3%'>Ek aur try?</prosody></speak>",
-        "<speak><prosody rate='90%'>Accha, close hai but<break time='400ms'/></prosody> thoda aur socho.<break time='450ms'/> {hint}</speak>",
-        "<speak>Almost beta!<break time='400ms'/> <prosody rate='92%'>Dekho,<break time='300ms'/> {hint}</prosody><break time='400ms'/> <prosody pitch='+3%'>Kya lagta hai?</prosody></speak>",
-        "<speak><prosody rate='92%'>Koi nahi,<break time='350ms'/> try again.</prosody><break time='400ms'/> Hint:<break time='300ms'/> {hint}</speak>",
+        "<speak>Hmm,<break time='200ms'/> not quite.<break time='200ms'/> {hint}<break time='200ms'/> Try again?</speak>",
+        "<speak>Close, but not exactly.<break time='200ms'/> {hint}</speak>",
+        "<speak>Almost!<break time='200ms'/> {hint}<break time='200ms'/> Give it another try.</speak>",
+        "<speak>Not quite right.<break time='200ms'/> Hint:<break time='150ms'/> {hint}</speak>",
     ],
     TutorIntent.NUDGE_CORRECTION: [
-        "<speak><prosody rate='90%'>Accha sunno beta,<break time='450ms'/> step by step karein.</prosody><break time='500ms'/> {hint}<break time='450ms'/> <prosody pitch='+3%'>Ek aur chance!</prosody></speak>",
-        "<speak>Tension mat lo!<break time='400ms'/> <prosody rate='90%'>Dekho,<break time='350ms'/> {hint}</prosody><break time='450ms'/> You can do it!</speak>",
-        "<speak><prosody rate='92%'>Koi baat nahi,<break time='400ms'/> let me help more.</prosody><break time='450ms'/> {hint}<break time='400ms'/> <prosody pitch='+3%'>Try karo!</prosody></speak>",
+        "<speak>Let me help more.<break time='200ms'/> {hint}<break time='200ms'/> One more try!</speak>",
+        "<speak>Don't worry!<break time='200ms'/> {hint}<break time='200ms'/> You can do it!</speak>",
+        "<speak>No problem,<break time='200ms'/> let me help.<break time='200ms'/> {hint}<break time='200ms'/> Try again!</speak>",
     ],
     TutorIntent.EXPLAIN_ONCE: [
-        "<speak><prosody rate='88%' pitch='-2%'>Koi baat nahi beta,<break time='500ms'/> yeh tricky tha.</prosody><break time='550ms'/> <prosody rate='90%'>Dekho kaise karte hain:<break time='450ms'/> {solution}</prosody><break time='500ms'/> <prosody pitch='+5%'>Samajh aaya? Next time pakka!</prosody></speak>",
-        "<speak><prosody rate='90%'>That's okay!<break time='450ms'/> Hota hai.</prosody><break time='500ms'/> <prosody rate='88%'>Watch this:<break time='400ms'/> {solution}</prosody><break time='450ms'/> <prosody pitch='+3%'>Ab clear hai?</prosody></speak>",
-        "<speak>No problem beta!<break time='450ms'/> <prosody rate='88%'>Chalo, together dekhte hain.<break time='450ms'/> {solution}</prosody><break time='500ms'/> <prosody pitch='+5%'>Dekha, easy tha!</prosody></speak>",
+        "<speak>That's okay, this was tricky.<break time='250ms'/> Here's how it works:<break time='200ms'/> {solution}<break time='250ms'/> You'll get it next time!</speak>",
+        "<speak>No problem!<break time='200ms'/> Let me show you.<break time='200ms'/> {solution}<break time='250ms'/> Makes sense?</speak>",
+        "<speak>Don't worry!<break time='200ms'/> {solution}<break time='250ms'/> See? Not so hard!</speak>",
     ],
     TutorIntent.MOVE_ON: [
-        "<speak><prosody rate='105%' pitch='+5%'>Chalo!</prosody><break time='350ms'/> Next one!</speak>",
-        "<speak>Okay,<break time='300ms'/> <prosody pitch='+3%'>aage badhein!</prosody></speak>",
-        "<speak><prosody rate='105%'>Ready?</prosody><break time='300ms'/> Next question!</speak>",
-        "<speak><prosody pitch='+5%'>Chalein!</prosody><break time='300ms'/> Another one!</speak>",
+        "<speak>Okay,<break time='150ms'/> next one!</speak>",
+        "<speak>Let's move on!</speak>",
+        "<speak>Ready?<break time='150ms'/> Next question!</speak>",
+        "<speak>Here's another one!</speak>",
     ],
     TutorIntent.ENCOURAGE_RETRY: [
-        "<speak><prosody rate='90%'>Dhire dhire beta,<break time='400ms'/> no rush.</prosody><break time='350ms'/> <prosody pitch='+3%'>Sochke batao.</prosody></speak>",
-        "<speak><prosody rate='92%'>Take your time.<break time='400ms'/></prosody> <prosody pitch='+3%'>You've got this!</prosody></speak>",
-        "<speak>Relax beta,<break time='350ms'/> <prosody rate='92%'>aaram se socho.</prosody></speak>",
+        "<speak>Take your time.<break time='200ms'/> No rush.</speak>",
+        "<speak>You've got this!<break time='200ms'/> Think it through.</speak>",
+        "<speak>Relax and try again.</speak>",
     ],
     TutorIntent.SESSION_START: [
-        "<speak><prosody rate='105%' pitch='+8%'>Namaste beta!</prosody><break time='450ms'/> Ready to learn today?<break time='400ms'/> <prosody pitch='+5%'>Let's go!</prosody></speak>",
-        "<speak><prosody pitch='+5%'>Hello champ!</prosody><break time='400ms'/> Kaise ho?<break time='350ms'/> <prosody rate='105%'>Chalo practice karein!</prosody></speak>",
-        "<speak><prosody rate='105%' pitch='+8%'>Aao beta!</prosody><break time='400ms'/> Math time!<break time='350ms'/> <prosody pitch='+5%'>Maza aayega!</prosody></speak>",
+        "<speak><prosody pitch='+5%'>Hello!</prosody><break time='200ms'/> Ready to learn today?<break time='200ms'/> Let's go!</speak>",
+        "<speak><prosody pitch='+5%'>Hi there!</prosody><break time='200ms'/> Let's practice together!</speak>",
+        "<speak><prosody pitch='+5%'>Welcome!</prosody><break time='200ms'/> Time for some math. Let's start!</speak>",
     ],
     TutorIntent.SESSION_END: [
-        "<speak><prosody pitch='+8%'>Bahut accha kiya aaj!</prosody><break time='450ms'/> <prosody rate='95%'>Proud of you beta.</prosody><break time='400ms'/> <prosody pitch='+5%'>Phir milenge!</prosody></speak>",
-        "<speak><prosody rate='105%' pitch='+8%'>Great job champ!</prosody><break time='400ms'/> Keep practicing.<break time='350ms'/> <prosody pitch='+5%'>Bye beta!</prosody></speak>",
-        "<speak><emphasis level='strong'>Shabash!</emphasis><break time='400ms'/> <prosody rate='95%'>You worked hard today.</prosody><break time='400ms'/> <prosody pitch='+8%'>See you soon!</prosody></speak>",
+        "<speak>Great work today!<break time='200ms'/> See you next time!</speak>",
+        "<speak><prosody pitch='+5%'>Well done!</prosody><break time='200ms'/> Keep practicing. Bye!</speak>",
+        "<speak>Good job today!<break time='200ms'/> See you soon!</speak>",
     ],
 }
 
@@ -642,56 +641,57 @@ def generate_gpt_response(
     # Build the context for GPT - include student's answer for contextual responses
     intent_instructions = {
         TutorIntent.ASK_FRESH: f"""Present this question warmly: '{question}'
-Use Hinglish like 'Accha beta, yeh try karo...' or 'Chalo dekho...' or 'Okay so...'
-Keep it short and inviting, not formal.""",
+Keep it short: "Okay, here's your question..." or "Alright, try this one..."
+Use English only. Be inviting, not formal.""",
 
         TutorIntent.CONFIRM_CORRECT: f"""Student answered: '{student_answer}'
 Correct answer: {correct_answer}
-CELEBRATE! They got it right! Be genuinely excited with Hinglish:
-'Arre wah! {student_answer} - ekdum sahi!' or 'Kya baat hai beta! Perfect!' or 'Shabash! Dekha, tumne kar liya!'
-React to THEIR specific answer. Show you're proud of them.""",
+CELEBRATE! They got it right! Be excited:
+"Yes! That's correct!" or "Perfect! Well done!" or "Excellent! You got it!"
+Keep it short - 1-2 sentences. English only.""",
 
         TutorIntent.GUIDE_THINKING: f"""Question: {question}
 Correct answer: {correct_answer}
 Student said: '{student_answer}' (wrong, attempt {attempt_number}/3)
 Hint to give: {hint}
 
-Be warm and encouraging, NOT disappointed. Use Hinglish:
-'Accha {student_answer}... close hai but thoda aur socho...' or 'Hmm, almost beta! Dekho, {hint}'
-Make them feel they CAN do it.""",
+Be encouraging, not disappointed:
+"Close! {hint}" or "Not quite. {hint} Try again!"
+English only. Keep it short.""",
 
         TutorIntent.NUDGE_CORRECTION: f"""Question: {question}
 Correct answer: {correct_answer}
 Student said: '{student_answer}' (wrong, attempt {attempt_number}/3)
 Hint: {hint}
 
-More direct help but still warm. Use Hinglish:
-'Koi nahi beta, let me help. Dekho, {hint}' or 'Accha sunno, step by step karein...'
-Give them confidence for one more try.""",
+More direct help, still encouraging:
+"Let me help. {hint}" or "Here's a bigger hint: {hint}"
+Give them confidence. English only.""",
 
         TutorIntent.EXPLAIN_ONCE: f"""Question: {question}
 Student's last attempt: '{student_answer}'
 Correct answer: {correct_answer}
 Solution: {solution}
 
-They tried 3 times - be EXTRA kind and supportive:
-'Koi baat nahi beta! Yeh tricky tha. Dekho kaise karte hain...' then explain simply.
-End with encouragement: 'Samajh aaya? Next time pakka hoga!'""",
+They tried 3 times - be kind:
+"No problem, this was tricky. Here's how: {solution}"
+End positively: "You'll get it next time!" English only.""",
 
-        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help - they want to learn! Be a supportive didi/bhaiya.
+        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help.
 
 Question: {question}
 Solution: {solution}
 Answer: {correct_answer}
 
-Walk through warmly: 'Accha dekho beta, step by step... pehle yeh... phir yeh... aur answer hai {correct_answer}!'
-Make them feel smart for asking.""",
+Walk through step by step in simple English.
+End with: "So the answer is {correct_answer}. Makes sense?"
+English only.""",
 
-        TutorIntent.MOVE_ON: "Quick warm transition. 'Chalo next!' or 'Aage badhein!' or 'Okay ready?' 3-5 words with energy.",
+        TutorIntent.MOVE_ON: "Quick transition: 'Okay, next one!' or 'Let's move on!' or 'Ready? Next question!' 3-5 words. English only.",
 
-        TutorIntent.SESSION_START: "Warm excited greeting! 'Namaste beta! Ready for math?' or 'Aao champ, let's go!' 5-7 words.",
+        TutorIntent.SESSION_START: "Friendly greeting: 'Hello! Ready for math? Let's go!' or 'Hi! Let's practice!' 5-7 words. English only.",
 
-        TutorIntent.SESSION_END: "Proud farewell! 'Bahut accha kiya aaj! Bye beta!' or 'Great job champ! Phir milenge!' 5-7 words.",
+        TutorIntent.SESSION_END: "Friendly goodbye: 'Great work today! See you!' or 'Well done! Bye!' 5-7 words. English only.",
     }
 
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
@@ -822,11 +822,10 @@ def wrap_in_ssml(text: str) -> str:
     Same text within 10-second windows gets cached result.
 
     Features:
-    - Slower base rate (92%) for clarity
-    - Varied pauses for natural rhythm
-    - Emphasis on excited/praise words
+    - Natural pace for clarity
+    - Brief pauses for rhythm
+    - Emphasis on praise words
     - Pitch variations for emotions
-    - Support for Hindi/Hinglish expressions
     """
     # Use time-bucketed seed for cache hits (same text within 10s = same result)
     seed = int(time.time() // 10)
