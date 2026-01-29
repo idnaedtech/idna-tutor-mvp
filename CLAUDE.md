@@ -182,3 +182,30 @@ The codebase includes several performance optimizations:
 - Target audience: Tier 2/3 Indian students (Class 8)
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
+
+## Current State (January 29, 2026)
+
+### Completed
+- Bug fixes (7 bugs fixed)
+- Questions: 100 new questions, Science subject, MCQ support
+- Performance: Response caching, async DB, reduced GPT calls
+- UI: New dark mode chat interface (like Claude/ChatGPT)
+- Streaming text effect for tutor messages
+- LLM as brain: GPT generates natural, conversational responses
+
+### Pending - Voice Quality
+The TTS voice still needs work:
+- Currently using: `en-IN-Wavenet-A` (Indian English)
+- Issue: Sounds nasal and not fluent
+- Settings: speaking_rate=1.05, pitch=0.0, no effects profile
+- Need to experiment with:
+  - Different Google TTS voices
+  - Alternative TTS providers (ElevenLabs, Azure, etc.)
+  - SSML adjustments
+
+### Recent UI Changes
+- Dark theme with chat bubbles
+- Input bar at bottom with voice button
+- Typing indicator animation
+- Message streaming effect
+- Color-coded feedback (green/red/yellow borders)
