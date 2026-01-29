@@ -43,33 +43,33 @@ def get_openai_client():
 # ============================================================
 
 # Pre-generated responses for common intents (no GPT needed)
-# These are refreshed periodically or on startup
+# Balance: Mostly English with occasional Hindi for warmth
 _cached_responses: Dict[str, List[str]] = {
     "session_start": [
-        "Namaste beta! Ready for math? Chalo!",
-        "Aao champ! Let's practice together!",
-        "Hello beta! Kaise ho? Math time!",
-        "Namaste! Excited to learn today? Let's go!",
+        "Hello! Ready for math? Let's go!",
+        "Hi there! Let's practice together!",
+        "Welcome! Time to learn. Let's start!",
+        "Hey! Excited to learn today? Let's go!",
     ],
     "session_end": [
-        "Bahut accha kiya aaj! Bye beta!",
-        "Great job champ! Phir milenge!",
-        "Shabash! Keep practicing. See you!",
-        "Well done beta! Proud of you!",
+        "Great work today! See you next time!",
+        "Well done! Keep practicing!",
+        "Good job! See you soon!",
+        "Nice effort today! Bye!",
     ],
     "move_on": [
-        "Chalo next!",
-        "Aage badhein!",
         "Okay, next one!",
-        "Ready? Here we go!",
         "Let's try another!",
+        "Ready? Here we go!",
+        "Next question!",
+        "Moving on!",
     ],
     "confirm_correct": [
-        "Arre wah! Ekdum sahi!",
-        "Kya baat hai! Perfect beta!",
-        "Shabash! That's exactly right!",
-        "Brilliant! You got it!",
-        "Wah wah! First class!",
+        "Yes! That's correct!",
+        "Perfect! Well done!",
+        "Excellent! You got it!",
+        "Brilliant! That's right!",
+        "Great job! Correct!",
     ],
 }
 
@@ -115,46 +115,33 @@ def set_cached_gpt_response(cache_key: str, response: str):
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You're a warm, encouraging didi/bhaiya helping a younger student with math. You LOVE seeing them learn. Mix Hindi naturally.
+TUTOR_PERSONA = """You're a warm, encouraging tutor helping a student with math. Keep responses mostly in English.
 
-EMOTIONAL WARMTH (most important!):
-- Show genuine excitement: "Arre wah!", "Kya baat hai!", "Maza aa gaya!"
-- Be encouraging when wrong: "Koi nahi beta, hota hai", "Tension mat lo"
-- Celebrate small wins: "Dekha! Tumne kar liya!", "Shabash mere bacche!"
-- Use affectionate terms: "beta", "bacche", "champ"
+TONE:
+- Friendly and encouraging, like a supportive older sibling
+- Celebrate correct answers: "Yes! That's right!", "Perfect!", "Excellent!"
+- Be kind when wrong: "Not quite, but good try!", "Almost there!"
 
-HINGLISH MIX (use naturally):
-- Reactions: "Accha accha", "Haan bilkul", "Sahi pakde", "Wah wah!"
-- Encouragement: "Koshish karo", "Thoda aur socho", "Bas ho gaya almost"
-- Transitions: "Chalo", "Dekho", "Suno", "Accha toh"
-- Praise: "Bahut badhiya!", "Ekdum sahi!", "First class!"
-- Comfort: "Koi baat nahi", "Dhire dhire", "No tension"
+RULES:
+- Keep it SHORT: 1-2 sentences max (this is spoken aloud)
+- Use simple, clear English
+- Only use occasional Hindi words for warmth (maybe 1 per response max): "Great job!", "Well done!"
+- React to their specific answer when relevant
 
-BE SPONTANEOUS:
-- Never start two responses the same way
-- React to THEIR specific answer: "Hmm 5... not quite but close!"
-- Think out loud: "Accha toh... agar hum yeh karein..."
-- Natural pauses: "Soo... let me think... haan!"
-
-KEEP SHORT (this is spoken aloud):
-- 1-2 sentences max
-- Fragments are perfect: "Sahi!" "Hmm close!" "Ek minute..."
-- Don't over-explain, let them think
-
-WHEN THEY'RE WRONG:
-- NEVER make them feel bad
-- "Accha, close hai but..." not "Wrong!"
-- Always give hope: "Ek aur try, you'll get it"
+WHEN WRONG:
+- Never make them feel bad
+- Give encouragement: "Close! Try again", "Good thinking, but check once more"
+- Provide the hint naturally
 
 WHEN EXPLAINING:
-- Walk through together: "Dekho, pehle yeh... phir yeh..."
-- Make it collaborative: "Toh humne kya kiya? Haan, yahi!"
-- Celebrate understanding: "Ab samjhe? See, easy tha!"
+- Be clear and simple
+- Walk through step by step
+- End positively: "See? Not so hard!", "You've got this!"
 
-NEVER SOUND LIKE:
-- A textbook or robot
-- Cold or formal
-- Disappointed in them
+AVOID:
+- Too much Hindi/Hinglish
+- Robotic or formal language
+- Long explanations
 """
 
 
@@ -750,64 +737,53 @@ def _wrap_in_ssml_cached(text: str, seed: int) -> str:
     # Use seed for reproducible "randomness" within cache window
     rng = random.Random(seed)
 
-    # Vary pause lengths for naturalness (longer pauses for better rhythm)
-    short_pause = rng.choice(["180ms", "220ms", "200ms"])
-    med_pause = rng.choice(["350ms", "400ms", "320ms"])
-    long_pause = rng.choice(["500ms", "550ms", "450ms"])
+    # Short, natural pauses
+    short_pause = rng.choice(["100ms", "120ms", "150ms"])
+    med_pause = rng.choice(["200ms", "250ms", "220ms"])
+    long_pause = rng.choice(["300ms", "350ms", "280ms"])
 
     result = text
 
-    # Add varied pauses after sentences (longer for clarity)
+    # Brief pauses after sentences
     def varied_sentence_pause(match):
-        pause = rng.choice(["400ms", "450ms", "500ms", "380ms"])
+        pause = rng.choice(["250ms", "300ms", "280ms"])
         return f'{match.group(1)}<break time="{pause}"/> '
 
     result = re.sub(r'([.!?])\s+', varied_sentence_pause, result)
 
-    # Natural pause for "..." (thinking) - longer for effect
-    result = re.sub(r'\.\.\.', f'<break time="{long_pause}"/>', result)
+    # Natural pause for "..." (thinking)
+    result = re.sub(r'\.\.\.', f'<break time="{med_pause}"/>', result)
 
-    # Pauses after colons (before explanations)
-    result = re.sub(r':\s+', f':<break time="{med_pause}"/> ', result)
+    # Brief pause after colons
+    result = re.sub(r':\s+', f':<break time="{short_pause}"/> ', result)
 
-    # Varied pauses after commas (slightly longer)
+    # Short pauses after commas
     def varied_comma_pause(match):
-        pause = rng.choice(["150ms", "180ms", "200ms", "160ms"])
+        pause = rng.choice(["80ms", "100ms", "120ms"])
         return f',<break time="{pause}"/> '
 
     result = re.sub(r',\s+', varied_comma_pause, result)
 
-    # Excited/praise words - strong emphasis with pitch lift
+    # Excited/praise words - slight emphasis
     praise_words = [
-        "wah", "bahut", "shabash", "perfect", "exactly", "correct", "sahi",
-        "badhiya", "amazing", "brilliant", "excellent", "great", "nice",
-        "accha", "maza", "first class", "proud"
+        "perfect", "exactly", "correct", "amazing", "brilliant",
+        "excellent", "great", "nice", "wonderful"
     ]
     for word in praise_words:
         pattern = re.compile(re.escape(word), re.IGNORECASE)
         result = pattern.sub(
-            lambda m: f'<emphasis level="strong"><prosody pitch="+8%">{m.group(0)}</prosody></emphasis>',
+            lambda m: f'<emphasis level="moderate">{m.group(0)}</emphasis>',
             result
         )
 
-    # Encouraging words - moderate emphasis, warm pitch
+    # Encouraging words - gentle emphasis
     encourage_words = [
-        "try", "koshish", "socho", "dekho", "close", "almost", "nearly",
-        "good", "okay", "can do", "you've got", "no problem", "koi baat"
+        "try", "close", "almost", "nearly", "good", "okay"
     ]
     for word in encourage_words:
         pattern = re.compile(re.escape(word), re.IGNORECASE)
         result = pattern.sub(
-            lambda m: f'<emphasis level="moderate"><prosody pitch="+3%">{m.group(0)}</prosody></emphasis>',
-            result
-        )
-
-    # Affectionate terms - warm, slightly slower
-    affection_words = ["beta", "bacche", "champ"]
-    for word in affection_words:
-        pattern = re.compile(re.escape(word), re.IGNORECASE)
-        result = pattern.sub(
-            lambda m: f'<prosody rate="90%" pitch="-2%">{m.group(0)}</prosody>',
+            lambda m: f'<emphasis level="moderate">{m.group(0)}</emphasis>',
             result
         )
 
@@ -822,18 +798,18 @@ def _wrap_in_ssml_cached(text: str, seed: int) -> str:
     # Detect emotion and set base prosody
     text_lower = result.lower()
 
-    # Celebration/excitement - faster, higher pitch
-    if any(w in text_lower for w in ["wah", "shabash", "yes!", "perfect", "correct", "sahi", "bahut accha"]):
-        result = f'<prosody rate="102%" pitch="+5%">{result}</prosody>'
-    # Comfort/encouragement when wrong - slower, warmer
-    elif any(w in text_lower for w in ["koi baat", "tension mat", "no problem", "that's okay", "hota hai"]):
-        result = f'<prosody rate="88%" pitch="-3%">{result}</prosody>'
-    # Explanation mode - slower, clear
-    elif any(w in text_lower for w in ["dekho", "so", "pehle", "step", "let me", "here's how"]):
-        result = f'<prosody rate="88%">{result}</prosody>'
-    # Default - slightly slow for clarity
+    # Celebration/excitement - slightly faster, higher pitch
+    if any(w in text_lower for w in ["yes!", "perfect", "correct", "excellent", "brilliant", "great"]):
+        result = f'<prosody rate="105%" pitch="+3%">{result}</prosody>'
+    # Comfort/encouragement when wrong - normal pace, warm
+    elif any(w in text_lower for w in ["no problem", "that's okay", "try again", "almost", "close"]):
+        result = f'<prosody rate="98%" pitch="-1%">{result}</prosody>'
+    # Explanation mode - slightly slower for clarity
+    elif any(w in text_lower for w in ["so", "step", "let me", "here's how", "first", "then"]):
+        result = f'<prosody rate="95%">{result}</prosody>'
+    # Default - normal pace
     else:
-        result = f'<prosody rate="92%">{result}</prosody>'
+        result = f'<prosody rate="100%">{result}</prosody>'
 
     return f"<speak>{result}</speak>"
 

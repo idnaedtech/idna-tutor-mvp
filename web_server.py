@@ -213,8 +213,8 @@ def google_tts(
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.92,  # Slightly slower for clarity and warmth
-        pitch=-1.0,  # Slightly lower pitch reduces nasality
+        speaking_rate=1.0,  # Normal pace
+        pitch=-0.5,  # Slightly lower pitch for warmth
         volume_gain_db=3.0,  # Good volume for mobile
         effects_profile_id=["small-bluetooth-speaker-class-device"],  # Optimized for mobile
     )
