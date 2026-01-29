@@ -3,569 +3,664 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IDNA EdTech - Learn Math</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>IDNA EdTech - Math Tutor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2a2a2a;
+            --bg-tertiary: #333333;
+            --text-primary: #f5f5f5;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --accent: #7c5cff;
+            --accent-hover: #9580ff;
+            --success: #4ade80;
+            --error: #f87171;
+            --warning: #fbbf24;
+            --border: #404040;
+        }
+
         body {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
+            display: flex;
+            flex-direction: column;
         }
-        
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        
+
+        /* Header */
         .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo img {
+            height: 32px;
+            width: auto;
+        }
+
+        .logo-text {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .score-badge {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 14px;
+        }
+
+        .score-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .score-value {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .score-label {
+            color: var(--text-secondary);
+        }
+
+        /* Main Chat Area */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Welcome Screen */
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
             text-align: center;
-            color: white;
+            padding: 40px 20px;
+        }
+
+        .welcome-screen.hidden {
+            display: none;
+        }
+
+        .welcome-icon {
+            font-size: 64px;
             margin-bottom: 24px;
         }
 
-        .header-logo {
-            max-width: 180px;
-            height: auto;
+        .welcome-title {
+            font-size: 28px;
+            font-weight: 700;
             margin-bottom: 8px;
         }
 
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 4px;
+        .welcome-subtitle {
+            color: var(--text-secondary);
+            font-size: 16px;
+            margin-bottom: 32px;
         }
 
-        .header p {
-            opacity: 0.9;
-            font-size: 14px;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 20px;
-            padding: 24px;
-            margin-bottom: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-        
-        .score-bar {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            padding: 12px 16px;
-            background: #f3f4f6;
-            border-radius: 12px;
-        }
-        
-        .score-item {
-            text-align: center;
-        }
-        
-        .score-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #667eea;
-        }
-        
-        .score-label {
-            font-size: 11px;
-            color: #6b7280;
-            text-transform: uppercase;
-        }
-        
         .chapter-select {
-            margin-bottom: 20px;
+            width: 100%;
+            max-width: 400px;
         }
-        
+
         .chapter-select label {
             display: block;
-            font-weight: 600;
+            font-size: 14px;
+            font-weight: 500;
             margin-bottom: 8px;
-            color: #374151;
+            color: var(--text-secondary);
         }
-        
+
         .chapter-select select {
             width: 100%;
-            padding: 14px;
-            border: 2px solid #e5e7eb;
+            padding: 14px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
             border-radius: 12px;
+            color: var(--text-primary);
             font-size: 15px;
             font-family: inherit;
-            background: white;
             cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
         }
-        
+
         .chapter-select select:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--accent);
         }
-        
-        .question-area {
-            display: none;
-        }
-        
-        .question-area.active {
-            display: block;
-        }
-        
-        .question-number {
-            font-size: 12px;
-            color: #9ca3af;
-            margin-bottom: 8px;
-        }
-        
-        .question-text {
-            font-size: 20px;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 20px;
-            line-height: 1.4;
-        }
-        
-        .answer-input {
+
+        .btn-start {
             width: 100%;
-            padding: 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
-            font-size: 18px;
-            font-family: inherit;
-            text-align: center;
-            margin-bottom: 12px;
-        }
-        
-        .answer-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .btn {
-            width: 100%;
-            padding: 16px;
+            max-width: 400px;
+            margin-top: 16px;
+            padding: 14px 24px;
+            background: var(--accent);
+            color: white;
             border: none;
             border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             font-family: inherit;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: background 0.2s;
         }
-        
-        .btn:active {
-            transform: scale(0.98);
+
+        .btn-start:hover:not(:disabled) {
+            background: var(--accent-hover);
         }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+
+        .btn-start:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
-        
-        .btn-secondary {
-            background: #f3f4f6;
-            color: #374151;
-            margin-top: 8px;
-        }
-        
-        .btn-start {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-        }
-        
-        .feedback {
-            padding: 10px 16px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 14px;
+
+        /* Chat Messages */
+        .chat-area {
             display: none;
+            flex-direction: column;
+            flex: 1;
         }
 
-        .feedback.show {
-            display: block;
+        .chat-area.active {
+            display: flex;
         }
 
-        .feedback.correct {
-            background: #d1fae5;
-            color: #065f46;
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
         }
 
-        .feedback.incorrect {
-            background: #fee2e2;
-            color: #991b1b;
-            font-weight: 500;
+        .message {
+            display: flex;
+            gap: 12px;
+            animation: fadeIn 0.3s ease;
         }
 
-        .feedback.hint {
-            background: #fef3c7;
-            color: #92400e;
-            font-weight: 500;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        
-        .voice-btn {
-            width: 80px;
-            height: 80px;
+
+        .message.tutor {
+            flex-direction: row;
+        }
+
+        .message.student {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .message.tutor .message-avatar {
+            background: var(--accent);
+        }
+
+        .message.student .message-avatar {
+            background: var(--bg-tertiary);
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 14px 18px;
+            border-radius: 18px;
+            line-height: 1.5;
+        }
+
+        .message.tutor .message-content {
+            background: var(--bg-secondary);
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.student .message-content {
+            background: var(--accent);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-content.question {
+            font-size: 17px;
+            font-weight: 500;
+        }
+
+        .message-content.correct {
+            border: 1px solid var(--success);
+        }
+
+        .message-content.incorrect {
+            border: 1px solid var(--error);
+        }
+
+        .message-content.hint {
+            border: 1px solid var(--warning);
+        }
+
+        .message-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            opacity: 0.7;
+        }
+
+        /* Typing Indicator */
+        .typing-indicator {
+            display: none;
+            padding: 14px 18px;
+            background: var(--bg-secondary);
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            width: fit-content;
+        }
+
+        .typing-indicator.show {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .input-container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 4px;
+            transition: border-color 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: var(--accent);
+        }
+
+        .input-wrapper input {
+            flex: 1;
+            padding: 12px 16px;
+            background: transparent;
             border: none;
-            color: white;
-            font-size: 32px;
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+        }
+
+        .input-wrapper input:focus {
+            outline: none;
+        }
+
+        .input-wrapper input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .voice-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 20px auto 8px;
+            transition: all 0.2s;
         }
 
-        .voice-btn-container {
-            text-align: center;
-            margin-top: 16px;
+        .voice-btn:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
         }
 
-        .voice-btn-label {
-            font-size: 14px;
-            color: #6b7280;
-            margin-top: 4px;
-        }
-
-        .attempt-indicator {
-            text-align: center;
-            padding: 8px 16px;
-            background: #f3f4f6;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            font-size: 14px;
-            color: #374151;
-        }
-
-        .attempt-dot {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-left: 4px;
-            background: #d1d5db;
-        }
-
-        .attempt-dot.used {
-            background: #ef4444;
-        }
-        
         .voice-btn.recording {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: var(--error);
+            color: white;
             animation: pulse 1s infinite;
         }
 
-        .answer-input.listening {
-            border-color: #ef4444;
-            background: #fef2f2;
-        }
-        
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
         }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .loading.show {
-            display: block;
-        }
-        
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e5e7eb;
-            border-top-color: #667eea;
+
+        .send-btn {
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 12px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .home-link {
-            display: block;
-            text-align: center;
+            background: var(--accent);
+            border: none;
             color: white;
-            text-decoration: none;
-            margin-top: 16px;
-            opacity: 0.8;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
         }
-        
-        .status-indicator {
+
+        .send-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Status Bar */
+        .status-bar {
             text-align: center;
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin-top: 16px;
-            font-size: 15px;
-            font-weight: 500;
-            transition: all 0.3s ease;
+            padding: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
-        .status-indicator.listening {
-            background: #fef2f2;
-            color: #dc2626;
+        .status-bar.listening {
+            color: var(--error);
         }
 
-        .status-indicator.thinking {
-            background: #fef3c7;
-            color: #d97706;
+        .status-bar.speaking {
+            color: var(--accent);
         }
 
-        .status-indicator.speaking {
-            background: #ede9fe;
-            color: #7c3aed;
-        }
-
-        .status-indicator.ready {
-            background: #ecfdf5;
-            color: #059669;
-        }
-
-        .steps-area {
-            margin: 16px 0;
-            padding: 16px;
-            background: #f8fafc;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            font-size: 14px;
-            color: #334155;
-            display: none;
-        }
-
-        .steps-area.show {
-            display: block;
-        }
-
-        .steps-area .step {
-            margin-bottom: 12px;
-            padding: 10px 12px;
-            background: white;
+        /* End Session Button */
+        .end-session-btn {
+            position: fixed;
+            top: 12px;
+            right: 20px;
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--border);
             border-radius: 8px;
-            border-left: 3px solid #667eea;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 100;
         }
 
-        .steps-area .step:last-child {
-            margin-bottom: 0;
+        .end-session-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
         }
 
-        .steps-area .step-label {
-            font-weight: 600;
-            color: #667eea;
-            font-size: 11px;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-            letter-spacing: 0.5px;
+        /* Mobile Responsive */
+        @media (max-width: 640px) {
+            .header {
+                padding: 10px 16px;
+            }
+
+            .logo-text {
+                display: none;
+            }
+
+            .score-badge {
+                gap: 12px;
+                font-size: 13px;
+            }
+
+            .messages {
+                padding: 16px;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+
+            .input-area {
+                padding: 12px 16px;
+            }
+
+            .welcome-title {
+                font-size: 24px;
+            }
+
+            .end-session-btn {
+                top: auto;
+                bottom: 80px;
+                right: 16px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <img src="/static/Idna Edtech Logo.png" alt="IDNA EdTech" class="header-logo">
-            <p>Voice-First Learning for Class 8</p>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <img src="/static/Idna Edtech Logo.png" alt="IDNA EdTech">
+            <span class="logo-text">Math Tutor</span>
         </div>
-        
-        <div class="card">
-            <div class="score-bar">
-                <div class="score-item">
-                    <div class="score-value" id="score">0</div>
-                    <div class="score-label">Score</div>
-                </div>
-                <div class="score-item">
-                    <div class="score-value" id="total">0</div>
-                    <div class="score-label">Questions</div>
-                </div>
-                <div class="score-item">
-                    <div class="score-value" id="accuracy">0%</div>
-                    <div class="score-label">Accuracy</div>
-                </div>
+        <div class="score-badge">
+            <div class="score-item">
+                <span class="score-value" id="score">0</span>
+                <span class="score-label">correct</span>
             </div>
-            
-            <div id="chapter-selection">
-                <div class="chapter-select">
-                    <label>Select Chapter (अध्याय चुनें)</label>
-                    <select id="chapter-dropdown">
-                        <option value="">-- Choose a chapter --</option>
-                    </select>
-                </div>
-                <button class="btn btn-start" id="start-btn" disabled>Start Practice 🚀</button>
-            </div>
-            
-            <div id="question-area" class="question-area">
-                <div class="question-number" id="question-number">Question 1</div>
-                <div class="question-text" id="question-text">Loading question...</div>
-
-                <div class="attempt-indicator" id="attempt-indicator">
-                    Attempt: <span id="attempt-count">1</span>/3
-                    <span class="attempt-dot" id="dot1"></span>
-                    <span class="attempt-dot" id="dot2"></span>
-                    <span class="attempt-dot" id="dot3"></span>
-                </div>
-
-                <div class="feedback" id="feedback"></div>
-
-                <div class="steps-area" id="steps-area"></div>
-
-                <input type="text" class="answer-input" id="answer-input" placeholder="Your answer..." autocomplete="off">
-
-                <div class="voice-btn-container">
-                    <button class="voice-btn" id="voice-btn">🎤</button>
-                    <div class="voice-btn-label">Tap to speak</div>
-                </div>
-
-                <button class="btn btn-primary" id="submit-btn">Submit Answer ✓</button>
-                <button class="btn btn-secondary" id="next-btn" style="display:none;">Next Question →</button>
-                <button class="btn btn-secondary" id="end-btn">End Session</button>
-
-                <div class="status-indicator ready" id="status-indicator">✏️ Your turn</div>
-            </div>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Loading...</p>
+            <div class="score-item">
+                <span class="score-value" id="total">0</span>
+                <span class="score-label">total</span>
             </div>
         </div>
-        
-        <a href="/" class="home-link">← Back to Home</a>
+    </header>
+
+    <!-- Welcome Screen -->
+    <div class="welcome-screen" id="welcome-screen">
+        <div class="welcome-icon">📚</div>
+        <h1 class="welcome-title">Ready to Learn?</h1>
+        <p class="welcome-subtitle">Select a chapter to start practicing</p>
+
+        <div class="chapter-select">
+            <label for="chapter-dropdown">Choose a chapter</label>
+            <select id="chapter-dropdown">
+                <option value="">Select chapter...</option>
+            </select>
+        </div>
+
+        <button class="btn-start" id="start-btn" disabled>Start Learning</button>
     </div>
+
+    <!-- Chat Area -->
+    <div class="chat-area" id="chat-area">
+        <div class="messages" id="messages">
+            <!-- Messages will be inserted here -->
+        </div>
+
+        <div class="typing-indicator" id="typing-indicator">
+            <span></span><span></span><span></span>
+        </div>
+
+        <div class="status-bar" id="status-bar"></div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area" id="input-area" style="display: none;">
+        <div class="input-container">
+            <div class="input-wrapper">
+                <input type="text" id="answer-input" placeholder="Type your answer..." autocomplete="off">
+                <button class="voice-btn" id="voice-btn" title="Voice input">🎤</button>
+            </div>
+            <button class="send-btn" id="send-btn" title="Send">➤</button>
+        </div>
+    </div>
+
+    <!-- End Session Button -->
+    <button class="end-session-btn" id="end-btn" style="display: none;">End Session</button>
 
     <script>
         // State
         let sessionId = null;
         let currentChapter = null;
-        let currentState = 'idle';
         let isListening = false;
         let recognition = null;
-        let autoSubmitTimer = null;
         let currentAudio = null;
-        
+
         // Elements
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const chatArea = document.getElementById('chat-area');
+        const inputArea = document.getElementById('input-area');
+        const messages = document.getElementById('messages');
         const chapterDropdown = document.getElementById('chapter-dropdown');
         const startBtn = document.getElementById('start-btn');
-        const chapterSelection = document.getElementById('chapter-selection');
-        const questionArea = document.getElementById('question-area');
-        const questionNumber = document.getElementById('question-number');
-        const questionText = document.getElementById('question-text');
         const answerInput = document.getElementById('answer-input');
-        const submitBtn = document.getElementById('submit-btn');
-        const nextBtn = document.getElementById('next-btn');
-        const endBtn = document.getElementById('end-btn');
-        const feedback = document.getElementById('feedback');
-        const loading = document.getElementById('loading');
+        const sendBtn = document.getElementById('send-btn');
         const voiceBtn = document.getElementById('voice-btn');
+        const endBtn = document.getElementById('end-btn');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const statusBar = document.getElementById('status-bar');
         const scoreEl = document.getElementById('score');
         const totalEl = document.getElementById('total');
-        const accuracyEl = document.getElementById('accuracy');
-        const statusIndicator = document.getElementById('status-indicator');
-        const stepsArea = document.getElementById('steps-area');
-        
-        // API calls
-        const API_BASE = '';
-        
+
+        // API
         async function api(endpoint, method = 'GET', body = null) {
             const options = {
                 method,
                 headers: { 'Content-Type': 'application/json' }
             };
             if (body) options.body = JSON.stringify(body);
-            
-            const res = await fetch(API_BASE + endpoint, options);
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'API Error');
-            }
+            const res = await fetch(endpoint, options);
+            if (!res.ok) throw new Error((await res.json()).detail || 'API Error');
             return res.json();
         }
-        
-        function updateState(newState) {
-            currentState = newState;
+
+        // Add message to chat
+        function addMessage(content, type = 'tutor', extraClass = '') {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = type === 'tutor' ? '🎓' : '👤';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `message-content ${extraClass}`;
+            contentDiv.textContent = content;
+
+            msg.appendChild(avatar);
+            msg.appendChild(contentDiv);
+            messages.appendChild(msg);
+            messages.scrollTop = messages.scrollHeight;
         }
 
-        function setStatus(type) {
-            statusIndicator.className = 'status-indicator ' + type;
-            switch(type) {
-                case 'listening':
-                    statusIndicator.textContent = '🎤 Listening...';
-                    break;
-                case 'thinking':
-                    statusIndicator.textContent = '🤔 Thinking...';
-                    break;
-                case 'speaking':
-                    statusIndicator.textContent = '🔊 Speaking...';
-                    break;
-                case 'ready':
-                default:
-                    statusIndicator.textContent = '✏️ Your turn';
-                    break;
-            }
+        function addLabeledMessage(label, content, type = 'tutor', extraClass = '') {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = type === 'tutor' ? '🎓' : '👤';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `message-content ${extraClass}`;
+            contentDiv.innerHTML = `<div class="message-label">${label}</div>${content}`;
+
+            msg.appendChild(avatar);
+            msg.appendChild(contentDiv);
+            messages.appendChild(msg);
+            messages.scrollTop = messages.scrollHeight;
         }
 
-        function addStep(label, text) {
-            const step = document.createElement('div');
-            step.className = 'step';
-            step.innerHTML = '<div class="step-label">' + label + '</div><div>' + text + '</div>';
-            stepsArea.appendChild(step);
-            stepsArea.classList.add('show');
+        function showTyping() {
+            typingIndicator.classList.add('show');
+            messages.scrollTop = messages.scrollHeight;
         }
 
-        function clearSteps() {
-            stepsArea.innerHTML = '';
-            stepsArea.classList.remove('show');
+        function hideTyping() {
+            typingIndicator.classList.remove('show');
         }
-        
-        function showFeedback(message, type) {
-            feedback.textContent = message;
-            feedback.className = 'feedback show ' + type;
+
+        function setStatus(text, type = '') {
+            statusBar.textContent = text;
+            statusBar.className = 'status-bar ' + type;
         }
-        
-        function hideFeedback() {
-            feedback.className = 'feedback';
-        }
-        
+
         function updateScore(score, total) {
             scoreEl.textContent = score;
             totalEl.textContent = total;
-            const acc = total > 0 ? Math.round((score / total) * 100) : 0;
-            accuracyEl.textContent = acc + '%';
         }
 
-        function updateAttemptIndicator(attemptCount) {
-            const count = attemptCount || 1;
-            document.getElementById('attempt-count').textContent = count;
-            // Update dots: used dots are red, unused are gray
-            for (let i = 1; i <= 3; i++) {
-                const dot = document.getElementById('dot' + i);
-                if (dot) {
-                    if (i < count) {
-                        dot.classList.add('used');
-                    } else {
-                        dot.classList.remove('used');
-                    }
-                }
-            }
-        }
-
-        function resetAttemptIndicator() {
-            updateAttemptIndicator(1);
-        }
-        
         // Load chapters
         async function loadChapters() {
             try {
                 const data = await api('/api/chapters');
-                chapterDropdown.innerHTML = '<option value="">-- Choose a chapter --</option>';
+                chapterDropdown.innerHTML = '<option value="">Select chapter...</option>';
                 data.chapters.forEach(ch => {
                     const opt = document.createElement('option');
                     opt.value = ch.id;
@@ -576,372 +671,211 @@
                 console.error('Failed to load chapters:', e);
             }
         }
-        
+
         // Start session
         async function startSession() {
-            loading.classList.add('show');
-            setStatus('thinking');
+            showTyping();
             try {
                 const data = await api('/api/session/start', 'POST');
                 sessionId = data.session_id;
-                updateState(data.state);
 
-                // Select chapter
                 currentChapter = chapterDropdown.value;
                 await api('/api/session/chapter', 'POST', {
                     session_id: sessionId,
                     chapter: currentChapter
                 });
 
-                // Get first question (this will speak the question intro)
+                welcomeScreen.classList.add('hidden');
+                chatArea.classList.add('active');
+                inputArea.style.display = 'block';
+                endBtn.style.display = 'block';
+
                 await getNextQuestion();
-
-                chapterSelection.style.display = 'none';
-                questionArea.classList.add('active');
-
-                // NOTE: Removed duplicate speak(data.message) here
-                // getNextQuestion() already speaks the question with intro
             } catch (e) {
                 alert('Error: ' + e.message);
             }
-            loading.classList.remove('show');
+            hideTyping();
         }
-        
+
         // Get next question
         async function getNextQuestion() {
-            hideFeedback();
-            clearSteps();
-            answerInput.value = '';
-            nextBtn.style.display = 'none';
-            submitBtn.style.display = 'block';
-            resetAttemptIndicator();
-            setStatus('thinking');
-            
+            showTyping();
             try {
                 const data = await api('/api/session/question', 'POST', {
                     session_id: sessionId,
                     chapter: currentChapter
                 });
-                
-                questionNumber.textContent = 'Question ' + data.question_number;
-                questionText.textContent = data.question_text;
-                updateState(data.state);
 
-                // Speak intro with SSML for warm, natural voice
-                const fullText = data.intro ? data.intro : data.question_text;
-                speak(fullText, data.intro_ssml);
+                hideTyping();
+
+                if (data.completed) {
+                    addMessage(data.message);
+                    inputArea.style.display = 'none';
+                    return;
+                }
+
+                addLabeledMessage(`Question ${data.question_number}`, data.question_text, 'tutor', 'question');
+                speak(data.intro, data.intro_ssml);
                 answerInput.focus();
             } catch (e) {
+                hideTyping();
                 alert('Error: ' + e.message);
-                setStatus('ready');
             }
         }
-        
+
         // Submit answer
         async function submitAnswer() {
             const answer = answerInput.value.trim();
-            if (!answer) {
-                answerInput.focus();
-                return;
-            }
-            
-            loading.classList.add('show');
-            setStatus('thinking');
+            if (!answer) return;
+
+            addMessage(answer, 'student');
+            answerInput.value = '';
+            showTyping();
+
             try {
                 const data = await api('/api/session/answer', 'POST', {
                     session_id: sessionId,
                     answer: answer
                 });
 
-                updateState(data.state);
+                hideTyping();
                 updateScore(data.score, data.total);
 
-                // Update attempt indicator
-                if (data.attempt_count !== undefined) {
-                    updateAttemptIndicator(data.attempt_count);
-                }
-
                 if (data.correct) {
-                    // Show simple success - tutor's words are spoken, not displayed
-                    showFeedback('✓ Correct!', 'correct');
-                    submitBtn.style.display = 'none';
-                    nextBtn.style.display = 'block';
+                    addMessage(data.message, 'tutor', 'correct');
+                    speak(data.message, data.ssml);
+                    setTimeout(() => getNextQuestion(), 2000);
                 } else if (data.show_answer) {
-                    // Show the correct answer, not tutor's spoken words
-                    showFeedback('Answer: ' + data.answer, 'incorrect');
-                    submitBtn.style.display = 'none';
-                    nextBtn.style.display = 'block';
-                    // Add solution to steps
-                    if (data.solution) {
-                        addStep('Solution', data.solution);
-                    }
-                } else if (data.hint) {
-                    // Show simple "try again" - hint goes in steps area
-                    showFeedback('Try again...', 'hint');
-                    // Add hint to steps area (accumulates)
-                    const hintLabel = 'Hint ' + (data.attempt_count ? data.attempt_count - 1 : '');
-                    addStep(hintLabel, data.hint);
-                } else if (data.is_help) {
-                    // Help request - show in steps area
-                    hideFeedback();
-                    addStep('Explanation', data.message);
+                    addLabeledMessage('Solution', `The answer is ${data.answer}. ${data.solution || ''}`, 'tutor', 'incorrect');
+                    speak(data.message, data.ssml);
+                    setTimeout(() => getNextQuestion(), 3000);
                 } else {
-                    showFeedback('Try again...', 'hint');
+                    addLabeledMessage(`Hint ${data.attempt_count}`, data.message, 'tutor', 'hint');
+                    speak(data.message, data.ssml);
                 }
-
-                // Use SSML for warmer voice if available
-                speak(data.message, data.ssml);
             } catch (e) {
+                hideTyping();
                 alert('Error: ' + e.message);
-                setStatus('ready');
             }
-            loading.classList.remove('show');
         }
-        
+
         // End session
         async function endSession() {
             if (!confirm('End this session?')) return;
-            
-            loading.classList.add('show');
+
             try {
                 const data = await api('/api/session/end', 'POST', {
                     session_id: sessionId,
                     chapter: currentChapter
                 });
-                
-                updateState(data.state);
-                alert(data.message);
-                speak(data.message);
-                
-                // Reset
-                sessionId = null;
-                currentChapter = null;
-                chapterSelection.style.display = 'block';
-                questionArea.classList.remove('active');
-                updateScore(0, 0);
+
+                addMessage(`Session complete! You got ${data.score} out of ${data.total} correct (${data.accuracy}%)`);
+                speak(data.message, data.ssml);
+                inputArea.style.display = 'none';
+                endBtn.style.display = 'none';
             } catch (e) {
                 alert('Error: ' + e.message);
             }
-            loading.classList.remove('show');
         }
-        
-        // Text to Speech (supports SSML for warmer voice)
+
+        // Text to Speech
         async function speak(text, ssml = null) {
-            // Stop any currently playing audio
             if (currentAudio) {
                 currentAudio.pause();
-                currentAudio.currentTime = 0;
+                currentAudio = null;
             }
 
             try {
-                setStatus('speaking');
-                // Pass SSML if available for warmer voice with pauses
+                setStatus('Speaking...', 'speaking');
                 const payload = { text, voice: 'nova' };
-                if (ssml) {
-                    payload.ssml = ssml;
-                }
+                if (ssml) payload.ssml = ssml;
                 const data = await api('/api/text-to-speech', 'POST', payload);
                 currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
-
-                // Auto-listen when tutor finishes speaking
-                currentAudio.onended = () => {
-                    setStatus('ready');
-                    // Only auto-listen if we're in question mode and submit button is visible
-                    if (submitBtn.style.display !== 'none' && questionArea.classList.contains('active')) {
-                        // Small delay before listening
-                        setTimeout(() => {
-                            if (!isListening) {
-                                startListening();
-                            }
-                        }, 500);
-                    }
-                };
-
+                currentAudio.onended = () => setStatus('');
                 currentAudio.play();
             } catch (e) {
                 console.error('TTS error:', e);
-                // Fallback to browser TTS (doesn't support SSML)
-                if ('speechSynthesis' in window) {
-                    // Stop any browser TTS as well
-                    speechSynthesis.cancel();
-                    setStatus('speaking');
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.onend = () => {
-                        setStatus('ready');
-                        if (submitBtn.style.display !== 'none' && questionArea.classList.contains('active')) {
-                            setTimeout(() => {
-                                if (!isListening) {
-                                    startListening();
-                                }
-                            }, 500);
-                        }
-                    };
-                    speechSynthesis.speak(utterance);
-                } else {
-                    setStatus('ready');
-                }
+                setStatus('');
             }
         }
-        
-        // Voice input using Web Speech API with auto-submit
+
+        // Voice Recognition
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                console.warn('Web Speech API not supported');
-                return null;
-            }
+            if (!SpeechRecognition) return null;
 
             const recog = new SpeechRecognition();
             recog.continuous = false;
             recog.interimResults = true;
-            recog.lang = 'en-IN';  // Indian English for better number recognition
+            recog.lang = 'en-IN';
 
             recog.onstart = () => {
                 isListening = true;
                 voiceBtn.classList.add('recording');
-                voiceBtn.textContent = '🎙️';
-                answerInput.placeholder = 'Listening...';
-                answerInput.classList.add('listening');
-                setStatus('listening');
+                voiceBtn.textContent = '⏹';
+                setStatus('Listening...', 'listening');
             };
 
             recog.onresult = (event) => {
-                // Clear any pending auto-submit
-                if (autoSubmitTimer) {
-                    clearTimeout(autoSubmitTimer);
-                    autoSubmitTimer = null;
-                }
-
-                let finalTranscript = '';
-                let interimTranscript = '';
-
+                let transcript = '';
                 for (let i = event.resultIndex; i < event.results.length; i++) {
-                    const transcript = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) {
-                        finalTranscript += transcript;
-                    } else {
-                        interimTranscript += transcript;
-                    }
+                    transcript = event.results[i][0].transcript;
                 }
-
-                // Show interim results while speaking
-                if (interimTranscript) {
-                    answerInput.value = interimTranscript.trim();
-                    answerInput.placeholder = 'Listening...';
-                }
-
-                // Set final result
-                if (finalTranscript) {
-                    answerInput.value = finalTranscript.trim();
-                    answerInput.placeholder = 'Your answer...';
-                }
+                answerInput.value = transcript.trim();
             };
 
             recog.onend = () => {
                 isListening = false;
                 voiceBtn.classList.remove('recording');
                 voiceBtn.textContent = '🎤';
-                answerInput.placeholder = 'Your answer...';
-                answerInput.classList.remove('listening');
-                setStatus('ready');
+                setStatus('');
 
-                // Auto-submit if we have text (after 1 second delay)
-                const answer = answerInput.value.trim();
-                if (answer && submitBtn.style.display !== 'none') {
-                    voiceBtn.textContent = '✓';
-                    autoSubmitTimer = setTimeout(() => {
-                        submitAnswer();
-                        voiceBtn.textContent = '🎤';
-                    }, 1000);
+                if (answerInput.value.trim()) {
+                    setTimeout(() => submitAnswer(), 500);
                 }
             };
 
             recog.onerror = (event) => {
-                console.error('Speech recognition error:', event.error);
                 isListening = false;
                 voiceBtn.classList.remove('recording');
                 voiceBtn.textContent = '🎤';
-                answerInput.placeholder = 'Your answer...';
-                answerInput.classList.remove('listening');
-                setStatus('ready');
-
-                if (event.error === 'not-allowed') {
-                    alert('Microphone access denied. Please allow microphone permissions.');
-                }
+                setStatus('');
             };
 
             return recog;
         }
 
-        function startListening() {
-            if (isListening) return;
-
-            // Barge-in: Stop any playing TTS
+        function toggleVoice() {
             if (currentAudio) {
                 currentAudio.pause();
-                currentAudio.currentTime = 0;
-            }
-            // Also stop browser TTS if running
-            if ('speechSynthesis' in window) {
-                speechSynthesis.cancel();
-            }
-
-            if (!recognition) {
-                recognition = initSpeechRecognition();
-            }
-            if (recognition) {
-                answerInput.value = '';
-                try {
-                    recognition.start();
-                } catch (e) {
-                    console.error('Recognition start error:', e);
-                }
-            } else {
-                alert('Voice input not supported in this browser.');
-            }
-        }
-
-        function stopListening() {
-            if (recognition && isListening) {
-                recognition.stop();
-            }
-        }
-
-        function toggleVoice() {
-            if (autoSubmitTimer) {
-                clearTimeout(autoSubmitTimer);
-                autoSubmitTimer = null;
-                voiceBtn.textContent = '🎤';
+                currentAudio = null;
             }
 
             if (isListening) {
-                stopListening();
+                recognition?.stop();
             } else {
-                startListening();
+                if (!recognition) recognition = initSpeechRecognition();
+                if (recognition) {
+                    answerInput.value = '';
+                    recognition.start();
+                }
             }
         }
-        
+
         // Event listeners
         chapterDropdown.addEventListener('change', () => {
             startBtn.disabled = !chapterDropdown.value;
         });
-        
+
         startBtn.addEventListener('click', startSession);
-        submitBtn.addEventListener('click', submitAnswer);
-        nextBtn.addEventListener('click', getNextQuestion);
-        endBtn.addEventListener('click', endSession);
+        sendBtn.addEventListener('click', submitAnswer);
         voiceBtn.addEventListener('click', toggleVoice);
-        
-        answerInput.addEventListener('keypress', e => {
-            if (e.key === 'Enter') {
-                if (nextBtn.style.display === 'block') {
-                    getNextQuestion();
-                } else {
-                    submitAnswer();
-                }
-            }
+        endBtn.addEventListener('click', endSession);
+
+        answerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') submitAnswer();
         });
-        
+
         // Init
         loadChapters();
     </script>
