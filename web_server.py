@@ -126,8 +126,19 @@ def get_google_tts_client():
         return None
 
 
-def google_tts(text: str, language_code: str = "en-IN", voice_name: str = "en-IN-Wavenet-A") -> bytes:
+def google_tts(
+    text: str,
+    language_code: str = "en-IN",
+    voice_name: str = "en-IN-Wavenet-A",
+    ssml: Optional[str] = None
+) -> bytes:
     """Generate clear, loud speech using Google Cloud TTS
+
+    Args:
+        text: Plain text to speak (used if ssml is None)
+        language_code: Language code (default: en-IN for Indian English)
+        voice_name: Voice to use (default: en-IN-Wavenet-A, warm female)
+        ssml: Optional SSML markup for warmer, more natural speech
 
     Voice options for Indian English:
     - en-IN-Wavenet-A: Warm female (recommended)
@@ -139,7 +150,11 @@ def google_tts(text: str, language_code: str = "en-IN", voice_name: str = "en-IN
     if tts_client is None:
         raise Exception("Google Cloud TTS not configured")
 
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    # Use SSML if provided, otherwise use plain text
+    if ssml:
+        synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
+    else:
+        synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice = texttospeech.VoiceSelectionParams(
         language_code=language_code,
@@ -371,6 +386,7 @@ class AnswerRequest(BaseModel):
 class TextToSpeechRequest(BaseModel):
     text: str
     voice: str = "nova"
+    ssml: Optional[str] = None  # Optional SSML for warmer voice
 
 
 # ============================================================
@@ -719,6 +735,7 @@ async def submit_answer(request: AnswerRequest):
         return {
             "correct": True,
             "message": tutor_result["response"],
+            "ssml": tutor_result.get("ssml"),
             "intent": tutor_result["intent"],
             "score": new_score,
             "total": session['total'],
@@ -742,6 +759,7 @@ async def submit_answer(request: AnswerRequest):
                 "answer": question["answer"],
                 "solution": question.get("solution", f"The answer is {question['answer']}"),
                 "message": tutor_result["response"],
+                "ssml": tutor_result.get("ssml"),
                 "intent": tutor_result["intent"],
                 "score": session['score'],
                 "total": session['total'],
@@ -760,6 +778,8 @@ async def submit_answer(request: AnswerRequest):
             return {
                 "correct": False,
                 "message": tutor_result["response"],
+                "ssml": tutor_result.get("ssml"),
+                "hint": tutor_result.get("response"),  # For steps area
                 "intent": tutor_result["intent"],
                 "hint_level": attempt_count,
                 "attempts_left": 3 - attempt_count,
@@ -907,14 +927,22 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech using Google Cloud TTS (clearer voice)"""
+    """Convert text to speech using Google Cloud TTS (clearer voice)
+
+    Supports SSML for warmer, more natural voice with pauses and emphasis.
+    If ssml is provided and Google TTS is available, uses SSML.
+    Falls back to plain text for OpenAI TTS.
+    """
     try:
-        # Use Google Cloud TTS (clearer, louder voice)
+        # Use Google Cloud TTS (clearer, louder voice, supports SSML)
         if get_google_tts_client():
-            audio_content = google_tts(request.text)
+            audio_content = google_tts(
+                text=request.text,
+                ssml=request.ssml  # Pass SSML if provided
+            )
             audio_base64 = base64.b64encode(audio_content).decode('utf-8')
         else:
-            # Fallback to OpenAI TTS
+            # Fallback to OpenAI TTS (doesn't support SSML, use plain text)
             response = client.audio.speech.create(
                 model="tts-1",
                 voice=request.voice,

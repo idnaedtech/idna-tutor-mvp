@@ -669,7 +669,8 @@
                     showFeedback(data.message, 'incorrect');
                 }
 
-                speak(data.message);
+                // Use SSML for warmer voice if available
+                speak(data.message, data.ssml);
             } catch (e) {
                 alert('Error: ' + e.message);
                 setStatus('ready');
@@ -704,8 +705,8 @@
             loading.classList.remove('show');
         }
         
-        // Text to Speech
-        async function speak(text) {
+        // Text to Speech (supports SSML for warmer voice)
+        async function speak(text, ssml = null) {
             try {
                 // Stop any currently playing audio
                 if (currentAudio) {
@@ -714,13 +715,18 @@
                 }
 
                 setStatus('speaking');
-                const data = await api('/api/text-to-speech', 'POST', { text, voice: 'nova' });
+                // Pass SSML if available for warmer voice with pauses
+                const payload = { text, voice: 'nova' };
+                if (ssml) {
+                    payload.ssml = ssml;
+                }
+                const data = await api('/api/text-to-speech', 'POST', payload);
                 currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
                 currentAudio.onended = () => setStatus('ready');
                 currentAudio.play();
             } catch (e) {
                 console.error('TTS error:', e);
-                // Fallback to browser TTS
+                // Fallback to browser TTS (doesn't support SSML)
                 if ('speechSynthesis' in window) {
                     // Stop any browser TTS as well
                     speechSynthesis.cancel();

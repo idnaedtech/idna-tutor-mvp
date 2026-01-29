@@ -150,6 +150,100 @@ INTENT_PHRASES = {
 }
 
 
+# SSML templates for warmer, more natural voice synthesis
+# Uses pauses (<break>) and Hinglish phrases for warmth
+PHRASES_SSML = {
+    TutorIntent.ASK_FRESH: [
+        "<speak>Achha beta,<break time='300ms'/> {question}<break time='400ms'/> Take your time.</speak>",
+        "<speak>Okay,<break time='250ms'/> here's your question.<break time='400ms'/> {question}</speak>",
+        "<speak>Let's try this one.<break time='300ms'/> {question}</speak>",
+        "<speak>Ready beta?<break time='300ms'/> {question}</speak>",
+    ],
+    TutorIntent.CONFIRM_CORRECT: [
+        "<speak>Bahut accha!<break time='300ms'/> That's exactly right, beta!</speak>",
+        "<speak>Perfect!<break time='250ms'/> Well done!<break time='300ms'/> You got it!</speak>",
+        "<speak>Excellent!<break time='300ms'/> I knew you could do it!</speak>",
+        "<speak>Shabash!<break time='300ms'/> That's correct!</speak>",
+    ],
+    TutorIntent.GUIDE_THINKING: [
+        "<speak>Hmm,<break time='400ms'/> not quite beta.<break time='300ms'/> {hint}<break time='400ms'/> Try again?</speak>",
+        "<speak>Close!<break time='300ms'/> Think about this:<break time='400ms'/> {hint}</speak>",
+        "<speak>Almost there.<break time='300ms'/> {hint}<break time='400ms'/> What do you think?</speak>",
+    ],
+    TutorIntent.NUDGE_CORRECTION: [
+        "<speak>Let me help more.<break time='400ms'/> {hint}<break time='400ms'/> Try once more, beta.</speak>",
+        "<speak>Okay beta,<break time='300ms'/> step by step.<break time='400ms'/> {hint}</speak>",
+        "<speak>Don't worry.<break time='300ms'/> {hint}<break time='400ms'/> One more try!</speak>",
+    ],
+    TutorIntent.EXPLAIN_ONCE: [
+        "<speak>Koi baat nahi beta,<break time='400ms'/> let me explain.<break time='500ms'/> {solution}<break time='400ms'/> Samajh aaya?</speak>",
+        "<speak>No problem.<break time='400ms'/> Watch this:<break time='500ms'/> {solution}<break time='400ms'/> Got it?</speak>",
+        "<speak>That's okay beta.<break time='400ms'/> Here's how:<break time='500ms'/> {solution}</speak>",
+    ],
+    TutorIntent.MOVE_ON: [
+        "<speak>Chalo,<break time='300ms'/> let's try the next one.</speak>",
+        "<speak>Okay,<break time='250ms'/> moving on.<break time='300ms'/> Next question!</speak>",
+        "<speak>Aage badhte hain.<break time='300ms'/> Next one!</speak>",
+    ],
+    TutorIntent.ENCOURAGE_RETRY: [
+        "<speak>Take your time beta.<break time='300ms'/> No rush.</speak>",
+        "<speak>Sochke batao.<break time='300ms'/> You've got this.</speak>",
+    ],
+    TutorIntent.SESSION_START: [
+        "<speak>Namaste beta!<break time='400ms'/> Ready to learn today?<break time='300ms'/> Let's go!</speak>",
+        "<speak>Hello!<break time='300ms'/> Great to see you.<break time='400ms'/> Let's practice together.</speak>",
+        "<speak>Aao beta!<break time='300ms'/> Time for some math practice.</speak>",
+    ],
+    TutorIntent.SESSION_END: [
+        "<speak>Bahut accha kiya aaj!<break time='400ms'/> Well done beta.<break time='300ms'/> See you next time!</speak>",
+        "<speak>Great work today!<break time='400ms'/> Keep practicing.<break time='300ms'/> Bye beta!</speak>",
+        "<speak>Shabash!<break time='300ms'/> You did well today.<break time='400ms'/> Phir milenge!</speak>",
+    ],
+}
+
+
+def generate_ssml_response(intent: TutorIntent, **kwargs) -> str:
+    """
+    Generate SSML response for given intent with placeholders filled.
+
+    Args:
+        intent: The TutorIntent to generate SSML for
+        **kwargs: Placeholder values (question, hint, solution, etc.)
+
+    Returns:
+        SSML string ready for Google Cloud TTS
+    """
+    templates = PHRASES_SSML.get(intent, ["<speak>{text}</speak>"])
+    template = random.choice(templates)
+
+    # Fill placeholders safely
+    try:
+        return template.format(**kwargs) if kwargs else template
+    except KeyError:
+        # If placeholder not provided, return template as-is
+        return template
+
+
+def strip_ssml(ssml: str) -> str:
+    """
+    Strip SSML tags to get plain text for fallback TTS.
+
+    Args:
+        ssml: SSML string
+
+    Returns:
+        Plain text without SSML tags
+    """
+    import re
+    # Remove <speak> tags
+    text = re.sub(r'</?speak>', '', ssml)
+    # Remove <break> tags
+    text = re.sub(r'<break[^>]*/?>', ' ', text)
+    # Clean up extra spaces
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
 class TutorVoice:
     """
     Generates natural tutor responses based on intent and context.
@@ -309,7 +403,7 @@ class TutorVoice:
         elif intent == TutorIntent.NUDGE_CORRECTION:
             hint = hint_2 or hint_1 or "Check your calculation carefully."
         
-        # Build the main response
+        # Build the main response (plain text)
         response = self.get_response(
             intent=intent,
             question=question,
@@ -318,16 +412,32 @@ class TutorVoice:
             correct_answer=correct_answer,
             attempt_number=attempt_number,
         )
-        
+
+        # Build SSML response for warmer voice
+        ssml_kwargs = {
+            "question": question or "",
+            "hint": hint or "",
+            "solution": solution or f"The answer is {correct_answer}.",
+            "correct_answer": correct_answer or "",
+        }
+        ssml_response = generate_ssml_response(intent, **ssml_kwargs)
+
         # Add transition if moving to next question
         should_move = is_correct or attempt_number >= 3
         if should_move and move_to_next:
             move_phrase = self.get_response(TutorIntent.MOVE_ON)
             response = f"{response} {move_phrase}"
-        
+            # Add SSML transition
+            ssml_move = generate_ssml_response(TutorIntent.MOVE_ON)
+            # Combine SSML (strip outer <speak> tags and re-wrap)
+            ssml_inner = ssml_response.replace("<speak>", "").replace("</speak>", "")
+            ssml_move_inner = ssml_move.replace("<speak>", "").replace("</speak>", "")
+            ssml_response = f"<speak>{ssml_inner}<break time='400ms'/> {ssml_move_inner}</speak>"
+
         return {
             "intent": intent.value,
             "response": response,
+            "ssml": ssml_response,
             "move_to_next": should_move,
             "show_answer": intent == TutorIntent.EXPLAIN_ONCE,
             "attempt_number": attempt_number,
@@ -384,9 +494,9 @@ def generate_tutor_response(
 # For testing
 if __name__ == "__main__":
     print("=== TutorIntent Layer Test ===\n")
-    
+
     tutor = TutorVoice()
-    
+
     # Test scenarios
     scenarios = [
         {"is_correct": True, "attempt": 1, "desc": "Correct on first try"},
@@ -394,7 +504,7 @@ if __name__ == "__main__":
         {"is_correct": False, "attempt": 2, "desc": "Wrong - Attempt 2"},
         {"is_correct": False, "attempt": 3, "desc": "Wrong - Attempt 3"},
     ]
-    
+
     for s in scenarios:
         result = generate_tutor_response(
             is_correct=s["is_correct"],
@@ -408,5 +518,15 @@ if __name__ == "__main__":
         print(f"📚 {s['desc']}")
         print(f"   Intent: {result['intent']}")
         print(f"   Response: {result['response']}")
+        print(f"   SSML: {result['ssml']}")
         print(f"   Move to next: {result['move_to_next']}")
         print()
+
+    # Test SSML generation directly
+    print("=== SSML Direct Test ===\n")
+    ssml = generate_ssml_response(
+        TutorIntent.ASK_FRESH,
+        question="What is 5 times 6?"
+    )
+    print(f"SSML: {ssml}")
+    print(f"Plain: {strip_ssml(ssml)}")
