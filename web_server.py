@@ -1104,6 +1104,24 @@ CLOSING_MESSAGES = [
     "Good effort! {score}/{total} correct. Practice makes perfect! 💪",
 ]
 
+# Messages for low confidence STT (PRD: Ask to repeat)
+LOW_CONFIDENCE_MESSAGES = [
+    "I didn't catch that clearly. Please say your answer again.",
+    "Sorry, I couldn't hear you properly. Can you repeat that?",
+    "I'm not sure I understood. Please say your answer once more.",
+    "Could you say that again? I want to make sure I got it right.",
+]
+
+# Messages for text fallback after multiple low confidence attempts
+TEXT_FALLBACK_MESSAGES = [
+    "I'm having trouble hearing you clearly. Try typing your answer instead!",
+    "Voice isn't working well right now. Please type your answer in the box below.",
+    "Let's switch to typing! Please type your answer.",
+]
+
+# Max low confidence attempts before suggesting text input
+MAX_LOW_CONFIDENCE_STREAK = 2
+
 
 def get_random_message(messages: list, **kwargs) -> str:
     msg = random.choice(messages)
@@ -2418,25 +2436,6 @@ def estimate_stt_confidence(text: str, segments: list = None) -> dict:
         "is_low_confidence": is_low,
         "reason": reason if is_low else None
     }
-
-
-# Messages for low confidence STT (PRD: Ask to repeat)
-LOW_CONFIDENCE_MESSAGES = [
-    "I didn't catch that clearly. Please say your answer again.",
-    "Sorry, I couldn't hear you properly. Can you repeat that?",
-    "I'm not sure I understood. Please say your answer once more.",
-    "Could you say that again? I want to make sure I got it right.",
-]
-
-# Messages for text fallback after multiple low confidence attempts
-TEXT_FALLBACK_MESSAGES = [
-    "I'm having trouble hearing you clearly. Try typing your answer instead!",
-    "Voice isn't working well right now. Please type your answer in the box below.",
-    "Let's switch to typing! Please type your answer.",
-]
-
-# Max low confidence attempts before suggesting text input
-MAX_LOW_CONFIDENCE_STREAK = 2
 
 
 @app.post("/api/speech-to-text")
