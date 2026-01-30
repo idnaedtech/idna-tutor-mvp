@@ -47,6 +47,18 @@ IDLE → CHAPTER_SELECTED → WAITING_ANSWER → SHOWING_HINT → SHOWING_ANSWER
 - `GUIDE_THINKING` - Hint 1 (Socratic nudge)
 - More intents in `tutor_intent.py`
 
+## Adaptive Difficulty (PRD)
+
+Questions are selected based on student performance:
+
+| Difficulty | Label | Trigger |
+|------------|-------|---------|
+| 1 | Easy | Start level, or after 2 wrong in a row |
+| 2 | Medium | After 3 correct in a row from Easy |
+| 3 | Hard | After 3 correct in a row from Medium |
+
+Session tracks: `current_difficulty`, `consecutive_correct`, `consecutive_wrong`
+
 ## Development Setup
 
 ```bash
@@ -77,6 +89,7 @@ python web_server.py
 
 ## API Endpoints
 
+### Session APIs
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/chapters` | GET | List available chapters |
@@ -84,10 +97,44 @@ python web_server.py
 | `/api/session/chapter` | POST | Select chapter |
 | `/api/session/question` | POST | Get next question |
 | `/api/session/answer` | POST | Submit answer |
-| `/api/session/end` | POST | End session |
+| `/api/session/end` | POST | End session with performance summary |
+| `/api/session/{id}/attempts` | GET | Get all attempts for session |
+| `/api/session/{id}/performance` | GET | Topic-level performance breakdown |
+
+### Parent Dashboard APIs
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/dashboard/{student_id}` | GET | Full dashboard data |
+| `/api/dashboard/{student_id}/voice-report` | POST | Dashboard with TTS audio |
+| `/api/dashboard/{student_id}/whatsapp-summary` | GET | WhatsApp-ready text summary |
+| `/api/dashboard/{student_id}/whatsapp-summary/voice` | POST | WhatsApp summary with TTS |
+| `/api/student/{student_id}/weak-topics` | GET | Topics needing practice |
+
+### Voice APIs
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/api/text-to-speech` | POST | Convert text to speech |
-| `/api/speech-to-text` | POST | Convert speech to text |
+| `/api/speech-to-text` | POST | Convert speech to text with confidence |
 | `/health` | GET | Health check |
+
+#### STT Response Format (with confidence)
+```json
+{
+  "text": "two by three",
+  "confidence": 0.85,
+  "is_low_confidence": false
+}
+```
+Low confidence response (< 0.5):
+```json
+{
+  "text": "um",
+  "confidence": 0.3,
+  "is_low_confidence": true,
+  "reason": "only_filler_words",
+  "retry_message": "I didn't catch that clearly. Please say your answer again."
+}
+```
 
 ## Code Patterns
 
@@ -129,6 +176,12 @@ railway variables set OPENAI_API_KEY=sk-...
 railway up
 ```
 
+### Adding Postgres (recommended for production)
+1. In Railway dashboard → your project → "Add Service" → "Database" → "Postgres"
+2. Click the Postgres service → "Variables" → copy `DATABASE_URL`
+3. In your app service → "Variables" → add `DATABASE_URL` (or link it)
+4. Redeploy - the app auto-detects Postgres and uses it
+
 ## Common Tasks
 
 ### Adding new questions
@@ -152,7 +205,44 @@ Modify the `SessionState` enum and transition logic in `web_server.py`.
 
 ## Database
 
-SQLite database (`idna.db`) stores sessions. Schema managed in `web_server.py`.
+Supports both **SQLite** (development) and **Postgres** (production).
+
+### Configuration
+| Environment Variable | Purpose |
+|---------------------|---------|
+| `DATABASE_URL` | Postgres connection string (takes precedence) |
+| `DATABASE_PATH` | SQLite file path (default: `idna.db`) |
+
+```bash
+# Development (SQLite - default)
+DATABASE_PATH=idna.db
+
+# Production (Postgres)
+DATABASE_URL=postgres://user:pass@host:5432/dbname
+```
+
+On Railway: Add Postgres plugin → `DATABASE_URL` is auto-set.
+
+### Tables
+| Table | Purpose |
+|-------|---------|
+| `sessions` | Active and completed tutoring sessions |
+| `students` | Student profiles (name, grade, age) |
+| `attempts` | Every answer attempt with topic, correctness, hints used |
+
+### Attempts Table (PRD-compliant)
+Tracks each answer submission for analytics:
+```sql
+attempts(id, session_id, question_id, topic_tag, attempt_no,
+         is_correct, hint_level_used, answer_text, difficulty, created_at)
+```
+
+### Analytics Endpoints
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/session/{id}/attempts` | All attempts for a session |
+| `GET /api/session/{id}/performance` | Topic-level performance breakdown |
+| `GET /api/student/{id}/weak-topics` | Identify topics below 60% accuracy |
 
 ## Performance Optimizations
 
@@ -176,6 +266,21 @@ The codebase includes several performance optimizations:
 - **STT temp file cleanup**: Always cleaned up in `finally` block
 - **Concurrent operations**: DB updates and GPT calls run concurrently where possible
 
+### Structured Logging (`web_server.py`, `tutor_intent.py`)
+JSON-formatted logs for production observability:
+
+```json
+{"timestamp":"2026-01-30T12:00:00Z","level":"INFO","message":"POST /api/session/answer","event":"api_request","endpoint":"/api/session/answer","method":"POST","status_code":200,"latency_ms":245.5,"session_id":"abc123"}
+```
+
+Log events include:
+- `api_request`: HTTP request completed (endpoint, method, status_code, latency_ms)
+- `stt_complete`: Whisper STT finished (latency_ms, audio_size_kb, confidence)
+- `tts_complete`: TTS finished (provider, latency_ms, text_length)
+- `gpt_complete`: GPT response generated (intent, model, latency_ms)
+- `gpt_cache_hit`: GPT response served from cache (cache_type)
+- `answer_evaluated`: Student answer processed (session_id, is_correct, attempt_number)
+
 ## Important Notes
 
 - Voice-first design: UI optimized for spoken interaction
@@ -183,7 +288,7 @@ The codebase includes several performance optimizations:
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
 
-## Current State (January 29, 2026)
+## Current State (January 30, 2026)
 
 ### Completed
 - Bug fixes (7 bugs fixed)
@@ -192,6 +297,44 @@ The codebase includes several performance optimizations:
 - UI: New dark mode chat interface (like Claude/ChatGPT)
 - Streaming text effect for tutor messages
 - LLM as brain: GPT generates natural, conversational responses
+- **Attempts tracking**: PRD-compliant `attempts` table records every answer
+  - Topic-level performance analytics
+  - Hint usage tracking
+  - Weak topic identification for parent summary
+  - Session end includes performance breakdown
+- **WhatsApp Parent Summary**: PRD-compliant formatted summaries
+  - `/api/dashboard/{id}/whatsapp-summary` - Text summary for sharing
+  - Includes: time, questions, accuracy, hints, weak topics, next step
+  - Bilingual support (English/Hindi)
+  - Voice version available with TTS
+- **Adaptive Question Selection**: PRD-compliant difficulty adjustment
+  - Questions selected based on current difficulty level (1-3)
+  - 3 correct in a row → increase difficulty
+  - 2 wrong in a row → decrease difficulty
+  - Session tracks: `current_difficulty`, `consecutive_correct`, `consecutive_wrong`
+  - API responses include difficulty info
+- **STT Confidence Check**: PRD-compliant voice quality handling
+  - `/api/speech-to-text` returns confidence score (0.0-1.0)
+  - Low confidence (< 0.5) triggers "please repeat" without counting as attempt
+  - Detects: empty audio, filler words, noise, very long responses
+  - `AnswerRequest` accepts `confidence` and `is_voice_input` fields
+- **Postgres Support**: Production-ready database
+  - Dual-database: SQLite (dev) / Postgres (prod)
+  - Auto-detects from `DATABASE_URL` environment variable
+  - Connection pooling for Postgres (2-10 connections)
+  - Same schema, automatic placeholder conversion (?→%s)
+- **Off-topic Handling**: PRD-compliant redirect behavior
+  - Detects: greetings, personal questions, weather, complaints, etc.
+  - Preserves math answers (numbers, fractions, spoken variants)
+  - Returns redirect message without counting as attempt
+  - Category-specific responses for complaints and greetings
+- **Structured Logging**: PRD-compliant observability
+  - JSON-formatted logs with `timestamp`, `level`, `message`, and context
+  - Request middleware logs: endpoint, method, status_code, latency_ms, session_id
+  - STT logging: Whisper latency, audio size, confidence, text length
+  - TTS logging: provider (Google/OpenAI), latency, text length, audio size
+  - GPT logging: intent, model, latency, response length, cache hits
+  - Answer evaluation logging: session_id, student_id, question_id, is_correct, attempt_number
 
 ### Pending - Voice Quality
 The TTS voice still needs work:

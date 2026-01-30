@@ -21,8 +21,31 @@ from typing import Optional, Dict, Any, List
 import random
 import os
 import time
+import json
+import logging
+from datetime import datetime
 from functools import lru_cache
 from openai import OpenAI
+
+
+# Simple structured logger for GPT calls
+_gpt_logger = logging.getLogger("idna.gpt")
+if not _gpt_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    _gpt_logger.addHandler(handler)
+    _gpt_logger.setLevel(logging.INFO)
+
+
+def _log_gpt_call(message: str, **context):
+    """Log GPT call with structured JSON."""
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "level": "INFO",
+        "message": message,
+        **{k: v for k, v in context.items() if v is not None}
+    }
+    _gpt_logger.info(json.dumps(log_entry))
 
 # Initialize OpenAI client for natural response generation
 _openai_client = None
@@ -187,6 +210,145 @@ def is_help_request(text: str) -> bool:
     """Check if student is asking for help rather than submitting an answer."""
     text_lower = text.lower().strip()
     return any(phrase in text_lower for phrase in HELP_REQUEST_PHRASES)
+
+
+# ============================================================
+# OFF-TOPIC DETECTION (PRD: Redirect unrelated speech)
+# ============================================================
+
+# Patterns that indicate off-topic conversation
+OFF_TOPIC_PATTERNS = {
+    # Greetings and small talk
+    "greetings": [
+        "hello", "hi there", "hey", "good morning", "good afternoon",
+        "good evening", "how are you", "what's up", "wassup", "howdy",
+        "namaste", "namaskar",
+    ],
+    # Personal questions about the tutor
+    "personal": [
+        "what's your name", "who are you", "are you a robot",
+        "are you human", "are you real", "where are you from",
+        "how old are you", "what do you look like", "are you ai",
+        "are you chatgpt", "are you claude",
+    ],
+    # Weather and environment
+    "weather": [
+        "what's the weather", "is it raining", "is it sunny",
+        "what's the temperature", "how's the weather",
+    ],
+    # Time and date
+    "time": [
+        "what time is it", "what's the time", "what day is it",
+        "what's the date", "what's today",
+    ],
+    # Entertainment and games
+    "entertainment": [
+        "tell me a joke", "sing a song", "play a game",
+        "tell me a story", "let's play", "can we play",
+        "i'm bored", "this is boring",
+    ],
+    # Food and breaks
+    "breaks": [
+        "i'm hungry", "i'm thirsty", "can i take a break",
+        "i want to stop", "i'm tired", "can we stop",
+    ],
+    # Complaints and refusals
+    "complaints": [
+        "i don't want to", "i don't like math", "math is hard",
+        "this is too hard", "i hate this", "i can't do this",
+        "i give up", "forget it", "never mind",
+    ],
+    # Random topics
+    "random": [
+        "do you like", "what's your favorite", "have you ever",
+        "can you tell me about", "what do you think about",
+        "do you know", "where is", "who is", "when is",
+    ],
+}
+
+# Redirect messages (PRD: Acknowledge briefly, redirect immediately)
+OFF_TOPIC_REDIRECTS = [
+    "Let's focus on the question. What's your answer?",
+    "We can chat later! Right now, tell me your answer.",
+    "Let's get back to math. What do you think the answer is?",
+    "Good question, but let's solve this first. Your answer?",
+    "I'd love to chat, but let's finish this question first!",
+    "Let's stay focused. What's your answer to this one?",
+]
+
+# Specific redirects for certain categories
+CATEGORY_REDIRECTS = {
+    "greetings": [
+        "Hi! Let's get back to the question. What's your answer?",
+        "Hello! Now, what do you think the answer is?",
+    ],
+    "complaints": [
+        "I know it's tough, but you can do this! Try answering.",
+        "Don't give up! Take a guess - what do you think?",
+        "It's okay to find it hard. Just try your best!",
+    ],
+    "breaks": [
+        "Almost done! Just answer this one, then we can take a break.",
+        "Let's finish this question first, then you can rest.",
+    ],
+}
+
+
+def detect_off_topic(text: str) -> dict:
+    """
+    Detect if student's response is off-topic (not an answer attempt).
+
+    PRD behavior:
+    - Acknowledge briefly
+    - Redirect immediately
+    - Example: "We'll talk later. Tell me the answer to this question."
+
+    Args:
+        text: The student's spoken/typed response
+
+    Returns:
+        dict with:
+        - is_off_topic: True if response is off-topic
+        - category: Which category of off-topic (greetings, personal, etc.)
+        - redirect_message: Message to redirect student back to question
+    """
+    text_lower = text.lower().strip()
+
+    # Skip if text looks like a number or math answer
+    # Numbers, fractions, simple math expressions are likely answers
+    import re
+    if re.match(r'^[\d\s\.\-\+\/\*xX=]+$', text_lower):
+        return {"is_off_topic": False, "category": None, "redirect_message": None}
+
+    # Check for number words that might be answers
+    number_words = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven",
+        "eight", "nine", "ten", "eleven", "twelve", "minus", "plus",
+        "by", "over", "divided", "times", "equals", "half", "third",
+        "fourth", "quarter", "fifth", "negative", "positive", "percent"
+    ]
+    words = text_lower.split()
+    if len(words) <= 4 and any(w in number_words for w in words):
+        return {"is_off_topic": False, "category": None, "redirect_message": None}
+
+    # Check each category of off-topic patterns
+    for category, patterns in OFF_TOPIC_PATTERNS.items():
+        for pattern in patterns:
+            if pattern in text_lower:
+                # Get category-specific redirect or general one
+                if category in CATEGORY_REDIRECTS:
+                    redirect = random.choice(CATEGORY_REDIRECTS[category])
+                else:
+                    redirect = random.choice(OFF_TOPIC_REDIRECTS)
+
+                return {
+                    "is_off_topic": True,
+                    "category": category,
+                    "redirect_message": redirect,
+                }
+
+    # Not off-topic
+    return {"is_off_topic": False, "category": None, "redirect_message": None}
 
 
 # Phrasing templates for each intent
@@ -634,6 +796,12 @@ def generate_gpt_response(
         if intent in intent_cache_map:
             cached = get_cached_response(intent_cache_map[intent])
             if cached:
+                _log_gpt_call(
+                    "GPT cache hit (pre-cached)",
+                    event="gpt_cache_hit",
+                    intent=intent.value,
+                    cache_type="pre_cached",
+                )
                 return cached
 
     # OPTIMIZATION: Check time-based cache for recent similar queries
@@ -641,6 +809,12 @@ def generate_gpt_response(
     if use_cache:
         cached_response = get_cached_gpt_response(cache_key)
         if cached_response:
+            _log_gpt_call(
+                "GPT cache hit (time-based)",
+                event="gpt_cache_hit",
+                intent=intent.value,
+                cache_type="time_based",
+            )
             return cached_response
 
     # Build the context for GPT - include student's answer for contextual responses
@@ -727,6 +901,8 @@ Walk them through it like you're sitting next to them:
         # More tokens for explanations
         max_tokens = 200 if intent in [TutorIntent.EXPLAIN_STEPS, TutorIntent.EXPLAIN_ONCE] else 100
 
+        # Time the GPT API call
+        start_time = time.perf_counter()
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -736,16 +912,36 @@ Walk them through it like you're sitting next to them:
             max_tokens=max_tokens,
             temperature=0.85,  # Balanced creativity and consistency
         )
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
         result = response.choices[0].message.content.strip()
         # Remove quotes if GPT wrapped the response
         result = result.strip('"').strip("'")
+
+        # Log GPT call completion
+        _log_gpt_call(
+            "GPT response generated",
+            event="gpt_complete",
+            intent=intent.value,
+            model="gpt-4o-mini",
+            latency_ms=latency_ms,
+            max_tokens=max_tokens,
+            response_length=len(result),
+            cached=False,
+        )
 
         # Cache the response for future use
         set_cached_gpt_response(cache_key, result)
 
         return result
     except Exception as e:
-        print(f"GPT response error: {e}")
+        _log_gpt_call(
+            f"GPT error: {str(e)}",
+            event="gpt_error",
+            intent=intent.value,
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
         # Fallback to template if GPT fails
         tutor = TutorVoice()
         return tutor.get_response(intent, question=question, hint=hint, solution=solution)
