@@ -733,9 +733,29 @@ def init_postgres_database():
             )
         """)
 
-        # Indexes
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_attempts_topic ON attempts(topic_tag, is_correct)")
+        # Add columns to existing attempts table if they don't exist (migration)
+        attempts_columns = [
+            ("topic_tag", "TEXT"),
+            ("raw_utterance", "TEXT"),
+            ("normalized_answer", "TEXT"),
+            ("asr_confidence", "REAL"),
+            ("input_mode", "TEXT DEFAULT 'text'"),
+            ("latency_ms", "INTEGER"),
+        ]
+        for col, col_type in attempts_columns:
+            try:
+                cursor.execute(f"ALTER TABLE attempts ADD COLUMN IF NOT EXISTS {col} {col_type}")
+            except Exception:
+                pass  # Column already exists or other error
+
+        conn.commit()  # Commit column additions before creating indexes
+
+        # Indexes (only create if columns exist)
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_attempts_topic ON attempts(topic_tag, is_correct)")
+        except Exception as e:
+            print(f"[DB] Index creation skipped: {e}")
 
         # Default student if none exists
         cursor.execute("SELECT COUNT(*) FROM students")
