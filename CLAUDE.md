@@ -155,11 +155,12 @@ client = OpenAI(
 ```
 
 ### TutorIntent voice principles
-- Max 2 sentences per turn (voice pacing)
+- MAX 1-2 SHORT sentences (15-25 words)
+- Pure English only (no Hindi - sounds odd with English TTS)
 - One idea per sentence
-- Warm, encouraging tone
-- Casual Hindi words allowed: "accha", "haan", "theek", "sahi"
+- Warm but brief - this is spoken aloud
 - Avoid robotic transitions: "Now," "Therefore," "Next,"
+- Token limits: 30 (confirm), 40 (hint), 60 (explain)
 
 ## Testing
 
@@ -405,27 +406,31 @@ Several fixes were needed for Railway deployment:
 
 ### Tutor Personality Refinements (January 30, 2026)
 
-**Problem**: Tutor felt robotic - just confirming/denying, not actually teaching
+**Problem**: Tutor felt robotic - responses too long, Hindi mixing sounded odd with English TTS
 
-**Solution**: Major overhaul of `TUTOR_PERSONA` and GPT prompts in `tutor_intent.py`:
+**Final Solution**: Strict short responses, pure English
 
-**New persona "Didi"** (friendly older sister tutor):
-- Uses real-world examples: pizzas, chocolates, money, cricket scores
-- Connects math to daily life - makes it relatable
-- Explains the "why" behind math, not just steps
-- Patient like a friendly older sibling
-- Uses occasional Hindi words: "haan", "dekho", "sahi", "accha"
+**Current TUTOR_PERSONA** (simplified):
+```python
+TUTOR_PERSONA = """You are a friendly math tutor for Class 8 students in India (CBSE/NCERT).
 
-**GPT Prompt improvements**:
-- Each intent now includes 2-3 example responses showing the teaching style
-- Prompts explicitly request real-world analogies (pizza slices, bank account, temperature)
-- Higher token limits (150 for hints, 250 for explanations)
-- Temperature 0.9 for more natural, varied responses
+CRITICAL RULES:
+1. MAX 1-2 SHORT SENTENCES. This is spoken aloud - long responses get cut off.
+2. NO Hindi words. Speak only in English.
+3. Be conversational, like chatting with a student sitting next to you.
+"""
+```
 
-**Example responses now expected**:
-- Correct: "Yes! You got it. See, when the denominators are the same, it's like adding slices of the same pizza - you just count the slices."
-- Wrong: "Not quite. Dekho, imagine a thermometer at -3 degrees. It warms up 2 degrees - where does it go?"
-- Explain: "Let me show you. Think of it like your bank account - if you owe 3 rupees and earn 2..."
+**Token Limits** (strictly enforced):
+- Confirmations: 30 tokens (was 100)
+- Hints: 40 tokens (was 150)
+- Explanations: 60 tokens (was 250)
+- Temperature: 0.7 (was 0.9) for consistency
+
+**Example responses**:
+- Correct: "Yes! Denominators match, add the tops." (7 words)
+- Hint: "Close! What's -3 plus 2?" (5 words)
+- Explain: "Answer is -1/7. Add -3 and 2." (8 words)
 
 ### UI Improvements (January 30, 2026)
 
@@ -466,13 +471,54 @@ async function startRecording() {
 }
 ```
 
+### Evaluator Fix: Embedded Answer Extraction (January 30, 2026)
+
+**Problem**: "I'm asking you, what? Two by three." marked WRONG (compared whole sentence to "2/3")
+
+**Solution**: New `extract_answer_candidate()` function in `evaluator.py`:
+```python
+def extract_answer_candidate(text: str, expected_type: str = "numeric") -> Optional[str]:
+    # Extracts fractions: -?\d+/\d+
+    # Extracts integers: -?\d+
+    # Extracts yes/no from sentences
+    # Takes LAST match ("I said 5 but now 7" → 7)
+```
+
+**Now handles**:
+- "I think it's 2/3" → extracts "2/3" ✓
+- "Yes, zero is rational" → extracts "yes" ✓
+- "umm let me think... minus 5" → extracts "-5" ✓
+
+### TTS Timing Fix (January 30, 2026)
+
+**Problem**: Audio cut off mid-sentence when moving to next question
+
+**Cause**: `setTimeout(2500ms)` didn't wait for actual audio to finish
+
+**Solution**: Use `audio.onended` callback instead:
+```javascript
+speak(message, ssml, {
+    onComplete: () => getNextQuestion()  // Waits for audio to END
+});
+```
+
+### Disaster Recovery Guide (January 30, 2026)
+
+Created `DISASTER_RECOVERY.md` with:
+- Git backup commands
+- New machine setup steps
+- Railway reconnection
+- Environment variable list
+- File overview
+
 ### Remaining Items
 | Priority | Item | Type | Notes |
 |----------|------|------|-------|
-| P1 | Hindi language support | Feature | User requested "at least Hindi to start with" |
-| P1 | Continue tutor personality refinement | UX | User said "long way to go" |
+| P1 | Hindi language support | Feature | Needs: Hindi TTS voice, Whisper hints, evaluator variants |
 | P2 | OpenAPI spec / JSON schemas | Documentation | |
 | P2 | Rate limiting per student | Infrastructure | |
+| P2 | Add `answer_type` to questions | Data | numeric/yes_no/mcq routing |
+| P2 | Instance ID in logs | Observability | For Railway multi-replica debugging |
 | P3 | Multi-subject evaluator scaffolding | Future feature | |
 | P3 | Tutor behavior test suite | Testing | |
 
@@ -481,3 +527,8 @@ async function startRecording() {
 |------|------|----------------|
 | Audio barge-in | UI | Mic click, chat click, Escape, Spacebar all stop TTS |
 | UI phase states | Enhancement | LISTENING/SPEAKING/PROCESSING with pulsing dot indicator |
+| Short responses | Tutor | 30-60 token limits, no Hindi mixing, pure English |
+| Embedded answer extraction | Evaluator | Extracts answer from within longer sentences |
+| TTS timing | UI | Waits for audio.onended before next question |
+| Disaster recovery guide | Docs | DISASTER_RECOVERY.md with full backup/restore steps |
+| NCERT alignment | Questions | Updated questions.py with full chapter list |
