@@ -294,6 +294,57 @@ CATEGORY_REDIRECTS = {
 }
 
 
+def _contains_math_answer(text: str) -> bool:
+    """
+    Check if text contains a valid math answer, even mixed with other words.
+
+    Examples that should return True:
+    - "11 by 12" → True
+    - "hi, it's 11 by 12" → True (contains fraction)
+    - "the answer is 5" → True
+    - "two thirds" → True
+    - "hello" → False
+    - "i don't know" → False
+
+    This prevents off-topic detection from rejecting valid answers
+    that happen to include greetings or other words.
+    """
+    import re
+    text_lower = text.lower().strip()
+
+    # Pattern 1: Contains digits (most common for math answers)
+    if re.search(r'\d', text_lower):
+        return True
+
+    # Pattern 2: Contains number words that could be an answer
+    answer_words = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven",
+        "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+        "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+        "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+        "hundred", "thousand", "million",
+        # Fractions
+        "half", "halves", "third", "thirds", "fourth", "fourths", "quarter",
+        "quarters", "fifth", "fifths", "sixth", "sixths", "seventh", "sevenths",
+        "eighth", "eighths", "ninth", "ninths", "tenth", "tenths",
+        # Math operations that indicate an answer
+        "minus", "negative", "plus", "positive", "percent",
+    ]
+
+    for word in answer_words:
+        if re.search(rf'\b{word}\b', text_lower):
+            return True
+
+    # Pattern 3: Contains fraction indicators with words around them
+    # "by", "over", "divided by" often indicate fractions
+    if re.search(r'\b(by|over|divided)\b', text_lower):
+        # Only count as answer if there are also numbers or number words nearby
+        if re.search(r'(\d|one|two|three|four|five|six|seven|eight|nine|ten)', text_lower):
+            return True
+
+    return False
+
+
 def detect_off_topic(text: str) -> dict:
     """
     Detect if student's response is off-topic (not an answer attempt).
@@ -302,6 +353,10 @@ def detect_off_topic(text: str) -> dict:
     - Acknowledge briefly
     - Redirect immediately
     - Example: "We'll talk later. Tell me the answer to this question."
+
+    IMPORTANT: If the text contains ANY valid math answer (even mixed with
+    greetings like "hi, it's 11 by 12"), we treat it as an answer attempt,
+    NOT off-topic. This prevents rejecting valid answers.
 
     Args:
         text: The student's spoken/typed response
@@ -314,21 +369,15 @@ def detect_off_topic(text: str) -> dict:
     """
     text_lower = text.lower().strip()
 
-    # Skip if text looks like a number or math answer
-    # Numbers, fractions, simple math expressions are likely answers
-    import re
-    if re.match(r'^[\d\s\.\-\+\/\*xX=]+$', text_lower):
+    # CRITICAL FIX: Check for valid math answer FIRST
+    # If text contains any math answer, it's NOT off-topic
+    # This handles cases like "hi, it's 11 by 12"
+    if _contains_math_answer(text_lower):
         return {"is_off_topic": False, "category": None, "redirect_message": None}
 
-    # Check for number words that might be answers
-    number_words = [
-        "zero", "one", "two", "three", "four", "five", "six", "seven",
-        "eight", "nine", "ten", "eleven", "twelve", "minus", "plus",
-        "by", "over", "divided", "times", "equals", "half", "third",
-        "fourth", "quarter", "fifth", "negative", "positive", "percent"
-    ]
-    words = text_lower.split()
-    if len(words) <= 4 and any(w in number_words for w in words):
+    # Legacy checks (kept for backwards compatibility but _contains_math_answer should catch these)
+    import re
+    if re.match(r'^[\d\s\.\-\+\/\*xX=]+$', text_lower):
         return {"is_off_topic": False, "category": None, "redirect_message": None}
 
     # Check each category of off-topic patterns

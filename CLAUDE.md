@@ -335,6 +335,19 @@ Log events include:
   - TTS logging: provider (Google/OpenAI), latency, text length, audio size
   - GPT logging: intent, model, latency, response length, cache hits
   - Answer evaluation logging: session_id, student_id, question_id, is_correct, attempt_number
+- **Robustness Fixes** (ChatGPT gap analysis):
+  - **Off-topic collision fix**: Checks for valid math answer BEFORE off-topic detection
+    - "hi, it's 11 by 12" now correctly treated as answer, not off-topic
+  - **Idempotency**: `/answer` endpoint supports `idempotency_key` to prevent duplicates
+    - Prevents double-submit on double-click or network retries
+    - 5-minute TTL cache with automatic cleanup
+  - **Session locking**: Per-session asyncio locks prevent race conditions
+    - Protects against overlapping `/question` and `/answer` requests
+  - **Expanded attempts table**: Added debug/audit fields
+    - `raw_utterance`, `normalized_answer`, `asr_confidence`, `input_mode`, `latency_ms`
+  - **Low confidence streak**: Tracks consecutive low-confidence STT results
+    - After 2 failures, suggests text input instead of voice
+    - `suggest_text_input` flag in response
 
 ### Pending - Voice Quality
 The TTS voice still needs work:

@@ -133,7 +133,7 @@ def log_latency(operation: str, latency_ms: float, **context):
     )
 
 from questions import ALL_CHAPTERS, CHAPTER_NAMES
-from evaluator import check_answer
+from evaluator import check_answer, normalize_spoken_input
 from tutor_intent import (
     generate_tutor_response,
     generate_gpt_response,
@@ -144,6 +144,111 @@ from tutor_intent import (
     TutorIntent,
     TutorVoice
 )
+
+
+# ============================================================
+# IDEMPOTENCY CACHE: Prevent duplicate answer submissions
+# ============================================================
+# Time-limited cache for idempotent answer submissions
+# Key: (session_id, question_id, idempotency_key)
+# Value: (response_dict, timestamp)
+# TTL: 5 minutes (enough for retries, not too long to waste memory)
+
+_idempotency_cache: Dict[str, tuple] = {}
+_IDEMPOTENCY_TTL_SECONDS = 300  # 5 minutes
+
+# Need to import Dict and Tuple for type hints
+from typing import Dict, Tuple
+
+
+def _get_idempotency_key(session_id: str, question_id: str, client_key: str) -> str:
+    """Generate cache key for idempotency check."""
+    return f"{session_id}:{question_id}:{client_key}"
+
+
+def _check_idempotency(session_id: str, question_id: str, client_key: Optional[str]) -> Optional[dict]:
+    """
+    Check if this request was already processed.
+
+    Returns cached response if found and not expired, None otherwise.
+    """
+    if not client_key:
+        return None
+
+    cache_key = _get_idempotency_key(session_id, question_id, client_key)
+    cached = _idempotency_cache.get(cache_key)
+
+    if cached:
+        response, timestamp = cached
+        # Check if expired
+        if time.time() - timestamp < _IDEMPOTENCY_TTL_SECONDS:
+            slog.info(
+                "Idempotency cache hit - returning cached response",
+                event="idempotency_hit",
+                session_id=session_id,
+                question_id=question_id,
+            )
+            return response
+        else:
+            # Expired, remove from cache
+            del _idempotency_cache[cache_key]
+
+    return None
+
+
+def _store_idempotency(session_id: str, question_id: str, client_key: Optional[str], response: dict):
+    """Store response in idempotency cache."""
+    if not client_key:
+        return
+
+    cache_key = _get_idempotency_key(session_id, question_id, client_key)
+    _idempotency_cache[cache_key] = (response, time.time())
+
+    # Cleanup old entries periodically (every 100 stores)
+    if len(_idempotency_cache) > 100:
+        _cleanup_idempotency_cache()
+
+
+def _cleanup_idempotency_cache():
+    """Remove expired entries from idempotency cache."""
+    current_time = time.time()
+    expired_keys = [
+        key for key, (_, timestamp) in _idempotency_cache.items()
+        if current_time - timestamp >= _IDEMPOTENCY_TTL_SECONDS
+    ]
+    for key in expired_keys:
+        del _idempotency_cache[key]
+
+
+# ============================================================
+# SESSION LOCKING: Prevent race conditions
+# ============================================================
+# Per-session locks to ensure only one request modifies session state at a time
+# Prevents issues like:
+# - /question requested while /answer is still processing
+# - Two /answer requests overlapping and corrupting state
+
+_session_locks: Dict[str, asyncio.Lock] = {}
+_session_locks_lock = asyncio.Lock()  # Lock for accessing the locks dict
+
+
+async def get_session_lock(session_id: str) -> asyncio.Lock:
+    """
+    Get or create an asyncio Lock for a specific session.
+
+    This ensures only one request per session can modify state at a time.
+    """
+    async with _session_locks_lock:
+        if session_id not in _session_locks:
+            _session_locks[session_id] = asyncio.Lock()
+        return _session_locks[session_id]
+
+
+async def cleanup_session_lock(session_id: str):
+    """Remove a session's lock when session ends (optional cleanup)."""
+    async with _session_locks_lock:
+        if session_id in _session_locks:
+            del _session_locks[session_id]
 
 
 # ============================================================
@@ -482,7 +587,8 @@ def init_sqlite_database():
             correct_answers INTEGER DEFAULT 0,
             current_difficulty INTEGER DEFAULT 1,
             consecutive_correct INTEGER DEFAULT 0,
-            consecutive_wrong INTEGER DEFAULT 0
+            consecutive_wrong INTEGER DEFAULT 0,
+            low_confidence_streak INTEGER DEFAULT 0
         )
     """)
 
@@ -490,7 +596,8 @@ def init_sqlite_database():
     for col, default in [
         ("current_difficulty", 1),
         ("consecutive_correct", 0),
-        ("consecutive_wrong", 0)
+        ("consecutive_wrong", 0),
+        ("low_confidence_streak", 0)
     ]:
         try:
             cursor.execute(f"ALTER TABLE sessions ADD COLUMN {col} INTEGER DEFAULT {default}")
@@ -519,6 +626,12 @@ def init_sqlite_database():
             answer_text TEXT,
             difficulty INTEGER DEFAULT 1,
             created_at TEXT NOT NULL,
+            -- Debug/audit fields (ChatGPT recommendation)
+            raw_utterance TEXT,
+            normalized_answer TEXT,
+            asr_confidence REAL,
+            input_mode TEXT DEFAULT 'text',
+            latency_ms INTEGER,
             FOREIGN KEY (session_id) REFERENCES sessions(id)
         )
     """)
@@ -563,7 +676,8 @@ def init_postgres_database():
                 correct_answers INTEGER DEFAULT 0,
                 current_difficulty INTEGER DEFAULT 1,
                 consecutive_correct INTEGER DEFAULT 0,
-                consecutive_wrong INTEGER DEFAULT 0
+                consecutive_wrong INTEGER DEFAULT 0,
+                low_confidence_streak INTEGER DEFAULT 0
             )
         """)
 
@@ -571,7 +685,8 @@ def init_postgres_database():
         for col, default in [
             ("current_difficulty", 1),
             ("consecutive_correct", 0),
-            ("consecutive_wrong", 0)
+            ("consecutive_wrong", 0),
+            ("low_confidence_streak", 0)
         ]:
             try:
                 cursor.execute(f"""
@@ -603,7 +718,13 @@ def init_postgres_database():
                 hint_level_used INTEGER DEFAULT 0,
                 answer_text TEXT,
                 difficulty INTEGER DEFAULT 1,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                -- Debug/audit fields (ChatGPT recommendation)
+                raw_utterance TEXT,
+                normalized_answer TEXT,
+                asr_confidence REAL,
+                input_mode TEXT DEFAULT 'text',
+                latency_ms INTEGER
             )
         """)
 
@@ -765,6 +886,12 @@ def record_attempt(
     answer_text: str,
     hint_level_used: int = 0,
     difficulty: int = 1,
+    # New debug/audit fields
+    raw_utterance: Optional[str] = None,
+    normalized_answer: Optional[str] = None,
+    asr_confidence: Optional[float] = None,
+    input_mode: str = "text",
+    latency_ms: Optional[int] = None,
 ) -> int:
     """
     Record a student's answer attempt to the database.
@@ -784,6 +911,11 @@ def record_attempt(
         answer_text: What the student actually answered
         hint_level_used: 0=no hint, 1=hint1, 2=hint2, 3=solution shown
         difficulty: Question difficulty (1-3)
+        raw_utterance: Original STT text before normalization
+        normalized_answer: Answer after evaluator normalization
+        asr_confidence: STT confidence score (0.0-1.0)
+        input_mode: 'voice' or 'text'
+        latency_ms: Total processing time in milliseconds
 
     Returns:
         The attempt ID
@@ -795,13 +927,15 @@ def record_attempt(
             cursor = conn.execute("""
                 INSERT INTO attempts
                 (session_id, question_id, topic_tag, attempt_no, is_correct,
-                 hint_level_used, answer_text, difficulty, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 hint_level_used, answer_text, difficulty, created_at,
+                 raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
             """, (
                 session_id, question_id, topic_tag, attempt_no,
                 1 if is_correct else 0, hint_level_used, answer_text,
-                difficulty, now
+                difficulty, now,
+                raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms
             ))
             result = cursor.fetchone()
             return result['id'] if result else 0
@@ -810,12 +944,14 @@ def record_attempt(
             cursor = conn.execute("""
                 INSERT INTO attempts
                 (session_id, question_id, topic_tag, attempt_no, is_correct,
-                 hint_level_used, answer_text, difficulty, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 hint_level_used, answer_text, difficulty, created_at,
+                 raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 session_id, question_id, topic_tag, attempt_no,
                 1 if is_correct else 0, hint_level_used, answer_text,
-                difficulty, now
+                difficulty, now,
+                raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms
             ))
             return cursor.lastrowid
 
@@ -983,6 +1119,8 @@ class AnswerRequest(BaseModel):
     # PRD: STT confidence fields (optional, from speech-to-text)
     confidence: Optional[float] = None  # 0.0 to 1.0
     is_voice_input: bool = False  # True if answer came from STT
+    # Idempotency: Prevent duplicate submissions on double-click/retry
+    idempotency_key: Optional[str] = None  # Client-generated unique key
 
 class TextToSpeechRequest(BaseModel):
     text: str
@@ -1503,6 +1641,7 @@ async def get_next_question(request: ChapterRequest):
     - Difficulty adjusts based on consecutive correct/wrong answers
     - Returns question with difficulty info
     """
+    # Quick validation (no lock needed)
     session = await async_get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1515,52 +1654,61 @@ async def get_next_question(request: ChapterRequest):
     if not questions:
         raise HTTPException(status_code=400, detail="No questions available")
 
-    asked = json.loads(session['questions_asked'] or '[]')
+    # SESSION LOCK: Acquire lock to prevent race conditions with /answer
+    session_lock = await get_session_lock(request.session_id)
+    async with session_lock:
+        # Re-fetch session inside lock (state may have changed)
+        session = await async_get_session(request.session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
 
-    # Get current difficulty level (default to 1 = Easy)
-    current_difficulty = session.get('current_difficulty') or 1
+        asked = json.loads(session['questions_asked'] or '[]')
 
-    # Use adaptive selection instead of random
-    question = select_adaptive_question(
-        chapter=chapter,
-        asked_ids=asked,
-        current_difficulty=current_difficulty,
-    )
+        # Get current difficulty level (default to 1 = Easy)
+        current_difficulty = session.get('current_difficulty') or 1
 
-    if not question:
-        # No more questions available
-        closing = generate_gpt_response(TutorIntent.SESSION_END)
+        # Use adaptive selection instead of random
+        question = select_adaptive_question(
+            chapter=chapter,
+            asked_ids=asked,
+            current_difficulty=current_difficulty,
+        )
 
-        return {
-            "completed": True,
-            "message": closing,
-            "score": session['score'],
-            "total": session['total']
-        }
+        if not question:
+            # No more questions available
+            closing = generate_gpt_response(TutorIntent.SESSION_END)
 
-    asked.append(question['id'])
-    question_number = (session['total'] or 0) + 1
-    question_difficulty = question.get('difficulty', 1)
+            return {
+                "completed": True,
+                "message": closing,
+                "score": session['score'],
+                "total": session['total']
+            }
 
-    # Run DB update and GPT call concurrently
-    update_task = async_update_session(
-        request.session_id,
-        current_question_id=question['id'],
-        questions_asked=asked,
-        total=question_number,
-        attempt_count=0,
-        state=SessionState.WAITING_ANSWER.value
-    )
+        asked.append(question['id'])
+        question_number = (session['total'] or 0) + 1
+        question_difficulty = question.get('difficulty', 1)
 
-    # Generate intro (may use cache for common patterns)
-    intro = generate_gpt_response(
-        intent=TutorIntent.ASK_FRESH,
-        question=question['text']
-    )
+        # Run DB update and GPT call concurrently
+        update_task = async_update_session(
+            request.session_id,
+            current_question_id=question['id'],
+            questions_asked=asked,
+            total=question_number,
+            attempt_count=0,
+            state=SessionState.WAITING_ANSWER.value
+        )
 
-    # Await the DB update
-    await update_task
+        # Generate intro (may use cache for common patterns)
+        intro = generate_gpt_response(
+            intent=TutorIntent.ASK_FRESH,
+            question=question['text']
+        )
 
+        # Await the DB update
+        await update_task
+
+    # Lock released - build response
     intro_ssml = wrap_in_ssml(intro)
 
     return {
@@ -1592,40 +1740,99 @@ async def submit_answer(request: AnswerRequest):
     - Wrong attempt 2 → NUDGE_CORRECTION (direct hint)
     - Wrong attempt 3 → EXPLAIN_ONCE (show solution) + MOVE_ON
     """
+    # Quick validation checks (no lock needed)
     session = await async_get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    current_state = SessionState(session['state'])
-    if current_state not in [SessionState.WAITING_ANSWER, SessionState.SHOWING_HINT]:
-        raise HTTPException(status_code=400, detail=f"Cannot submit answer in state: {current_state.value}")
 
     question = get_question_by_id(session['chapter'], session['current_question_id'])
     if not question:
         raise HTTPException(status_code=400, detail="No active question")
 
+    # IDEMPOTENCY: Check if this exact request was already processed (no lock needed)
+    # Prevents duplicate attempts on double-click or network retries
+    if request.idempotency_key:
+        cached_response = _check_idempotency(
+            session_id=request.session_id,
+            question_id=question['id'],
+            client_key=request.idempotency_key,
+        )
+        if cached_response:
+            return cached_response
+
+    # SESSION LOCK: Acquire lock to prevent race conditions
+    # This ensures only one request per session modifies state at a time
+    session_lock = await get_session_lock(request.session_id)
+    async with session_lock:
+        # Re-fetch session inside lock (state may have changed)
+        session = await async_get_session(request.session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        current_state = SessionState(session['state'])
+        if current_state not in [SessionState.WAITING_ANSWER, SessionState.SHOWING_HINT]:
+            raise HTTPException(status_code=400, detail=f"Cannot submit answer in state: {current_state.value}")
+
+        # All session modifications happen inside this lock
+        return await _process_answer(request, session, question)
+
+
+async def _process_answer(request: AnswerRequest, session: dict, question: dict):
+    """
+    Internal function to process answer (called with session lock held).
+    Extracted to keep submit_answer readable.
+    """
+    current_state = SessionState(session['state'])
+
     # PRD: Check STT confidence for voice input
     # If confidence is low, don't count as attempt - ask to repeat
+    # After MAX_LOW_CONFIDENCE_STREAK failures, suggest text input
     LOW_CONFIDENCE_THRESHOLD = 0.5
     if request.is_voice_input and request.confidence is not None:
         if request.confidence < LOW_CONFIDENCE_THRESHOLD:
-            # Don't count as attempt, ask to repeat
-            retry_message = random.choice(LOW_CONFIDENCE_MESSAGES)
+            # Track low confidence streak
+            current_streak = (session.get('low_confidence_streak') or 0) + 1
+
+            # Check if we should suggest text input
+            if current_streak >= MAX_LOW_CONFIDENCE_STREAK:
+                # Suggest text input after repeated failures
+                retry_message = random.choice(TEXT_FALLBACK_MESSAGES)
+                suggest_text = True
+                # Reset streak after suggesting text
+                new_streak = 0
+            else:
+                # Ask to repeat
+                retry_message = random.choice(LOW_CONFIDENCE_MESSAGES)
+                suggest_text = False
+                new_streak = current_streak
+
+            # Update streak in database
+            await async_update_session(
+                request.session_id,
+                low_confidence_streak=new_streak,
+            )
+
             retry_ssml = wrap_in_ssml(retry_message)
 
             return {
                 "correct": False,
                 "is_low_confidence": True,
+                "suggest_text_input": suggest_text,
                 "message": retry_message,
                 "ssml": retry_ssml,
-                "intent": "ask_repeat",
+                "intent": "ask_repeat" if not suggest_text else "suggest_text",
                 "score": session['score'],
                 "total": session['total'],
                 "attempt_count": session['attempt_count'] or 0,  # Don't increment
                 "move_to_next": False,
                 "state": current_state.value,
                 "confidence": request.confidence,
+                "low_confidence_streak": new_streak,
             }
+
+    # Reset low confidence streak on successful voice input or text input
+    if session.get('low_confidence_streak', 0) > 0:
+        await async_update_session(request.session_id, low_confidence_streak=0)
 
     # Check if student is asking for help (not submitting an answer)
     if is_help_request(request.answer):
@@ -1670,6 +1877,9 @@ async def submit_answer(request: AnswerRequest):
             "state": current_state.value
         }
 
+    # Normalize the answer for comparison and logging
+    normalized_answer = normalize_spoken_input(request.answer)
+
     # Use enhanced evaluator (handles spoken variants like "2 by 3" → "2/3")
     is_correct = check_answer(question['answer'], request.answer)
     attempt_count = (session['attempt_count'] or 0) + 1
@@ -1706,6 +1916,7 @@ async def submit_answer(request: AnswerRequest):
     hint_level = 0 if attempt_count == 1 else attempt_count - 1
 
     # Run attempt recording concurrently with other operations
+    # Include debug/audit fields for debugging and analytics
     record_task = async_record_attempt(
         session_id=request.session_id,
         question_id=question['id'],
@@ -1715,6 +1926,12 @@ async def submit_answer(request: AnswerRequest):
         answer_text=request.answer,
         hint_level_used=hint_level if not is_correct else 0,
         difficulty=question.get('difficulty', 1),
+        # Debug/audit fields
+        raw_utterance=request.answer,  # Original input
+        normalized_answer=normalized_answer,  # After normalization
+        asr_confidence=request.confidence,  # STT confidence if voice input
+        input_mode="voice" if request.is_voice_input else "text",
+        latency_ms=round(tutor_timer.elapsed_ms),
     )
 
     # Get current difficulty tracking values
@@ -1759,7 +1976,7 @@ async def submit_answer(request: AnswerRequest):
             else:
                 difficulty_message = f" Let's try some {get_difficulty_label(new_diff)} questions."
 
-        return {
+        response = {
             "correct": True,
             "message": tutor_result["response"] + difficulty_message,
             "ssml": tutor_result.get("ssml"),
@@ -1774,6 +1991,9 @@ async def submit_answer(request: AnswerRequest):
             "new_difficulty": new_diff,
             "difficulty_changed": difficulty_changed,
         }
+        # Store in idempotency cache
+        _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
+        return response
     else:
         # Wrong answer - use TutorIntent scaffolding
         if tutor_result["move_to_next"]:
@@ -1804,7 +2024,7 @@ async def submit_answer(request: AnswerRequest):
             if difficulty_changed and new_diff < current_difficulty:
                 difficulty_message = f" Let's try some {get_difficulty_label(new_diff)} questions next."
 
-            return {
+            response = {
                 "correct": False,
                 "show_answer": True,
                 "answer": question["answer"],
@@ -1822,6 +2042,9 @@ async def submit_answer(request: AnswerRequest):
                 "new_difficulty": new_diff,
                 "difficulty_changed": difficulty_changed,
             }
+            # Store in idempotency cache
+            _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
+            return response
         else:
             # Attempt 1 or 2: Show hint (no difficulty adjustment yet)
             await asyncio.gather(
@@ -1833,7 +2056,7 @@ async def submit_answer(request: AnswerRequest):
                 )
             )
 
-            return {
+            response = {
                 "correct": False,
                 "message": tutor_result["response"],
                 "ssml": tutor_result.get("ssml"),
@@ -1848,6 +2071,9 @@ async def submit_answer(request: AnswerRequest):
                 "state": SessionState.SHOWING_HINT.value,
                 "difficulty": current_difficulty,
             }
+            # Store in idempotency cache
+            _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
+            return response
 
 
 @app.post("/api/session/end")
@@ -2196,6 +2422,16 @@ LOW_CONFIDENCE_MESSAGES = [
     "I'm not sure I understood. Please say your answer once more.",
     "Could you say that again? I want to make sure I got it right.",
 ]
+
+# Messages for text fallback after multiple low confidence attempts
+TEXT_FALLBACK_MESSAGES = [
+    "I'm having trouble hearing you clearly. Try typing your answer instead!",
+    "Voice isn't working well right now. Please type your answer in the box below.",
+    "Let's switch to typing! Please type your answer.",
+]
+
+# Max low confidence attempts before suggesting text input
+MAX_LOW_CONFIDENCE_STREAK = 2
 
 
 @app.post("/api/speech-to-text")
