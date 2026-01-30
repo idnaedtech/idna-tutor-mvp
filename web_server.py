@@ -372,6 +372,34 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 
+# Global exception handler - ensure all errors return JSON
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler to ensure all errors return JSON responses.
+    This prevents the frontend from getting plain text "Internal Server Error".
+    """
+    # Log the error
+    slog.error(
+        f"Unhandled exception: {str(exc)}",
+        event="unhandled_exception",
+        endpoint=request.url.path,
+        method=request.method,
+        error_type=type(exc).__name__,
+        error_message=str(exc)
+    )
+
+    # Return JSON response
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "detail": str(exc) if os.getenv("DEBUG") else "An unexpected error occurred",
+            "type": type(exc).__name__
+        }
+    )
+
+
 # Mount static files
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")

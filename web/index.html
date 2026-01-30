@@ -596,7 +596,17 @@
             };
             if (body) options.body = JSON.stringify(body);
             const res = await fetch(endpoint, options);
-            if (!res.ok) throw new Error((await res.json()).detail || 'API Error');
+            if (!res.ok) {
+                // Handle both JSON and plain text error responses
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.detail || errorData.error || 'API Error');
+                } else {
+                    const errorText = await res.text();
+                    throw new Error(errorText || `Server Error (${res.status})`);
+                }
+            }
             return res.json();
         }
 
