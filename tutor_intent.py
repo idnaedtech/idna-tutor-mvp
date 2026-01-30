@@ -69,26 +69,26 @@ def get_openai_client():
 # Keep these natural and varied
 _cached_responses: Dict[str, List[str]] = {
     "session_start": [
-        "Hi. Ready to practice?",
-        "Let's get started.",
-        "Ready for some math?",
+        "Hi! Ready to practice some math?",
+        "Let's do some math together.",
+        "Ready to practice?",
     ],
     "session_end": [
-        "Good work today.",
-        "See you next time.",
-        "That's it for today.",
+        "Good work today. Keep practicing!",
+        "Nice effort today. See you next time.",
+        "That's it for today. You did well.",
     ],
     "move_on": [
-        "Next one.",
-        "Here's another.",
-        "Next question.",
+        "Let's try another one.",
+        "Here's the next one.",
+        "On to the next question.",
     ],
     "confirm_correct": [
-        "Yes.",
-        "That's right.",
-        "Correct.",
-        "Exactly.",
-        "Right.",
+        "Yes, that's right.",
+        "Correct!",
+        "Exactly right.",
+        "That's it.",
+        "You got it.",
     ],
 }
 
@@ -134,28 +134,28 @@ def set_cached_gpt_response(cache_key: str, response: str):
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You are a friendly math tutor having a real conversation. Talk naturally like I'm talking to you right now.
+TUTOR_PERSONA = """You are a math tutor helping a student learn. Be warm but natural - like a real teacher, not a script.
 
-HOW TO SOUND NATURAL:
-- Just say what you mean directly
-- No filler sounds like "Hmm", "Alright", "Okay so" - these sound robotic when spoken
-- No excited punctuation or forced enthusiasm
-- Talk like you're explaining to a friend sitting next to you
+AS A TUTOR:
+- Guide their thinking, don't just give answers
+- When they're right, confirm and briefly reinforce why
+- When they're wrong, help them understand what to think about
+- Make them feel they're learning, not being tested
 
-WHEN THEY GET IT RIGHT:
-- Just confirm simply: "Yes, that's right" or "Exactly" or "That's it"
-- Maybe one short follow-up if relevant
-- Don't over-celebrate - it feels fake
+YOUR VOICE:
+- Speak naturally, like explaining to someone next to you
+- Avoid filler words: "Hmm", "Alright", "Okay so" - they sound robotic
+- Be warm without being fake - no "Great job!" or "Awesome!"
+- Use simple, clear language
 
-WHEN THEY NEED HELP:
-- Give the hint directly, don't pad it with filler
-- Instead of "Hmm, let me think... try this" just say "Try thinking about..."
-- Be helpful, not performatively encouraging
+EXAMPLES OF GOOD RESPONSES:
+- Correct answer: "Yes, that's right. When the denominators are the same, you just add the numerators."
+- Wrong answer: "Not quite. Remember, with same denominators you add the top numbers. What's -3 plus 2?"
+- Hint: "Think about it this way - the denominator stays 7, you just need to add -3 and 2."
 
-KEEP IT SHORT:
-- One or two sentences max
-- Say what's needed, nothing more
-- This will be spoken aloud - brevity is key
+KEEP IT BRIEF:
+- Two sentences usually enough
+- This is spoken aloud, not written
 """
 
 
@@ -398,39 +398,41 @@ INTENT_PHRASES = {
     },
     
     TutorIntent.CONFIRM_CORRECT: {
-        "style": "simple",
-        "max_sentences": 1,
+        "style": "warm",
+        "max_sentences": 2,
         "templates": [
-            "Yes.",
-            "That's right.",
-            "Correct.",
-            "Exactly.",
+            "Yes, that's right.",
+            "Correct! You got it.",
+            "Exactly right.",
+            "That's it. Nice work.",
         ]
     },
 
     TutorIntent.GUIDE_THINKING: {
-        "style": "direct",
-        "max_sentences": 1,
+        "style": "helpful",
+        "max_sentences": 2,
         "templates": [
-            "Not quite. {hint}",
-            "{hint}",
+            "Not quite. {hint} Try again.",
+            "Close, but not exactly. {hint}",
+            "Think about this: {hint}",
         ]
     },
 
     TutorIntent.NUDGE_CORRECTION: {
-        "style": "direct",
-        "max_sentences": 1,
+        "style": "supportive",
+        "max_sentences": 2,
         "templates": [
-            "{hint}",
+            "Let me help. {hint}",
+            "Here's a bigger hint: {hint}",
         ]
     },
 
     TutorIntent.EXPLAIN_ONCE: {
-        "style": "clear",
-        "max_sentences": 2,
+        "style": "teaching",
+        "max_sentences": 3,
         "templates": [
-            "The answer is {solution}",
-            "{solution}",
+            "Here's how it works: {solution}",
+            "Let me explain. {solution}",
         ]
     },
 
@@ -438,68 +440,72 @@ INTENT_PHRASES = {
         "style": "brief",
         "max_sentences": 1,
         "templates": [
-            "Next question.",
+            "Let's try another one.",
+            "On to the next one.",
         ]
     },
 
     TutorIntent.ENCOURAGE_RETRY: {
-        "style": "simple",
+        "style": "supportive",
         "max_sentences": 1,
         "templates": [
-            "Take your time.",
+            "Take your time. Think it through.",
+            "No rush. You can do this.",
         ]
     },
 
     TutorIntent.SESSION_START: {
-        "style": "simple",
+        "style": "warm",
         "max_sentences": 1,
         "templates": [
-            "Hi. Ready to practice?",
+            "Hi! Ready to practice some math?",
+            "Let's do some math together.",
         ]
     },
 
     TutorIntent.SESSION_END: {
-        "style": "simple",
-        "max_sentences": 1,
+        "style": "encouraging",
+        "max_sentences": 2,
         "templates": [
-            "Good work today.",
+            "Good work today. Keep practicing!",
+            "Nice effort. See you next time.",
         ]
     },
 }
 
 
 # SSML templates for natural voice synthesis
-# Simple SSML - just natural pauses, no forced enthusiasm
+# SSML with natural pauses - tutor-like warmth
 PHRASES_SSML = {
     TutorIntent.ASK_FRESH: [
         "<speak>{question}</speak>",
     ],
     TutorIntent.CONFIRM_CORRECT: [
         "<speak>Yes, that's right.</speak>",
-        "<speak>Correct.</speak>",
-        "<speak>Exactly.</speak>",
+        "<speak>Correct.<break time='150ms'/> You got it.</speak>",
+        "<speak>Exactly right.</speak>",
     ],
     TutorIntent.GUIDE_THINKING: [
-        "<speak>Not quite.<break time='200ms'/> {hint}</speak>",
-        "<speak>{hint}</speak>",
+        "<speak>Not quite.<break time='200ms'/> {hint}<break time='150ms'/> Try again.</speak>",
+        "<speak>Close, but not exactly.<break time='200ms'/> {hint}</speak>",
     ],
     TutorIntent.NUDGE_CORRECTION: [
-        "<speak>{hint}</speak>",
+        "<speak>Let me help.<break time='200ms'/> {hint}</speak>",
     ],
     TutorIntent.EXPLAIN_ONCE: [
-        "<speak>The answer is {solution}</speak>",
+        "<speak>Here's how it works.<break time='200ms'/> {solution}</speak>",
     ],
     TutorIntent.MOVE_ON: [
-        "<speak>Next question.</speak>",
+        "<speak>Let's try another one.</speak>",
     ],
     TutorIntent.ENCOURAGE_RETRY: [
-        "<speak>Take your time.</speak>",
+        "<speak>Take your time.<break time='150ms'/> Think it through.</speak>",
     ],
     TutorIntent.SESSION_START: [
-        "<speak>Hi. Ready to practice?</speak>",
+        "<speak>Hi!<break time='150ms'/> Ready to practice some math?</speak>",
     ],
     TutorIntent.SESSION_END: [
-        "<speak>Good work today.</speak>",
+        "<speak>Good work today.<break time='150ms'/> Keep practicing!</speak>",
     ],
 }
 
@@ -801,44 +807,55 @@ def generate_gpt_response(
 
     # Build the context for GPT - include student's answer for contextual responses
     intent_instructions = {
-        TutorIntent.ASK_FRESH: f"""Present this question: {question}
+        TutorIntent.ASK_FRESH: f"""Ask the student this question: {question}
 
-Just state it directly. No "Alright" or "Okay" or "Here's one for you".
-Just ask the question naturally in one sentence.""",
+Just present the question naturally. Keep it simple.""",
 
-        TutorIntent.CONFIRM_CORRECT: f"""Student answered "{student_answer}" correctly.
+        TutorIntent.CONFIRM_CORRECT: f"""Student answered "{student_answer}" - correct!
 
-Confirm simply: "Yes" or "That's right" or "Correct". One or two words is fine.""",
+Confirm they're right and add one brief teaching point about why it works.
+Example: "Yes, that's right. Adding -3 and 2 gives -1, and the denominator stays the same."
+
+Two sentences max.""",
 
         TutorIntent.GUIDE_THINKING: f"""Student said "{student_answer}" but the answer is {correct_answer}.
 
-Give this hint directly: {hint}
+Use this hint to guide them: {hint}
 
-No "Hmm" or "Close!". Just give the hint in a helpful way. One sentence.""",
+Be helpful like a tutor - tell them what to think about, not just that they're wrong.
+Example: "Not quite. Remember, when denominators are the same, you just add the numerators. What's -3 plus 2?"
 
-        TutorIntent.NUDGE_CORRECTION: f"""Student said "{student_answer}", answer is {correct_answer}. They need more help.
+Two sentences.""",
 
-Give this stronger hint: {hint}
+        TutorIntent.NUDGE_CORRECTION: f"""Student still struggling. They said "{student_answer}", answer is {correct_answer}.
 
-Be direct and helpful. One or two sentences.""",
+Give more direct help using: {hint}
 
-        TutorIntent.EXPLAIN_ONCE: f"""Student couldn't get it. Answer was {correct_answer}.
+Guide them closer to the answer without giving it away.
+Example: "Let me help. -3 plus 2 equals -1. Now put that over the denominator."
 
-Explain briefly: {solution}
+Two sentences.""",
 
-Keep it simple and short. No "Don't worry" or "That's okay". Just explain.""",
+        TutorIntent.EXPLAIN_ONCE: f"""Student tried but couldn't get it. The answer was {correct_answer}.
 
-        TutorIntent.EXPLAIN_STEPS: f"""Explain this step by step:
+Explain the solution: {solution}
+
+Walk through it clearly so they understand. Be a teacher, not just revealing the answer.
+Example: "So here's how it works. With -3/7 plus 2/7, the 7 stays the same, and -3 plus 2 is -1. So the answer is -1/7."
+
+Three sentences max.""",
+
+        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help. Explain step by step:
 Question: {question}
 Solution: {solution}
 
-Be clear and direct. No filler words.""",
+Break it down clearly like a tutor would.""",
 
-        TutorIntent.MOVE_ON: "Next question.",
+        TutorIntent.MOVE_ON: "Say something brief to transition to the next question.",
 
-        TutorIntent.SESSION_START: "Hi. Ready to practice some math?",
+        TutorIntent.SESSION_START: "Greet the student warmly and ask if they're ready to practice.",
 
-        TutorIntent.SESSION_END: "Good work today. See you next time.",
+        TutorIntent.SESSION_END: "End the session warmly. Mention what they did well if relevant.",
     }
 
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
