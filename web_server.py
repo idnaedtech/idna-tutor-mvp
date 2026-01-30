@@ -286,6 +286,7 @@ async def lifespan(app: FastAPI):
     print("[STARTUP] TutorIntent layer: ENABLED")
     db_info = f"Postgres ({DATABASE_URL[:30]}...)" if USE_POSTGRES else f"SQLite ({DB_PATH})"
     print(f"[STARTUP] Database: {db_info}")
+    print(f"[STARTUP] PORT env: {os.environ.get('PORT', 'not set')}")
     print(f"[STARTUP] Static files: {'static/' if os.path.exists('static') else 'NOT FOUND'}")
 
     yield
