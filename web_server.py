@@ -693,6 +693,30 @@ def init_postgres_database():
     try:
         cursor = conn.cursor()
 
+        # Check if sessions table has wrong schema (missing 'id' column)
+        # This can happen if table was created with different schema
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'sessions' AND column_name = 'id'
+        """)
+        has_id_column = cursor.fetchone() is not None
+
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'sessions'
+            )
+        """)
+        table_exists = cursor.fetchone()[0]
+
+        if table_exists and not has_id_column:
+            print("[DB] Sessions table has wrong schema - recreating...")
+            # Drop dependent tables first (foreign key constraints)
+            cursor.execute("DROP TABLE IF EXISTS attempts CASCADE")
+            cursor.execute("DROP TABLE IF EXISTS sessions CASCADE")
+            conn.commit()
+            print("[DB] Old tables dropped, recreating with correct schema...")
+
         # Sessions table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
