@@ -65,31 +65,27 @@ def get_openai_client():
 # RESPONSE CACHING - Reduces GPT API calls significantly
 # ============================================================
 
-# Pre-generated responses for common intents (fallback when GPT unavailable)
-# Keep these natural and warm - like Didi talking
+# Pre-generated responses - VERY SHORT for voice
 _cached_responses: Dict[str, List[str]] = {
     "session_start": [
-        "Hi! Ready to practice some math together?",
-        "Hello! Let's do some math practice.",
-        "Hi there! Ready to learn?",
+        "Ready to practice?",
+        "Let's start!",
     ],
     "session_end": [
-        "Good practice today! Keep it up.",
-        "Well done today. See you next time!",
-        "Nice work! Keep practicing.",
+        "Good work today!",
+        "Nice practice!",
     ],
     "move_on": [
-        "Let's try another one.",
-        "Ready for the next?",
-        "Here comes another one.",
-        "Okay, next question.",
+        "Next one.",
+        "Let's try another.",
+        "Next question.",
     ],
     "confirm_correct": [
-        "Yes! You got it.",
-        "Sahi hai! That's correct.",
-        "Exactly right!",
-        "Yes, that's it!",
-        "Correct! Well done.",
+        "Yes!",
+        "Correct!",
+        "That's right!",
+        "Exactly!",
+        "You got it!",
     ],
 }
 
@@ -135,50 +131,35 @@ def set_cached_gpt_response(cache_key: str, response: str):
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You are Didi, a warm and experienced math tutor helping CBSE Class 8 students in India with their NCERT syllabus.
+TUTOR_PERSONA = """You are a friendly math tutor for Class 8 students in India (CBSE/NCERT).
 
-SYLLABUS CONTEXT (NCERT Class 8):
-- Chapter 1: Rational Numbers - operations, properties, number line
-- Chapter 2: Linear Equations - one variable, word problems
-- Chapter 3: Understanding Quadrilaterals - types, properties, angles
-- Chapter 5: Squares and Square Roots - patterns, Pythagorean triplets
-- Chapter 6: Cubes and Cube Roots - patterns, estimation
-- Chapter 7: Comparing Quantities - percentages, profit/loss, interest
-- Use NCERT terminology and methods they learn in school
+CRITICAL RULES:
+1. MAX 1-2 SHORT SENTENCES. This is spoken aloud - long responses get cut off.
+2. NO Hindi words. Speak only in English.
+3. Be conversational, like chatting with a student sitting next to you.
 
-HOW YOU TEACH:
-- Use real-world Indian examples: sharing rotis, cricket scores, pocket money, train distances
-- Connect to their NCERT textbook - "Remember what we learned about..."
-- Explain step by step - one idea at a time
-- Build confidence - small wins matter
-- When stuck, use familiar objects: laddoos, chapatis, rupees
+WHEN CORRECT:
+- One sentence confirmation + why it works
+- Example: "Yes! When denominators match, you just add the top numbers."
 
-YOUR PERSONALITY:
-- Warm like a friendly older sister (Didi)
-- Patient - never make them feel stupid
-- Encouraging but genuine - not fake excitement
-- Like you're helping them with homework at home
+WHEN WRONG:
+- One guiding question or hint
+- Example: "Close! What's -3 plus 2?"
 
-INDIAN CONTEXT EXAMPLES:
-- Fractions: "If you have 8 laddoos and give 3 to your friend..."
-- Negative numbers: "Like temperature in Shimla going below zero..."
-- Percentages: "If something costs ₹100 and has 20% discount..."
-- Ratios: "Sharing pocket money between you and your brother..."
+WHEN EXPLAINING:
+- Maximum 2 sentences. Keep it simple.
+- Example: "The 7 stays the same. You just add -3 and 2, which gives -1."
 
-YOUR VOICE:
-- Speak naturally, like sitting next to them
-- Use Hindi words: "haan", "dekho", "sahi", "accha", "bilkul"
-- Keep it brief - 2-3 sentences max (spoken aloud)
-- No robotic phrases like "Hmm", "Alright then"
+NEVER:
+- Write paragraphs
+- Use filler words (Hmm, Alright, So, Now)
+- Sound like a textbook
+- Mix Hindi words
 
-WHEN THEY'RE RIGHT:
-- Confirm and reinforce the NCERT concept
-- "Sahi hai! See, when denominators are same, we just add numerators - exactly like your textbook shows."
-
-WHEN THEY'RE WRONG:
-- Never say "wrong" - guide gently
-- Use a familiar example
-- "Not quite. Dekho, if you have ₹3 and spend ₹5, you owe ₹2, right? That's how negative numbers work."
+ALWAYS:
+- Sound like a real person talking
+- Keep responses SHORT (under 20 words ideally)
+- One idea per response
 """
 
 
@@ -828,75 +809,68 @@ def generate_gpt_response(
             )
             return cached_response
 
-    # Build the context for GPT - include student's answer for contextual responses
+    # Build the context for GPT - STRICT length limits for voice
     intent_instructions = {
-        TutorIntent.ASK_FRESH: f"""Present this question to the student: {question}
+        TutorIntent.ASK_FRESH: f"""Say this question: {question}
 
-Make it feel like a friendly challenge, not a test. You can add a tiny bit of context if it helps.
-Keep it to 1-2 sentences. This is spoken aloud.""",
+ONE sentence only. Just ask the question naturally.""",
 
-        TutorIntent.CONFIRM_CORRECT: f"""Student answered "{student_answer}" and it's CORRECT! The answer is {correct_answer}.
+        TutorIntent.CONFIRM_CORRECT: f"""Student said "{student_answer}" - CORRECT!
 
-Celebrate genuinely (not fake) and teach them WHY it works using a real-world connection.
+Reply in ONE short sentence. Confirm and briefly say why.
+Examples:
+- "Yes! Denominators match, so you just add the tops."
+- "Exactly right!"
+- "That's it! -3 plus 2 is -1."
 
-Good examples:
-- "Yes! You got it. See, when the denominators are the same, it's like adding slices of the same pizza - you just count the slices."
-- "Sahi hai! The bottom number stays 7, you just added the top numbers. Like counting items in the same group."
-- "Exactly right. Think of it like money - if you owe 3 rupees and earn 2, you still owe 1."
+MAX 15 WORDS. No paragraphs.""",
 
-2 sentences. Be warm and reinforce the concept.""",
+        TutorIntent.GUIDE_THINKING: f"""Student said "{student_answer}" but answer is {correct_answer}.
 
-        TutorIntent.GUIDE_THINKING: f"""Student said "{student_answer}" but the answer is {correct_answer}.
+Give ONE short hint as a question. Guide them to think.
+Examples:
+- "Close! What's -3 plus 2?"
+- "Almost. The bottom stays 7, what about the top?"
+- "Think again - if you owe 3 and get 2, what do you owe?"
 
-Hint to use: {hint}
+MAX 15 WORDS. ONE sentence only.""",
 
-DON'T just say "wrong" - use a real-world example to help them SEE the mistake.
-
-Good examples:
-- "Hmm, not quite. Dekho, imagine you have a pizza cut into 7 pieces. If you take away 3 and add 2, how many do you have?"
-- "Close! Think of it like your bank account - if you're at -3 and someone gives you 2 rupees, where are you now?"
-- "Almost there. When the denominators match, it's like counting the same type of thing. What's -3 plus 2?"
-
-Guide their thinking with an analogy. 2 sentences.""",
-
-        TutorIntent.NUDGE_CORRECTION: f"""Student is struggling. They said "{student_answer}", but the answer is {correct_answer}.
-
+        TutorIntent.NUDGE_CORRECTION: f"""Student stuck. Said "{student_answer}", answer is {correct_answer}.
 Hint: {hint}
 
-Give more direct help with a concrete example. Walk them through part of it.
+Give a direct mini-hint. ONE sentence.
+Examples:
+- "-3 plus 2 equals -1. Put that over 7."
+- "Add the tops: -3 + 2 = ?"
+- "The denominator stays same. Just add -3 and 2."
 
-Good examples:
-- "Let me help. If you have -3 chocolates (meaning you owe 3) and get 2, you still owe 1, right? So -3 + 2 = -1. Now put that over 7."
-- "Accha, let's break it down. The 7 at the bottom stays same - that's your pizza slices. Now just add -3 and 2 on top. What do you get?"
-- "Think of a thermometer. You're at -3 degrees, it warms up 2 degrees. Where are you now? That's your numerator."
+MAX 20 WORDS.""",
 
-Be like a patient older sibling. 2-3 sentences.""",
-
-        TutorIntent.EXPLAIN_ONCE: f"""Student tried 3 times but couldn't get {correct_answer}.
-
+        TutorIntent.EXPLAIN_ONCE: f"""Student couldn't get it. Answer was {correct_answer}.
 Solution: {solution}
 
-Now TEACH them - don't just reveal the answer. Use a real-world example so they truly understand.
+Explain simply in 2 SHORT sentences max.
+Example:
+- "The answer is -1/7. When denominators match, add the numerators: -3 + 2 = -1."
 
-Good example:
-"Let me show you how this works. Imagine a thermometer at -3 degrees. It gets 2 degrees warmer - where does it go? To -1 degrees, right? Same thing here: -3/7 + 2/7 means the 7 stays (that's our scale), and -3 + 2 = -1. So the answer is -1/7. Does that make sense?"
+MAX 25 WORDS total. No long explanations.""",
 
-Make them feel they learned something, not that they failed. 3-4 sentences.""",
-
-        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help understanding this:
-Question: {question}
+        TutorIntent.EXPLAIN_STEPS: f"""Question: {question}
 Solution: {solution}
 
-Explain step by step using real-world examples. Be like a patient tutor sitting next to them.
-- Use analogies (pizza slices, money, temperature)
-- Break complex steps into simple ones
-- Check understanding as you go""",
+Give 2-3 very short steps. One line each.
+Example:
+- "Step 1: Denominators are same, so keep 7."
+- "Step 2: Add tops: -3 + 2 = -1."
+- "Answer: -1/7."
 
-        TutorIntent.MOVE_ON: "Brief, encouraging transition to the next question. Like 'Let's try another one.' or 'Ready for the next?'",
+MAX 30 WORDS total.""",
 
-        TutorIntent.SESSION_START: "Greet warmly like a friendly tutor. Maybe 'Hi! Ready to practice some math together?' Keep it simple and welcoming.",
+        TutorIntent.MOVE_ON: "Say: 'Next one.' or 'Let's try another.' MAX 5 WORDS.",
 
-        TutorIntent.SESSION_END: "End warmly. Acknowledge their effort genuinely. Keep it brief - 'Good practice today. Keep it up!'",
+        TutorIntent.SESSION_START: "Say: 'Ready to practice?' MAX 5 WORDS.",
+
+        TutorIntent.SESSION_END: "Say: 'Good work today!' MAX 5 WORDS.",
     }
 
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
@@ -904,13 +878,13 @@ Explain step by step using real-world examples. Be like a patient tutor sitting 
     try:
         client = get_openai_client()
 
-        # More tokens for teaching moments - don't be stingy with explanations
+        # STRICT token limits - short responses for voice
         if intent in [TutorIntent.EXPLAIN_STEPS, TutorIntent.EXPLAIN_ONCE]:
-            max_tokens = 250  # Full explanations need room
+            max_tokens = 60  # 2-3 short sentences max
         elif intent in [TutorIntent.GUIDE_THINKING, TutorIntent.NUDGE_CORRECTION]:
-            max_tokens = 150  # Hints with examples need more space
+            max_tokens = 40  # One sentence hint
         else:
-            max_tokens = 100  # Simple confirmations
+            max_tokens = 30  # Very short confirmations
 
         # Time the GPT API call
         start_time = time.perf_counter()
@@ -921,7 +895,7 @@ Explain step by step using real-world examples. Be like a patient tutor sitting 
                 {"role": "user", "content": user_prompt}
             ],
             max_tokens=max_tokens,
-            temperature=0.9,  # Higher creativity for natural, varied responses
+            temperature=0.7,  # Lower temperature for more consistent short responses
         )
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
@@ -1139,10 +1113,8 @@ def generate_tutor_response(
     # Determine if we should move to next question
     should_move = is_correct or attempt_number >= 3
 
-    # OPTIMIZATION: Use cached move_on response instead of GPT call
-    if should_move:
-        move_response = get_cached_response("move_on")
-        response = f"{response} {move_response}"
+    # DON'T append move_on phrase - keep response short for TTS
+    # UI handles transition separately
 
     # Wrap in SSML for natural voice pauses
     ssml = wrap_in_ssml(response)
