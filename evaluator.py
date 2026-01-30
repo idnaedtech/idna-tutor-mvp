@@ -72,10 +72,14 @@ def normalize_spoken_input(text: str) -> str:
     """
     if not text:
         return ""
-    
+
     # Convert to lowercase and strip
     normalized = text.lower().strip()
-    
+
+    # Normalize different minus/dash characters to standard hyphen-minus
+    # This handles en-dash (–), em-dash (—), minus sign (−), etc.
+    normalized = re.sub(r"[–—−‐]", "-", normalized)
+
     # Remove common filler phrases
     fillers = [
         r"^the answer is\s*",
@@ -109,12 +113,18 @@ def normalize_spoken_input(text: str) -> str:
     compound_pattern = r"\b(\d0)\s+(\d)\b"
     normalized = re.sub(compound_pattern, lambda m: str(int(m.group(1)) + int(m.group(2))), normalized)
     
+    # Handle negative spoken fractions FIRST (before by/over conversion)
+    # "minus 1 by 7" → "-1/7", "negative 2 over 3" → "-2/3"
+    normalized = re.sub(r"\b(minus|negative)\s*(\d+)\s*by\s*(\d+)", r"-\2/\3", normalized)
+    normalized = re.sub(r"\b(minus|negative)\s*(\d+)\s*over\s*(\d+)", r"-\2/\3", normalized)
+    normalized = re.sub(r"\b(minus|negative)\s*(\d+)\s*divided\s*by\s*(\d+)", r"-\2/\3", normalized)
+
     # Handle "X by Y" → "X/Y" (spoken fractions)
     normalized = re.sub(r"(\d+)\s*by\s*(\d+)", r"\1/\2", normalized)
-    
+
     # Handle "X over Y" → "X/Y"
     normalized = re.sub(r"(\d+)\s*over\s*(\d+)", r"\1/\2", normalized)
-    
+
     # Handle "X divided by Y" → "X/Y"
     normalized = re.sub(r"(\d+)\s*divided\s*by\s*(\d+)", r"\1/\2", normalized)
     
@@ -137,9 +147,12 @@ def normalize_spoken_input(text: str) -> str:
     normalized = re.sub(r"\ba\s*quarter\b", "1/4", normalized)
     normalized = re.sub(r"\ban?\s*eighth\b", "1/8", normalized)
     
-    # Handle "minus X" or "negative X" → "-X"
+    # Handle "minus X" or "negative X" → "-X" (including fractions)
+    # First handle fractions: "minus 1/7" → "-1/7"
+    normalized = re.sub(r"\b(minus|negative)\s*(\d+/\d+)", r"-\2", normalized)
+    # Then handle simple numbers: "minus 5" → "-5"
     normalized = re.sub(r"\b(minus|negative)\s*(\d+)", r"-\2", normalized)
-    
+
     # Handle decimal points: "point 5" → ".5", "2 point 5" → "2.5"
     normalized = re.sub(r"(\d*)\s*point\s*(\d+)", r"\1.\2", normalized)
     normalized = re.sub(r"^\.(\d+)", r"0.\1", normalized)  # ".5" → "0.5"
