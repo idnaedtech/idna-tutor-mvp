@@ -366,30 +366,118 @@ Several fixes were needed for Railway deployment:
    - Fixes "unexpected token I" error in frontend when server returns 500
    - Logs full error details (type, message, endpoint) for debugging
 6. **Frontend error handling**: API function now handles both JSON and plain text errors
+7. **Postgres schema mismatch**: Sessions table had wrong schema from previous deployment
+   - Auto-detects missing `id` column and drops/recreates tables
+   - Prevents "column does not exist" errors
 
-### Pending - Voice Quality
-The TTS voice still needs work:
-- Currently using: `en-IN-Wavenet-A` (Indian English)
-- Issue: Sounds nasal and not fluent
-- Settings: speaking_rate=1.05, pitch=0.0, no effects profile
-- Need to experiment with:
-  - Different Google TTS voices
-  - Alternative TTS providers (ElevenLabs, Azure, etc.)
-  - SSML adjustments
+### Voice & STT Improvements (January 30, 2026)
 
-### Recent UI Changes
-- Dark theme with chat bubbles
-- Input bar at bottom with voice button
-- Typing indicator animation
-- Message streaming effect
-- Color-coded feedback (green/red/yellow borders)
+**Whisper STT Integration** (replaced browser speech recognition):
+- Browser's Web Speech API was terrible at math ("- 5 - 8 / 5" instead of "-5/8")
+- Now uses MediaRecorder API to capture audio as webm
+- Sends audio to `/api/speech-to-text` which uses OpenAI Whisper
+- Much more accurate transcription of fractions and negative numbers
+- Frontend in `web/index.html`:
+  ```javascript
+  // MediaRecorder captures audio
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+  mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      await sendToWhisper(audioBlob);
+  };
+  ```
 
-### Remaining Items (from ChatGPT Gap Analysis)
-| Priority | Item | Type |
-|----------|------|------|
-| P1 | Audio barge-in (stop tutor when student speaks) | UI implementation |
-| P2 | OpenAPI spec / JSON schemas | Documentation |
-| P2 | Rate limiting per student | Infrastructure |
-| P3 | UI phase states (LISTENING/SPEAKING/IDLE) | Enhancement |
-| P3 | Multi-subject evaluator scaffolding | Future feature |
-| P3 | Tutor behavior test suite | Testing |
+**Voice Quality** (TTS improvements):
+- Changed from `en-IN-Wavenet-A` to `en-US-Neural2-F`
+- Adjusted settings: `speaking_rate=0.95, pitch=-1.0, volume_gain_db=3.0`
+- Voice is now warmer and less nasal/robotic
+
+**Answer Evaluation** (`evaluator.py`):
+- Fixed negative fraction handling: "minus 1 by 7" → "-1/7"
+- Added unicode minus normalization (en-dash, em-dash, minus sign → hyphen)
+- Fixed space handling: "- 5 / 8" → "-5/8", "+ 5 / 8" → "5/8"
+- Patterns for negative spoken fractions run BEFORE fraction conversion:
+  ```python
+  normalized = re.sub(r"\b(minus|negative)\s*(\d+)\s*by\s*(\d+)", r"-\2/\3", normalized)
+  normalized = re.sub(r"\b(minus|negative)\s*(\d+)\s*over\s*(\d+)", r"-\2/\3", normalized)
+  ```
+
+### Tutor Personality Refinements (January 30, 2026)
+
+**Problem**: Tutor felt robotic - just confirming/denying, not actually teaching
+
+**Solution**: Major overhaul of `TUTOR_PERSONA` and GPT prompts in `tutor_intent.py`:
+
+**New persona "Didi"** (friendly older sister tutor):
+- Uses real-world examples: pizzas, chocolates, money, cricket scores
+- Connects math to daily life - makes it relatable
+- Explains the "why" behind math, not just steps
+- Patient like a friendly older sibling
+- Uses occasional Hindi words: "haan", "dekho", "sahi", "accha"
+
+**GPT Prompt improvements**:
+- Each intent now includes 2-3 example responses showing the teaching style
+- Prompts explicitly request real-world analogies (pizza slices, bank account, temperature)
+- Higher token limits (150 for hints, 250 for explanations)
+- Temperature 0.9 for more natural, varied responses
+
+**Example responses now expected**:
+- Correct: "Yes! You got it. See, when the denominators are the same, it's like adding slices of the same pizza - you just count the slices."
+- Wrong: "Not quite. Dekho, imagine a thermometer at -3 degrees. It warms up 2 degrees - where does it go?"
+- Explain: "Let me show you. Think of it like your bank account - if you owe 3 rupees and earn 2..."
+
+### UI Improvements (January 30, 2026)
+
+- **Auto-scroll fixed**: Used `requestAnimationFrame` to ensure DOM is updated before scrolling
+- **Auto-listen**: Microphone automatically activates after TTS ends (300ms delay)
+- **Cleaner interface**: Removed chat bubbles, avatars, and labels for distraction-free learning
+- **Streamlined message display**: Direct text without decorations
+
+### Audio Barge-in & Phase Indicators (January 30, 2026)
+
+**Barge-in** (stop tutor when student wants to speak):
+- Clicking mic button immediately stops TTS audio
+- Auto-listen after TTS uses `startRecording()` which calls `stopTTS()`
+- Clicking chat area while tutor speaks = stop TTS + start listening
+- Pressing Escape key stops TTS and any ongoing recording
+- Pressing Spacebar (when not in input) toggles voice recording
+
+**UI Phase Indicators** (`status-bar` with pulsing dot):
+- **IDLE**: No indicator
+- **LISTENING**: Red pulsing dot + "Listening..."
+- **SPEAKING**: Purple pulsing dot + "Speaking..."
+- **PROCESSING**: Yellow pulsing dot + "Processing..."
+
+```javascript
+// Barge-in: Stop TTS immediately
+function stopTTS() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+    }
+}
+
+// Called at start of recording
+async function startRecording() {
+    stopTTS(); // BARGE-IN
+    // ... start MediaRecorder
+}
+```
+
+### Remaining Items
+| Priority | Item | Type | Notes |
+|----------|------|------|-------|
+| P1 | Hindi language support | Feature | User requested "at least Hindi to start with" |
+| P1 | Continue tutor personality refinement | UX | User said "long way to go" |
+| P2 | OpenAPI spec / JSON schemas | Documentation | |
+| P2 | Rate limiting per student | Infrastructure | |
+| P3 | Multi-subject evaluator scaffolding | Future feature | |
+| P3 | Tutor behavior test suite | Testing | |
+
+### Completed Items (January 30, 2026)
+| Item | Type | Implementation |
+|------|------|----------------|
+| Audio barge-in | UI | Mic click, chat click, Escape, Spacebar all stop TTS |
+| UI phase states | Enhancement | LISTENING/SPEAKING/PROCESSING with pulsing dot indicator |

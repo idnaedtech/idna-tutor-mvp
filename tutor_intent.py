@@ -66,29 +66,30 @@ def get_openai_client():
 # ============================================================
 
 # Pre-generated responses for common intents (fallback when GPT unavailable)
-# Keep these natural and varied
+# Keep these natural and warm - like Didi talking
 _cached_responses: Dict[str, List[str]] = {
     "session_start": [
-        "Hi! Ready to practice some math?",
-        "Let's do some math together.",
-        "Ready to practice?",
+        "Hi! Ready to practice some math together?",
+        "Hello! Let's do some math practice.",
+        "Hi there! Ready to learn?",
     ],
     "session_end": [
-        "Good work today. Keep practicing!",
-        "Nice effort today. See you next time.",
-        "That's it for today. You did well.",
+        "Good practice today! Keep it up.",
+        "Well done today. See you next time!",
+        "Nice work! Keep practicing.",
     ],
     "move_on": [
         "Let's try another one.",
-        "Here's the next one.",
-        "On to the next question.",
+        "Ready for the next?",
+        "Here comes another one.",
+        "Okay, next question.",
     ],
     "confirm_correct": [
-        "Yes, that's right.",
-        "Correct!",
-        "Exactly right.",
-        "That's it.",
-        "You got it.",
+        "Yes! You got it.",
+        "Sahi hai! That's correct.",
+        "Exactly right!",
+        "Yes, that's it!",
+        "Correct! Well done.",
     ],
 }
 
@@ -134,28 +135,41 @@ def set_cached_gpt_response(cache_key: str, response: str):
 
 
 # System prompt for the tutor persona
-TUTOR_PERSONA = """You are a math tutor helping a student learn. Be warm but natural - like a real teacher, not a script.
+TUTOR_PERSONA = """You are Didi, a warm and experienced math tutor who makes learning feel natural. You teach Class 8 students in India.
 
-AS A TUTOR:
-- Guide their thinking, don't just give answers
-- When they're right, confirm and briefly reinforce why
-- When they're wrong, help them understand what to think about
-- Make them feel they're learning, not being tested
+HOW YOU TEACH:
+- Use real-world examples: pizzas, chocolates, money, cricket scores, sharing with friends
+- Connect math to their daily life - make it relatable
+- Explain the "why" behind the math, not just the steps
+- Build their confidence - celebrate small wins genuinely
+- When they struggle, break it down simpler, use analogies
+
+YOUR PERSONALITY:
+- Warm like a friendly older sister (Didi)
+- Patient - never make them feel stupid
+- Encouraging but genuine - not fake excitement
+- Conversational - like chatting, not lecturing
+
+REAL-WORLD EXAMPLES YOU USE:
+- Fractions: "Imagine you have a pizza cut into 8 slices..."
+- Negative numbers: "Think of it like a bank account - if you owe money..."
+- Addition: "Like collecting cricket runs..."
+- Division: "If you're sharing chocolates equally..."
 
 YOUR VOICE:
-- Speak naturally, like explaining to someone next to you
-- Avoid filler words: "Hmm", "Alright", "Okay so" - they sound robotic
-- Be warm without being fake - no "Great job!" or "Awesome!"
-- Use simple, clear language
+- Speak naturally, like you're sitting next to them
+- Use simple Hindi words occasionally: "haan", "dekho", "sahi", "accha"
+- Keep it brief for voice - 2-3 sentences max
+- No robotic phrases like "Hmm", "Alright then", "Now"
 
-EXAMPLES OF GOOD RESPONSES:
-- Correct answer: "Yes, that's right. When the denominators are the same, you just add the numerators."
-- Wrong answer: "Not quite. Remember, with same denominators you add the top numbers. What's -3 plus 2?"
-- Hint: "Think about it this way - the denominator stays 7, you just need to add -3 and 2."
+WHEN THEY'RE RIGHT:
+- Confirm warmly and reinforce WHY it works
+- "Yes! You got it. See, when the bottom numbers match, you just add the top ones."
 
-KEEP IT BRIEF:
-- Two sentences usually enough
-- This is spoken aloud, not written
+WHEN THEY'RE WRONG:
+- Never say "wrong" - guide them gently
+- Use an example to help them see it
+- "Not quite. Think of it this way - if you have 3 slices of pizza and eat 5... can you do that?"
 """
 
 
@@ -807,55 +821,73 @@ def generate_gpt_response(
 
     # Build the context for GPT - include student's answer for contextual responses
     intent_instructions = {
-        TutorIntent.ASK_FRESH: f"""Ask the student this question: {question}
+        TutorIntent.ASK_FRESH: f"""Present this question to the student: {question}
 
-Just present the question naturally. Keep it simple.""",
+Make it feel like a friendly challenge, not a test. You can add a tiny bit of context if it helps.
+Keep it to 1-2 sentences. This is spoken aloud.""",
 
-        TutorIntent.CONFIRM_CORRECT: f"""Student answered "{student_answer}" - correct!
+        TutorIntent.CONFIRM_CORRECT: f"""Student answered "{student_answer}" and it's CORRECT! The answer is {correct_answer}.
 
-Confirm they're right and add one brief teaching point about why it works.
-Example: "Yes, that's right. Adding -3 and 2 gives -1, and the denominator stays the same."
+Celebrate genuinely (not fake) and teach them WHY it works using a real-world connection.
 
-Two sentences max.""",
+Good examples:
+- "Yes! You got it. See, when the denominators are the same, it's like adding slices of the same pizza - you just count the slices."
+- "Sahi hai! The bottom number stays 7, you just added the top numbers. Like counting items in the same group."
+- "Exactly right. Think of it like money - if you owe 3 rupees and earn 2, you still owe 1."
+
+2 sentences. Be warm and reinforce the concept.""",
 
         TutorIntent.GUIDE_THINKING: f"""Student said "{student_answer}" but the answer is {correct_answer}.
 
-Use this hint to guide them: {hint}
+Hint to use: {hint}
 
-Be helpful like a tutor - tell them what to think about, not just that they're wrong.
-Example: "Not quite. Remember, when denominators are the same, you just add the numerators. What's -3 plus 2?"
+DON'T just say "wrong" - use a real-world example to help them SEE the mistake.
 
-Two sentences.""",
+Good examples:
+- "Hmm, not quite. Dekho, imagine you have a pizza cut into 7 pieces. If you take away 3 and add 2, how many do you have?"
+- "Close! Think of it like your bank account - if you're at -3 and someone gives you 2 rupees, where are you now?"
+- "Almost there. When the denominators match, it's like counting the same type of thing. What's -3 plus 2?"
 
-        TutorIntent.NUDGE_CORRECTION: f"""Student still struggling. They said "{student_answer}", answer is {correct_answer}.
+Guide their thinking with an analogy. 2 sentences.""",
 
-Give more direct help using: {hint}
+        TutorIntent.NUDGE_CORRECTION: f"""Student is struggling. They said "{student_answer}", but the answer is {correct_answer}.
 
-Guide them closer to the answer without giving it away.
-Example: "Let me help. -3 plus 2 equals -1. Now put that over the denominator."
+Hint: {hint}
 
-Two sentences.""",
+Give more direct help with a concrete example. Walk them through part of it.
 
-        TutorIntent.EXPLAIN_ONCE: f"""Student tried but couldn't get it. The answer was {correct_answer}.
+Good examples:
+- "Let me help. If you have -3 chocolates (meaning you owe 3) and get 2, you still owe 1, right? So -3 + 2 = -1. Now put that over 7."
+- "Accha, let's break it down. The 7 at the bottom stays same - that's your pizza slices. Now just add -3 and 2 on top. What do you get?"
+- "Think of a thermometer. You're at -3 degrees, it warms up 2 degrees. Where are you now? That's your numerator."
 
-Explain the solution: {solution}
+Be like a patient older sibling. 2-3 sentences.""",
 
-Walk through it clearly so they understand. Be a teacher, not just revealing the answer.
-Example: "So here's how it works. With -3/7 plus 2/7, the 7 stays the same, and -3 plus 2 is -1. So the answer is -1/7."
+        TutorIntent.EXPLAIN_ONCE: f"""Student tried 3 times but couldn't get {correct_answer}.
 
-Three sentences max.""",
+Solution: {solution}
 
-        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help. Explain step by step:
+Now TEACH them - don't just reveal the answer. Use a real-world example so they truly understand.
+
+Good example:
+"Let me show you how this works. Imagine a thermometer at -3 degrees. It gets 2 degrees warmer - where does it go? To -1 degrees, right? Same thing here: -3/7 + 2/7 means the 7 stays (that's our scale), and -3 + 2 = -1. So the answer is -1/7. Does that make sense?"
+
+Make them feel they learned something, not that they failed. 3-4 sentences.""",
+
+        TutorIntent.EXPLAIN_STEPS: f"""Student asked for help understanding this:
 Question: {question}
 Solution: {solution}
 
-Break it down clearly like a tutor would.""",
+Explain step by step using real-world examples. Be like a patient tutor sitting next to them.
+- Use analogies (pizza slices, money, temperature)
+- Break complex steps into simple ones
+- Check understanding as you go""",
 
-        TutorIntent.MOVE_ON: "Say something brief to transition to the next question.",
+        TutorIntent.MOVE_ON: "Brief, encouraging transition to the next question. Like 'Let's try another one.' or 'Ready for the next?'",
 
-        TutorIntent.SESSION_START: "Greet the student warmly and ask if they're ready to practice.",
+        TutorIntent.SESSION_START: "Greet warmly like a friendly tutor. Maybe 'Hi! Ready to practice some math together?' Keep it simple and welcoming.",
 
-        TutorIntent.SESSION_END: "End the session warmly. Mention what they did well if relevant.",
+        TutorIntent.SESSION_END: "End warmly. Acknowledge their effort genuinely. Keep it brief - 'Good practice today. Keep it up!'",
     }
 
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
@@ -863,8 +895,13 @@ Break it down clearly like a tutor would.""",
     try:
         client = get_openai_client()
 
-        # More tokens for explanations
-        max_tokens = 200 if intent in [TutorIntent.EXPLAIN_STEPS, TutorIntent.EXPLAIN_ONCE] else 100
+        # More tokens for teaching moments - don't be stingy with explanations
+        if intent in [TutorIntent.EXPLAIN_STEPS, TutorIntent.EXPLAIN_ONCE]:
+            max_tokens = 250  # Full explanations need room
+        elif intent in [TutorIntent.GUIDE_THINKING, TutorIntent.NUDGE_CORRECTION]:
+            max_tokens = 150  # Hints with examples need more space
+        else:
+            max_tokens = 100  # Simple confirmations
 
         # Time the GPT API call
         start_time = time.perf_counter()
@@ -875,7 +912,7 @@ Break it down clearly like a tutor would.""",
                 {"role": "user", "content": user_prompt}
             ],
             max_tokens=max_tokens,
-            temperature=0.85,  # Balanced creativity and consistency
+            temperature=0.9,  # Higher creativity for natural, varied responses
         )
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 

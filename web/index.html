@@ -402,6 +402,10 @@
             padding: 8px;
             font-size: 13px;
             color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .status-bar.listening {
@@ -410,6 +414,38 @@
 
         .status-bar.speaking {
             color: var(--accent);
+        }
+
+        .status-bar.processing {
+            color: var(--warning);
+        }
+
+        /* Phase indicator dot */
+        .phase-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .status-bar.listening .phase-dot {
+            background: var(--error);
+            animation: pulseDot 1s infinite;
+        }
+
+        .status-bar.speaking .phase-dot {
+            background: var(--accent);
+            animation: pulseDot 1.5s infinite;
+        }
+
+        .status-bar.processing .phase-dot {
+            background: var(--warning);
+            animation: pulseDot 0.5s infinite;
+        }
+
+        @keyframes pulseDot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
         }
 
         /* End Session Button */
@@ -518,7 +554,7 @@
             <span></span><span></span><span></span>
         </div>
 
-        <div class="status-bar" id="status-bar"></div>
+        <div class="status-bar" id="status-bar"><span class="phase-dot"></span><span class="status-text"></span></div>
     </div>
 
     <!-- Input Area -->
@@ -646,9 +682,28 @@
             typingIndicator.classList.remove('show');
         }
 
+        // UI Phase states: idle, listening, speaking, processing
+        let currentPhase = 'idle';
+
         function setStatus(text, type = '') {
-            statusBar.textContent = text;
+            const statusText = statusBar.querySelector('.status-text');
+            if (statusText) {
+                statusText.textContent = text;
+            }
             statusBar.className = 'status-bar ' + type;
+            currentPhase = type || 'idle';
+        }
+
+        // Barge-in: Stop TTS immediately when student wants to speak
+        function stopTTS() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
+                if (currentPhase === 'speaking') {
+                    setStatus('', '');
+                }
+            }
         }
 
         function updateScore(score, total) {
@@ -780,10 +835,7 @@
 
         // Text to Speech - with optional auto-listen after speaking
         async function speak(text, ssml = null, autoListen = false) {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio = null;
-            }
+            stopTTS(); // Stop any currently playing audio
 
             try {
                 setStatus('Speaking...', 'speaking');
@@ -793,14 +845,11 @@
                 currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
                 currentAudio.onended = () => {
                     setStatus('');
+                    currentAudio = null;
                     // Auto-start listening after tutor finishes speaking
-                    if (autoListen && recognition && !isListening) {
+                    if (autoListen && !isListening) {
                         setTimeout(() => {
-                            try {
-                                recognition.start();
-                            } catch (e) {
-                                console.log('Could not auto-start mic:', e);
-                            }
+                            startRecording();
                         }, 300); // Small delay for natural pause
                     }
                 };
@@ -816,6 +865,9 @@
         let audioChunks = [];
 
         async function startRecording() {
+            // BARGE-IN: Stop tutor audio immediately when student starts speaking
+            stopTTS();
+
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(stream);
@@ -838,7 +890,7 @@
                 isListening = true;
                 voiceBtn.classList.add('recording');
                 voiceBtn.textContent = '⏹';
-                setStatus('Listening... (click to stop)', 'listening');
+                setStatus('Listening...', 'listening');
             } catch (e) {
                 console.error('Microphone error:', e);
                 setStatus('Microphone not available', 'error');
@@ -851,7 +903,7 @@
                 isListening = false;
                 voiceBtn.classList.remove('recording');
                 voiceBtn.textContent = '🎤';
-                setStatus('Processing...', 'speaking');
+                setStatus('Processing...', 'processing');
             }
         }
 
@@ -886,16 +938,11 @@
         }
 
         function toggleVoice() {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio = null;
-            }
-
             if (isListening) {
                 stopRecording();
             } else {
                 answerInput.value = '';
-                startRecording();
+                startRecording(); // This calls stopTTS() for barge-in
             }
         }
 
@@ -917,6 +964,29 @@
 
         answerInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') submitAnswer();
+        });
+
+        // Keyboard shortcuts for barge-in
+        document.addEventListener('keydown', (e) => {
+            // Escape stops TTS (barge-in)
+            if (e.key === 'Escape') {
+                stopTTS();
+                if (isListening) stopRecording();
+            }
+            // Spacebar in chat area starts/stops voice (when not typing)
+            if (e.key === ' ' && document.activeElement !== answerInput) {
+                e.preventDefault();
+                toggleVoice();
+            }
+        });
+
+        // Clicking messages area while tutor speaks = barge-in + start listening
+        messages.addEventListener('click', () => {
+            if (currentPhase === 'speaking' && currentAudio) {
+                stopTTS();
+                // Optionally start listening after barge-in
+                setTimeout(() => startRecording(), 100);
+            }
         });
 
         // Init
