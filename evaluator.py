@@ -266,49 +266,141 @@ def normalize_answer(answer: str) -> str:
     return normalized
 
 
+def extract_answer_candidate(text: str, expected_type: str = "numeric") -> Optional[str]:
+    """
+    Extract the answer candidate from a longer sentence.
+
+    This handles cases like:
+    - "I think it's 2/3" → extracts "2/3"
+    - "The answer is -5" → extracts "-5"
+    - "Two by three is my answer" → extracts "2/3" (after normalization)
+
+    Args:
+        text: The normalized student response
+        expected_type: "numeric", "fraction", "yes_no", "mcq"
+
+    Returns:
+        The extracted answer candidate, or None if not found
+    """
+    # Patterns to extract (ordered by specificity)
+    patterns = [
+        # Fractions (including negative): -5/8, 2/3
+        r'-?\d+\s*/\s*\d+',
+        # Decimals: -3.5, 0.5
+        r'-?\d+\.\d+',
+        # Integers (including negative): -5, 42
+        r'-?\d+',
+        # Percentages: 50%
+        r'\d+%',
+    ]
+
+    # For yes/no questions
+    if expected_type == "yes_no":
+        text_lower = text.lower()
+        # Check for yes variants
+        if re.search(r'\byes\b|\bhaan\b|\bcorrect\b|\bright\b|\btrue\b', text_lower):
+            return "yes"
+        # Check for no variants
+        if re.search(r'\bno\b|\bnahi\b|\bwrong\b|\bfalse\b|\bnot\b', text_lower):
+            return "no"
+        return None
+
+    # For MCQ questions
+    if expected_type == "mcq":
+        match = re.search(r'\b([a-dA-D])\b', text)
+        if match:
+            return match.group(1).lower()
+        return None
+
+    # For numeric/fraction - try each pattern
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            # Return the last match (usually the actual answer)
+            # "I said 5 but now I think 7" → return "7"
+            return matches[-1].replace(" ", "")
+
+    return None
+
+
 def check_answer(correct_answer: str, student_answer: str) -> bool:
     """
     Check if student's answer matches the correct answer.
-    
+
     This is the main evaluation function called by the API.
-    
+
+    IMPORTANT: This now extracts the answer from within longer sentences.
+    "I'm asking, what? Two by three." will correctly match "2/3".
+
     Args:
         correct_answer: The expected correct answer
         student_answer: The student's submitted answer (may be spoken)
-        
+
     Returns:
         True if the answer is correct, False otherwise
     """
     if not student_answer:
         return False
-    
+
     # First, normalize spoken input
     normalized_student = normalize_spoken_input(student_answer)
-    
-    # Normalize both answers
+
+    # Normalize the correct answer
     norm_correct = normalize_answer(correct_answer)
+
+    # Determine expected answer type
+    expected_type = "numeric"
+    if correct_answer.lower() in ["yes", "no"]:
+        expected_type = "yes_no"
+    elif correct_answer.lower() in ["a", "b", "c", "d"]:
+        expected_type = "mcq"
+    elif "/" in correct_answer:
+        expected_type = "fraction"
+
+    # STEP 1: Try direct comparison with full normalized text
     norm_student = normalize_answer(normalized_student)
-    
-    # Direct comparison
     if norm_correct == norm_student:
         return True
-    
-    # Check fraction equivalence
+
+    # STEP 2: Extract answer candidate from within the sentence
+    candidate = extract_answer_candidate(normalized_student, expected_type)
+    if candidate:
+        norm_candidate = normalize_answer(candidate)
+
+        # Direct match with candidate
+        if norm_correct == norm_candidate:
+            return True
+
+        # Fraction equivalence with candidate
+        if "/" in norm_correct or "/" in norm_candidate:
+            if fractions_equivalent(norm_correct, norm_candidate):
+                return True
+
+        # Numeric equivalence with candidate
+        try:
+            correct_val = eval_safe(norm_correct)
+            candidate_val = eval_safe(norm_candidate)
+            if correct_val is not None and candidate_val is not None:
+                if abs(correct_val - candidate_val) < 0.0001:
+                    return True
+        except Exception:
+            pass
+
+    # STEP 3: Fallback - check fraction equivalence with full text
     if "/" in correct_answer or "/" in normalized_student:
         if fractions_equivalent(norm_correct, norm_student):
             return True
-    
-    # Check numeric equivalence (handles "0.5" vs "1/2")
+
+    # STEP 4: Fallback - numeric equivalence with full text
     try:
         correct_val = eval_safe(norm_correct)
         student_val = eval_safe(norm_student)
         if correct_val is not None and student_val is not None:
-            # Allow small floating point tolerance
             if abs(correct_val - student_val) < 0.0001:
                 return True
     except Exception:
         pass
-    
+
     return False
 
 
@@ -370,8 +462,15 @@ if __name__ == "__main__":
         ("11/12", "eleven twelfths", True),
         ("7", "the answer is 7", True),
         ("3", "5", False),
+        # NEW: Embedded answer tests (answer within longer sentence)
+        ("2/3", "I'm asking you, what are you doing? Two by three.", True),
+        ("2/3", "umm let me think... 2 by 3", True),
+        ("-5/8", "I think the answer is minus 5 by 8", True),
+        ("yes", "Yes, zero is a rational number", True),
+        ("yes", "No, zero is not a rational number", False),  # Wrong answer
+        ("7", "first I thought 5 but now I say 7", True),  # Takes last number
     ]
-    
+
     for correct, student, expected in answer_tests:
         result = check_answer(correct, student)
         status = "✅" if result == expected else "❌"
