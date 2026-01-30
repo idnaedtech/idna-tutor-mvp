@@ -880,50 +880,78 @@
             }
         }
 
-        // Voice Recognition
-        function initSpeechRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) return null;
+        // Voice Recognition using Whisper API (much more accurate for math)
+        let mediaRecorder = null;
+        let audioChunks = [];
 
-            const recog = new SpeechRecognition();
-            recog.continuous = false;
-            recog.interimResults = true;
-            recog.lang = 'en-IN';
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
 
-            recog.onstart = () => {
+                mediaRecorder.ondataavailable = (e) => {
+                    audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+
+                    // Create audio blob and send to Whisper API
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    await sendToWhisper(audioBlob);
+                };
+
+                mediaRecorder.start();
                 isListening = true;
                 voiceBtn.classList.add('recording');
                 voiceBtn.textContent = '⏹';
-                setStatus('Listening...', 'listening');
-            };
+                setStatus('Listening... (click to stop)', 'listening');
+            } catch (e) {
+                console.error('Microphone error:', e);
+                setStatus('Microphone not available', 'error');
+            }
+        }
 
-            recog.onresult = (event) => {
-                let transcript = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    transcript = event.results[i][0].transcript;
-                }
-                answerInput.value = transcript.trim();
-            };
-
-            recog.onend = () => {
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
                 isListening = false;
                 voiceBtn.classList.remove('recording');
                 voiceBtn.textContent = '🎤';
-                setStatus('');
+                setStatus('Processing...', 'speaking');
+            }
+        }
 
-                if (answerInput.value.trim()) {
-                    setTimeout(() => submitAnswer(), 500);
+        async function sendToWhisper(audioBlob) {
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'audio.webm');
+
+                const response = await fetch('/api/speech-to-text', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('STT failed');
                 }
-            };
 
-            recog.onerror = (event) => {
-                isListening = false;
-                voiceBtn.classList.remove('recording');
-                voiceBtn.textContent = '🎤';
+                const data = await response.json();
                 setStatus('');
-            };
 
-            return recog;
+                if (data.text && data.text.trim()) {
+                    answerInput.value = data.text.trim();
+                    // Auto-submit after successful transcription
+                    setTimeout(() => submitAnswer(), 300);
+                } else {
+                    setStatus('Could not understand. Try again or type.', 'error');
+                }
+            } catch (e) {
+                console.error('Whisper error:', e);
+                setStatus('Voice error. Please type your answer.', 'error');
+            }
         }
 
         function toggleVoice() {
@@ -933,14 +961,17 @@
             }
 
             if (isListening) {
-                recognition?.stop();
+                stopRecording();
             } else {
-                if (!recognition) recognition = initSpeechRecognition();
-                if (recognition) {
-                    answerInput.value = '';
-                    recognition.start();
-                }
+                answerInput.value = '';
+                startRecording();
             }
+        }
+
+        // Legacy browser speech recognition (fallback, less accurate)
+        function initSpeechRecognition() {
+            // Now using Whisper API instead - this is just a stub
+            return null;
         }
 
         // Event listeners

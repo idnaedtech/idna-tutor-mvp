@@ -80,6 +80,23 @@ def normalize_spoken_input(text: str) -> str:
     # This handles en-dash (–), em-dash (—), minus sign (−), etc.
     normalized = re.sub(r"[–—−‐]", "-", normalized)
 
+    # Fix speech recognition issues with fractions
+    # "- 5 / 8" or "- 5/8" → "-5/8" (remove space after minus)
+    normalized = re.sub(r"-\s+(\d)", r"-\1", normalized)
+    # "+ 5 / 8" → "5/8" (remove erroneous plus at start)
+    normalized = re.sub(r"^\+\s*", "", normalized)
+    # "5 / 8" → "5/8" (remove spaces around slash)
+    normalized = re.sub(r"(\d+)\s*/\s*(\d+)", r"\1/\2", normalized)
+
+    # Handle badly transcribed fractions like "- 5 - 8 / 5" → try to extract "-5/8"
+    # Pattern: minus, number, junk, slash, number at end
+    bad_fraction = re.match(r"^-?\s*(\d+).*?/\s*(\d+)$", normalized)
+    if bad_fraction and "-" in normalized[:3]:
+        # Likely meant negative fraction
+        normalized = f"-{bad_fraction.group(1)}/{bad_fraction.group(2)}"
+    elif bad_fraction:
+        normalized = f"{bad_fraction.group(1)}/{bad_fraction.group(2)}"
+
     # Remove common filler phrases
     fillers = [
         r"^the answer is\s*",
