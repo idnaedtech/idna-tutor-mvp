@@ -648,7 +648,6 @@
             element.textContent = '';
 
             function scrollToBottom() {
-                // Use requestAnimationFrame to ensure scroll happens after DOM update
                 requestAnimationFrame(() => {
                     messages.scrollTop = messages.scrollHeight;
                 });
@@ -664,6 +663,36 @@
             }
 
             addChar();
+        }
+
+        // Display steps line by line (for explanations)
+        function displayStepByStep(element, text, lineDelay = 800) {
+            // Split by sentences or line breaks
+            const lines = text.split(/(?<=[.!?])\s+|[\n]+/).filter(line => line.trim());
+            element.innerHTML = '';
+            let lineIndex = 0;
+
+            function showNextLine() {
+                if (lineIndex < lines.length) {
+                    const lineDiv = document.createElement('div');
+                    lineDiv.style.marginBottom = '8px';
+                    lineDiv.style.opacity = '0';
+                    lineDiv.style.transition = 'opacity 0.3s';
+                    lineDiv.textContent = lines[lineIndex];
+                    element.appendChild(lineDiv);
+
+                    // Fade in
+                    requestAnimationFrame(() => {
+                        lineDiv.style.opacity = '1';
+                        messages.scrollTop = messages.scrollHeight;
+                    });
+
+                    lineIndex++;
+                    setTimeout(showNextLine, lineDelay);
+                }
+            }
+
+            showNextLine();
         }
 
         // Ensure scroll to bottom after any message
@@ -764,13 +793,15 @@
                 hideTyping();
 
                 if (data.completed) {
-                    addMessage(data.message, 'tutor', '', true);
+                    speak(data.message, null, false);
+                    addMessage(data.message, 'tutor', '', false);
                     inputArea.style.display = 'none';
                     return;
                 }
 
-                addLabeledMessage(`Question ${data.question_number}`, data.question_text, 'tutor', 'question', true);
+                // Start TTS first, then show question text
                 speak(data.intro, data.intro_ssml, true); // Auto-listen after question
+                addMessage(data.question_text, 'tutor', 'question', false);
                 answerInput.focus();
             } catch (e) {
                 hideTyping();
@@ -797,16 +828,21 @@
                 updateScore(data.score, data.total);
 
                 if (data.correct) {
-                    addMessage(data.message, 'tutor', 'correct', true);
+                    // Start TTS immediately (don't wait for text)
                     speak(data.message, data.ssml);
+                    // Show text alongside audio
+                    addMessage(data.message, 'tutor', 'correct', false); // false = no streaming, instant
                     setTimeout(() => getNextQuestion(), 2500);
                 } else if (data.show_answer) {
-                    addLabeledMessage('Solution', `The answer is ${data.answer}. ${data.solution || ''}`, 'tutor', 'incorrect', true);
+                    // Explanation - start voice first, then show steps line by line
                     speak(data.message, data.ssml);
-                    setTimeout(() => getNextQuestion(), 4000);
+                    const msgEl = addMessage('', 'tutor', 'incorrect', false);
+                    displayStepByStep(msgEl, data.message, 1000); // 1 second per line
+                    setTimeout(() => getNextQuestion(), 6000); // More time for explanation
                 } else {
-                    addLabeledMessage(`Hint ${data.attempt_count}`, data.message, 'tutor', 'hint', true);
+                    // Hint - voice first, then text
                     speak(data.message, data.ssml);
+                    addMessage(data.message, 'tutor', 'hint', false);
                 }
             } catch (e) {
                 hideTyping();

@@ -1,6 +1,27 @@
 """
 IDNA EdTech - CBSE Class 8 Question Bank
-Based on NCERT Syllabus
+Based on NCERT Syllabus (2024-25)
+
+IMPORTANT: Questions should match NCERT textbook exactly!
+- Use same terminology as textbook (e.g., "additive inverse" not "opposite")
+- Follow chapter order from NCERT
+- Include exercise numbers where possible
+- Word problems should use Indian context (rupees, km, etc.)
+
+NCERT Class 8 Math Chapters:
+1. Rational Numbers (परिमेय संख्याएँ)
+2. Linear Equations in One Variable (एक चर वाले रैखिक समीकरण)
+3. Understanding Quadrilaterals (चतुर्भुजों को समझना)
+4. Data Handling (आँकड़ों का प्रबंधन) - Added for CBSE 2024-25
+5. Squares and Square Roots (वर्ग और वर्गमूल)
+6. Cubes and Cube Roots (घन और घनमूल)
+7. Comparing Quantities (राशियों की तुलना)
+8. Algebraic Expressions and Identities (बीजीय व्यंजक और सर्वसमिकाएँ)
+9. Mensuration (क्षेत्रमिति)
+10. Exponents and Powers (घातांक और घात)
+11. Direct and Inverse Proportions (प्रत्यक्ष और प्रतिलोम समानुपात)
+12. Factorisation (गुणनखंडन)
+13. Introduction to Graphs (ग्राफ का परिचय)
 
 Subjects:
 - Mathematics (10 chapters, 150 questions)
@@ -11,9 +32,11 @@ Question Types:
 - mcq: Multiple choice (A/B/C/D)
 
 Difficulty Levels:
-- 1: Easy (basic concepts)
-- 2: Medium (application)
-- 3: Hard (multi-step/word problems)
+- 1: Easy (basic concepts from NCERT examples)
+- 2: Medium (NCERT exercise questions)
+- 3: Hard (NCERT "Think and Discuss" / word problems)
+
+TODO: Add NCERT exercise references (e.g., "Ex 1.1 Q3")
 """
 
 # ============================================================
