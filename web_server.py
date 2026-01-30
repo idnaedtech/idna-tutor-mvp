@@ -284,7 +284,8 @@ async def lifespan(app: FastAPI):
     init_database()
     print("[STARTUP] IDNA EdTech MVP ready")
     print("[STARTUP] TutorIntent layer: ENABLED")
-    print(f"[STARTUP] Database: {DB_PATH}")
+    db_info = f"Postgres ({DATABASE_URL[:30]}...)" if USE_POSTGRES else f"SQLite ({DB_PATH})"
+    print(f"[STARTUP] Database: {db_info}")
     print(f"[STARTUP] Static files: {'static/' if os.path.exists('static') else 'NOT FOUND'}")
 
     yield
