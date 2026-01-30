@@ -793,15 +793,15 @@
                 hideTyping();
 
                 if (data.completed) {
-                    speak(data.message, null, false);
                     addMessage(data.message, 'tutor', '', false);
+                    speak(data.message, null, {});
                     inputArea.style.display = 'none';
                     return;
                 }
 
-                // Start TTS first, then show question text
-                speak(data.intro, data.intro_ssml, true); // Auto-listen after question
+                // Show question, then speak, then auto-listen after audio ends
                 addMessage(data.question_text, 'tutor', 'question', false);
+                speak(data.intro, data.intro_ssml, { autoListen: true });
                 answerInput.focus();
             } catch (e) {
                 hideTyping();
@@ -828,21 +828,22 @@
                 updateScore(data.score, data.total);
 
                 if (data.correct) {
-                    // Start TTS immediately (don't wait for text)
-                    speak(data.message, data.ssml);
-                    // Show text alongside audio
-                    addMessage(data.message, 'tutor', 'correct', false); // false = no streaming, instant
-                    setTimeout(() => getNextQuestion(), 2500);
+                    // Show text, then speak, then move to next question AFTER audio finishes
+                    addMessage(data.message, 'tutor', 'correct', false);
+                    speak(data.message, data.ssml, {
+                        onComplete: () => getNextQuestion()
+                    });
                 } else if (data.show_answer) {
-                    // Explanation - start voice first, then show steps line by line
-                    speak(data.message, data.ssml);
+                    // Explanation - show steps, speak, then move on AFTER audio finishes
                     const msgEl = addMessage('', 'tutor', 'incorrect', false);
-                    displayStepByStep(msgEl, data.message, 1000); // 1 second per line
-                    setTimeout(() => getNextQuestion(), 6000); // More time for explanation
+                    displayStepByStep(msgEl, data.message, 800);
+                    speak(data.message, data.ssml, {
+                        onComplete: () => getNextQuestion()
+                    });
                 } else {
-                    // Hint - voice first, then text
-                    speak(data.message, data.ssml);
+                    // Hint - show text, speak, then auto-listen for next attempt
                     addMessage(data.message, 'tutor', 'hint', false);
+                    speak(data.message, data.ssml, { autoListen: true });
                 }
             } catch (e) {
                 hideTyping();
@@ -861,7 +862,7 @@
                 });
 
                 addMessage(`Session complete! You got ${data.score} out of ${data.total} correct (${data.accuracy}%)`);
-                speak(data.message, data.ssml);
+                speak(data.message, data.ssml, {});
                 inputArea.style.display = 'none';
                 endBtn.style.display = 'none';
             } catch (e) {
@@ -869,8 +870,11 @@
             }
         }
 
-        // Text to Speech - with optional auto-listen after speaking
-        async function speak(text, ssml = null, autoListen = false) {
+        // Text to Speech - with optional callbacks
+        // onComplete: function to call when audio finishes
+        // autoListen: start recording after audio ends
+        async function speak(text, ssml = null, options = {}) {
+            const { onComplete, autoListen } = options;
             stopTTS(); // Stop any currently playing audio
 
             try {
@@ -882,17 +886,27 @@
                 currentAudio.onended = () => {
                     setStatus('');
                     currentAudio = null;
+
+                    // Call completion callback if provided
+                    if (onComplete) {
+                        setTimeout(onComplete, 300); // Small pause before next action
+                    }
+
                     // Auto-start listening after tutor finishes speaking
                     if (autoListen && !isListening) {
                         setTimeout(() => {
                             startRecording();
-                        }, 300); // Small delay for natural pause
+                        }, 300);
                     }
                 };
                 currentAudio.play();
             } catch (e) {
                 console.error('TTS error:', e);
                 setStatus('');
+                // Still call onComplete even if TTS fails
+                if (onComplete) {
+                    onComplete();
+                }
             }
         }
 
