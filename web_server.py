@@ -1986,6 +1986,12 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
     is_correct = check_answer(question['answer'], request.answer)
     attempt_count = (session['attempt_count'] or 0) + 1
 
+    # Debug logging for answer evaluation
+    print(f"[DEBUG EVAL] Student raw: {repr(request.answer)}")
+    print(f"[DEBUG EVAL] Student normalized: {repr(normalized_answer)}")
+    print(f"[DEBUG EVAL] Correct answer: {repr(question['answer'])}")
+    print(f"[DEBUG EVAL] Result: {is_correct}")
+
     # Generate natural tutor response using TutorIntent layer
     with Timer() as tutor_timer:
         tutor_result = generate_tutor_response(

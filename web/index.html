@@ -784,7 +784,7 @@
                 }
 
                 addLabeledMessage(`Question ${data.question_number}`, data.question_text, 'tutor', 'question', true);
-                speak(data.intro, data.intro_ssml);
+                speak(data.intro, data.intro_ssml, true); // Auto-listen after question
                 answerInput.focus();
             } catch (e) {
                 hideTyping();
@@ -847,8 +847,8 @@
             }
         }
 
-        // Text to Speech
-        async function speak(text, ssml = null) {
+        // Text to Speech - with optional auto-listen after speaking
+        async function speak(text, ssml = null, autoListen = false) {
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio = null;
@@ -860,7 +860,19 @@
                 if (ssml) payload.ssml = ssml;
                 const data = await api('/api/text-to-speech', 'POST', payload);
                 currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
-                currentAudio.onended = () => setStatus('');
+                currentAudio.onended = () => {
+                    setStatus('');
+                    // Auto-start listening after tutor finishes speaking
+                    if (autoListen && recognition && !isListening) {
+                        setTimeout(() => {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                console.log('Could not auto-start mic:', e);
+                            }
+                        }, 300); // Small delay for natural pause
+                    }
+                };
                 currentAudio.play();
             } catch (e) {
                 console.error('TTS error:', e);
