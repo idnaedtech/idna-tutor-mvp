@@ -229,7 +229,15 @@ def _cleanup_idempotency_cache():
 # - Two /answer requests overlapping and corrupting state
 
 _session_locks: Dict[str, asyncio.Lock] = {}
-_session_locks_lock = asyncio.Lock()  # Lock for accessing the locks dict
+_session_locks_lock: Optional[asyncio.Lock] = None  # Initialized lazily
+
+
+def _get_locks_lock() -> asyncio.Lock:
+    """Get or create the lock for accessing session locks dict (lazy init)."""
+    global _session_locks_lock
+    if _session_locks_lock is None:
+        _session_locks_lock = asyncio.Lock()
+    return _session_locks_lock
 
 
 async def get_session_lock(session_id: str) -> asyncio.Lock:
@@ -238,7 +246,7 @@ async def get_session_lock(session_id: str) -> asyncio.Lock:
 
     This ensures only one request per session can modify state at a time.
     """
-    async with _session_locks_lock:
+    async with _get_locks_lock():
         if session_id not in _session_locks:
             _session_locks[session_id] = asyncio.Lock()
         return _session_locks[session_id]
@@ -246,7 +254,7 @@ async def get_session_lock(session_id: str) -> asyncio.Lock:
 
 async def cleanup_session_lock(session_id: str):
     """Remove a session's lock when session ends (optional cleanup)."""
-    async with _session_locks_lock:
+    async with _get_locks_lock():
         if session_id in _session_locks:
             del _session_locks[session_id]
 
