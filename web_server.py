@@ -461,23 +461,27 @@ def get_google_tts_client():
 
 def google_tts(
     text: str,
-    language_code: str = "en-IN",
-    voice_name: str = "en-IN-Wavenet-A",
+    language_code: str = "en-US",
+    voice_name: str = "en-US-Neural2-F",
     ssml: Optional[str] = None
 ) -> bytes:
     """Generate natural speech using Google Cloud TTS
 
     Args:
         text: Plain text to speak (used if ssml is None)
-        language_code: Language code (default: en-IN for Indian English)
-        voice_name: Voice to use (default: en-IN-Wavenet-A, natural Indian female)
+        language_code: Language code (default: en-US for clearer pronunciation)
+        voice_name: Voice to use (default: en-US-Neural2-F, warm female voice)
         ssml: Optional SSML markup for natural speech
 
-    Indian English voices (Wavenet = most natural):
-    - en-IN-Wavenet-A: Female - most natural
-    - en-IN-Wavenet-B: Male - most natural
-    - en-IN-Wavenet-C: Female - alternative
-    - en-IN-Wavenet-D: Male - alternative
+    Best voices for clear, warm speech (Neural2 = most natural):
+    - en-US-Neural2-F: Female - warm, friendly, clear
+    - en-US-Neural2-C: Female - clear, professional
+    - en-US-Neural2-D: Male - warm, clear
+    - en-US-Neural2-A: Male - professional
+
+    Indian English alternatives (if needed):
+    - en-IN-Neural2-A: Female
+    - en-IN-Neural2-D: Male
     """
     tts_client = get_google_tts_client()
     if tts_client is None:
@@ -496,9 +500,10 @@ def google_tts(
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.05,  # Slightly faster for natural flow
-        pitch=0.0,  # Neutral pitch - no modification
-        volume_gain_db=2.0,  # Good volume
+        speaking_rate=0.95,  # Slightly slower for warmth and clarity
+        pitch=-1.0,  # Slightly lower pitch for warmth (less nasal)
+        volume_gain_db=3.0,  # Good volume
+        effects_profile_id=["small-bluetooth-speaker-class-device"],  # Optimize for speakers
     )
 
     try:
@@ -509,11 +514,11 @@ def google_tts(
         )
         return response.audio_content
     except Exception as e:
-        # Fallback to alternative Indian voice
+        # Fallback to alternative voice
         print(f"Primary voice failed, trying fallback: {e}")
         voice = texttospeech.VoiceSelectionParams(
-            language_code="en-IN",
-            name="en-IN-Wavenet-C",
+            language_code="en-US",
+            name="en-US-Neural2-C",
         )
         response = tts_client.synthesize_speech(
             input=synthesis_input,

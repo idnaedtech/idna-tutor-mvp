@@ -625,12 +625,15 @@
             msg.appendChild(avatar);
             msg.appendChild(contentDiv);
             messages.appendChild(msg);
-            messages.scrollTop = messages.scrollHeight;
 
             if (stream && type === 'tutor') {
                 streamText(contentDiv, content);
             } else {
                 contentDiv.textContent = content;
+                // Scroll after content is added
+                requestAnimationFrame(() => {
+                    messages.scrollTop = messages.scrollHeight;
+                });
             }
 
             return contentDiv;
@@ -658,12 +661,15 @@
             msg.appendChild(avatar);
             msg.appendChild(contentDiv);
             messages.appendChild(msg);
-            messages.scrollTop = messages.scrollHeight;
 
             if (stream && type === 'tutor') {
                 streamText(textSpan, content);
             } else {
                 textSpan.textContent = content;
+                // Scroll after content is added
+                requestAnimationFrame(() => {
+                    messages.scrollTop = messages.scrollHeight;
+                });
             }
 
             return textSpan;
@@ -674,16 +680,30 @@
             let index = 0;
             element.textContent = '';
 
+            function scrollToBottom() {
+                // Use requestAnimationFrame to ensure scroll happens after DOM update
+                requestAnimationFrame(() => {
+                    messages.scrollTop = messages.scrollHeight;
+                });
+            }
+
             function addChar() {
                 if (index < text.length) {
                     element.textContent += text[index];
                     index++;
-                    messages.scrollTop = messages.scrollHeight;
+                    scrollToBottom();
                     setTimeout(addChar, speed);
                 }
             }
 
             addChar();
+        }
+
+        // Ensure scroll to bottom after any message
+        function scrollToBottom() {
+            requestAnimationFrame(() => {
+                messages.scrollTop = messages.scrollHeight;
+            });
         }
 
         function showTyping() {
