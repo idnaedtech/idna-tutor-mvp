@@ -202,81 +202,52 @@
         .messages {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            max-width: 800px;
+            padding: 30px 20px;
+            max-width: 700px;
             margin: 0 auto;
             width: 100%;
         }
 
         .message {
-            display: flex;
-            gap: 12px;
             animation: fadeIn 0.3s ease;
+            margin-bottom: 20px;
+            line-height: 1.7;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
         .message.tutor {
-            flex-direction: row;
+            color: var(--text-primary);
+            font-size: 17px;
         }
 
         .message.student {
-            flex-direction: row-reverse;
-        }
-
-        .message-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            flex-shrink: 0;
-        }
-
-        .message.tutor .message-avatar {
-            background: var(--accent);
-        }
-
-        .message.student .message-avatar {
-            background: var(--bg-tertiary);
+            color: var(--accent);
+            font-size: 16px;
+            padding-left: 20px;
+            border-left: 2px solid var(--accent);
+            margin: 15px 0;
         }
 
         .message-content {
-            max-width: 70%;
-            padding: 14px 18px;
-            border-radius: 18px;
-            line-height: 1.5;
-        }
-
-        .message.tutor .message-content {
-            background: var(--bg-secondary);
-            border-bottom-left-radius: 4px;
-        }
-
-        .message.student .message-content {
-            background: var(--accent);
-            border-bottom-right-radius: 4px;
+            /* Clean, no boxes */
         }
 
         .message-content.question {
-            font-size: 17px;
-            font-weight: 500;
+            font-size: 18px;
+            color: var(--text-primary);
+            margin: 10px 0;
         }
 
         .message-content.correct {
-            border: 1px solid var(--success);
+            color: var(--success);
         }
 
         .message-content.incorrect {
-            border: 1px solid var(--error);
+            color: var(--text-secondary);
         }
 
         .message-content.hint {
@@ -610,69 +581,29 @@
             return res.json();
         }
 
-        // Add message to chat with optional streaming effect
+        // Add message - clean and simple, no boxes or avatars
         function addMessage(content, type = 'tutor', extraClass = '', stream = false) {
             const msg = document.createElement('div');
-            msg.className = `message ${type}`;
-
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = type === 'tutor' ? '🎓' : '👤';
-
-            const contentDiv = document.createElement('div');
-            contentDiv.className = `message-content ${extraClass}`;
-
-            msg.appendChild(avatar);
-            msg.appendChild(contentDiv);
-            messages.appendChild(msg);
+            msg.className = `message ${type} ${extraClass}`;
 
             if (stream && type === 'tutor') {
-                streamText(contentDiv, content);
+                messages.appendChild(msg);
+                streamText(msg, content);
             } else {
-                contentDiv.textContent = content;
-                // Scroll after content is added
+                msg.textContent = content;
+                messages.appendChild(msg);
                 requestAnimationFrame(() => {
                     messages.scrollTop = messages.scrollHeight;
                 });
             }
 
-            return contentDiv;
+            return msg;
         }
 
+        // Add message - for questions, just show the content naturally
         function addLabeledMessage(label, content, type = 'tutor', extraClass = '', stream = false) {
-            const msg = document.createElement('div');
-            msg.className = `message ${type}`;
-
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = type === 'tutor' ? '🎓' : '👤';
-
-            const contentDiv = document.createElement('div');
-            contentDiv.className = `message-content ${extraClass}`;
-
-            const labelDiv = document.createElement('div');
-            labelDiv.className = 'message-label';
-            labelDiv.textContent = label;
-            contentDiv.appendChild(labelDiv);
-
-            const textSpan = document.createElement('span');
-            contentDiv.appendChild(textSpan);
-
-            msg.appendChild(avatar);
-            msg.appendChild(contentDiv);
-            messages.appendChild(msg);
-
-            if (stream && type === 'tutor') {
-                streamText(textSpan, content);
-            } else {
-                textSpan.textContent = content;
-                // Scroll after content is added
-                requestAnimationFrame(() => {
-                    messages.scrollTop = messages.scrollHeight;
-                });
-            }
-
-            return textSpan;
+            // Skip labels, just show content naturally
+            return addMessage(content, type, extraClass, stream);
         }
 
         // Streaming text effect - reveals text character by character
