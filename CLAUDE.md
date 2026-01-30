@@ -290,6 +290,11 @@ Log events include:
 
 ## Current State (January 30, 2026)
 
+### Deployment Status
+- **Railway**: Auto-deploys from GitHub `main` branch
+- **Database**: Postgres (production), SQLite (development)
+- **Latest Deploy**: Fixed Postgres migration for `attempts` table columns
+
 ### Completed
 - Bug fixes (7 bugs fixed)
 - Questions: 100 new questions, Science subject, MCQ support
@@ -349,6 +354,15 @@ Log events include:
     - After 2 failures, suggests text input instead of voice
     - `suggest_text_input` flag in response
 
+### Deployment Fixes (January 30, 2026)
+Several fixes were needed for Railway deployment:
+1. **Lazy asyncio.Lock init**: Can't create `asyncio.Lock()` at module level
+2. **Import order**: `Dict, Tuple` must be imported before use
+3. **Constant ordering**: `LOW_CONFIDENCE_MESSAGES` moved before `_process_answer`
+4. **Postgres migration**: Added `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for:
+   - `attempts` table: `topic_tag`, `raw_utterance`, `normalized_answer`, `asr_confidence`, `input_mode`, `latency_ms`
+   - `sessions` table: `low_confidence_streak`
+
 ### Pending - Voice Quality
 The TTS voice still needs work:
 - Currently using: `en-IN-Wavenet-A` (Indian English)
@@ -365,3 +379,13 @@ The TTS voice still needs work:
 - Typing indicator animation
 - Message streaming effect
 - Color-coded feedback (green/red/yellow borders)
+
+### Remaining Items (from ChatGPT Gap Analysis)
+| Priority | Item | Type |
+|----------|------|------|
+| P1 | Audio barge-in (stop tutor when student speaks) | UI implementation |
+| P2 | OpenAPI spec / JSON schemas | Documentation |
+| P2 | Rate limiting per student | Infrastructure |
+| P3 | UI phase states (LISTENING/SPEAKING/IDLE) | Enhancement |
+| P3 | Multi-subject evaluator scaffolding | Future feature |
+| P3 | Tutor behavior test suite | Testing |
