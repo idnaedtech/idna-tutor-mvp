@@ -38,7 +38,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional, Any, Dict, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI
 from google.cloud import texttospeech
@@ -156,9 +156,6 @@ from tutor_intent import (
 
 _idempotency_cache: Dict[str, tuple] = {}
 _IDEMPOTENCY_TTL_SECONDS = 300  # 5 minutes
-
-# Need to import Dict and Tuple for type hints
-from typing import Dict, Tuple
 
 
 def _get_idempotency_key(session_id: str, question_id: str, client_key: str) -> str:
