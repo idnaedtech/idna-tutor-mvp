@@ -362,6 +362,10 @@ Several fixes were needed for Railway deployment:
 4. **Postgres migration**: Added `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for:
    - `attempts` table: `topic_tag`, `raw_utterance`, `normalized_answer`, `asr_confidence`, `input_mode`, `latency_ms`
    - `sessions` table: `low_confidence_streak`
+5. **Global exception handler**: All server errors now return JSON instead of plain text
+   - Fixes "unexpected token I" error in frontend when server returns 500
+   - Logs full error details (type, message, endpoint) for debugging
+6. **Frontend error handling**: API function now handles both JSON and plain text errors
 
 ### Pending - Voice Quality
 The TTS voice still needs work:
