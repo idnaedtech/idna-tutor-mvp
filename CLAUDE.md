@@ -607,7 +607,15 @@ Created `DISASTER_RECOVERY.md` with:
 
 **Problem Solved:** Tutor felt like a quiz master (chatbot), not a real teacher.
 
-**Solution:** Implemented ChatGPT's recommended Teacher Policy architecture.
+**Solution:** Implemented ChatGPT's recommended Teacher Policy architecture with strict P0 enforcement.
+
+**P0 Acceptance Criteria (VERIFIED):**
+| Criteria | Target | Status |
+|----------|--------|--------|
+| Turns end with exactly ONE question | ≥80% | ✅ PASS |
+| Tutor speaks ≤2 sentences before asking | 100% | ✅ PASS |
+| Moves change on 3rd wrong attempt | Always | ✅ PASS |
+| Planner JSON logged for every turn | Always | ✅ PASS |
 
 **Key Concepts:**
 
@@ -618,7 +626,7 @@ Created `DISASTER_RECOVERY.md` with:
 | TEACH → CHECK Rule | Never teach without asking a check question in the same turn |
 | 2-Pass Approach | Pass 1: Planner decides move. Pass 2: GPT renders in teacher voice |
 | Repetition Breaker | If same move fails twice, force a different approach |
-| Word Limit | Max 55 words before asking a question |
+| Max 2 Sentences | Enforced AFTER GPT polishing - question preserved at end |
 
 **Error Types (Math):**
 - `sign_error` - Got +/- wrong
