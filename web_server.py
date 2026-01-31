@@ -461,27 +461,25 @@ def get_google_tts_client():
 
 def google_tts(
     text: str,
-    language_code: str = "en-US",
-    voice_name: str = "en-US-Neural2-F",
+    language_code: str = "en-IN",
+    voice_name: str = "en-IN-Neural2-A",
     ssml: Optional[str] = None
 ) -> bytes:
     """Generate natural speech using Google Cloud TTS
 
     Args:
         text: Plain text to speak (used if ssml is None)
-        language_code: Language code (default: en-US for clearer pronunciation)
-        voice_name: Voice to use (default: en-US-Neural2-F, warm female voice)
+        language_code: Language code (default: en-IN for Indian English)
+        voice_name: Voice to use (default: en-IN-Neural2-A, warm Indian female voice)
         ssml: Optional SSML markup for natural speech
 
-    Best voices for clear, warm speech (Neural2 = most natural):
-    - en-US-Neural2-F: Female - warm, friendly, clear
-    - en-US-Neural2-C: Female - clear, professional
-    - en-US-Neural2-D: Male - warm, clear
-    - en-US-Neural2-A: Male - professional
+    Indian English voices (Neural2 = most natural):
+    - en-IN-Neural2-A: Female - warm, friendly (DEFAULT)
+    - en-IN-Neural2-D: Male - warm, clear
 
-    Indian English alternatives (if needed):
-    - en-IN-Neural2-A: Female
-    - en-IN-Neural2-D: Male
+    US English alternatives:
+    - en-US-Neural2-F: Female - warm, friendly, clear
+    - en-US-Neural2-D: Male - warm, clear
     """
     tts_client = get_google_tts_client()
     if tts_client is None:
@@ -500,8 +498,8 @@ def google_tts(
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.95,  # Slightly slower for warmth and clarity
-        pitch=-1.0,  # Slightly lower pitch for warmth (less nasal)
+        speaking_rate=0.92,  # Slower for warmth and Indian accent clarity
+        pitch=-0.5,  # Slightly lower pitch for warmth
         volume_gain_db=3.0,  # Good volume
         effects_profile_id=["small-bluetooth-speaker-class-device"],  # Optimize for speakers
     )
@@ -517,8 +515,8 @@ def google_tts(
         # Fallback to alternative voice
         print(f"Primary voice failed, trying fallback: {e}")
         voice = texttospeech.VoiceSelectionParams(
-            language_code="en-US",
-            name="en-US-Neural2-C",
+            language_code="en-IN",
+            name="en-IN-Neural2-D",  # Male Indian voice as fallback
         )
         response = tts_client.synthesize_speech(
             input=synthesis_input,
@@ -2127,13 +2125,36 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
     # Acknowledge briefly, redirect immediately - don't count as attempt
     off_topic_result = detect_off_topic(request.answer)
     if off_topic_result["is_off_topic"]:
+        category = off_topic_result["category"]
         redirect_message = off_topic_result["redirect_message"]
         redirect_ssml = wrap_in_ssml(redirect_message)
+
+        # SPECIAL: Handle session end request
+        if category == "stop_session":
+            # End the session gracefully
+            await async_update_session(
+                request.session_id,
+                state=SessionState.COMPLETED.value,
+            )
+            return {
+                "correct": False,
+                "is_off_topic": True,
+                "category": category,
+                "message": redirect_message,
+                "ssml": redirect_ssml,
+                "intent": "session_end",
+                "score": session['score'],
+                "total": session['total'],
+                "attempt_count": session['attempt_count'] or 0,
+                "move_to_next": False,
+                "completed": True,  # Signal frontend to end session
+                "state": SessionState.COMPLETED.value
+            }
 
         return {
             "correct": False,
             "is_off_topic": True,
-            "category": off_topic_result["category"],
+            "category": category,
             "message": redirect_message,
             "ssml": redirect_ssml,
             "intent": "redirect_to_question",

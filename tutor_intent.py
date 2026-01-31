@@ -239,6 +239,13 @@ OFF_TOPIC_PATTERNS = {
         "i'm hungry", "i'm thirsty", "can i take a break",
         "i want to stop", "i'm tired", "can we stop",
     ],
+    # Session end requests (handled specially - not redirected)
+    "stop_session": [
+        "let's stop", "lets stop", "let stop", "stop now", "stop please",
+        "end session", "end the session", "i'm done", "i am done",
+        "that's enough", "thats enough", "finish now", "quit",
+        "bye", "goodbye", "see you later", "gotta go", "have to go",
+    ],
     # Complaints and refusals
     "complaints": [
         "i don't want to", "i don't like math", "math is hard",
@@ -277,6 +284,11 @@ CATEGORY_REDIRECTS = {
     "breaks": [
         "Almost done! Just answer this one, then we can take a break.",
         "Let's finish this question first, then you can rest.",
+    ],
+    "stop_session": [
+        "Okay, great practice today! See you next time.",
+        "Good work! Let's stop here. See you soon!",
+        "Alright, we'll end here. You did well today!",
     ],
 }
 

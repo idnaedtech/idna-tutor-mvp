@@ -842,6 +842,15 @@
                 hideTyping();
                 updateScore(data.score, data.total);
 
+                // Handle session end request (e.g., "let's stop")
+                if (data.completed) {
+                    addMessage(data.message, 'tutor', '', false);
+                    speak(data.message, data.ssml, {});
+                    inputArea.style.display = 'none';
+                    endBtn.style.display = 'none';
+                    return;
+                }
+
                 if (data.correct) {
                     // Show text, then speak, then move to next question AFTER audio finishes
                     addMessage(data.message, 'tutor', 'correct', false);
