@@ -361,23 +361,32 @@ Log events include:
     - After 2 failures, suggests text input instead of voice
     - `suggest_text_input` flag in response
 
-### Railway Container Shutdown Issue (January 31, 2026)
+### Railway Container Shutdown Issue (January 31, 2026) - FIXED
 
 **Problem**: Railway stops container ~5 seconds after startup despite `/health` returning 200 OK.
 
-**Timeline from logs**:
-```
-06:39:57 - Uvicorn running on 8080
-06:39:58 - /health 200 OK  ✓
-06:40:02 - Stopping Container  ← Platform kills it 4 seconds later
+**Root Cause**: Railway's "Scale to Zero" feature puts container to sleep when no traffic.
+
+**Fix Applied**: Keep-alive background task (`web_server.py`):
+```python
+async def keep_alive_loop():
+    """Ping health endpoint every 30 seconds to prevent Railway auto-sleep"""
+    while True:
+        await session.get(f"http://localhost:{port}/health")
+        await asyncio.sleep(30)
 ```
 
-**Root Cause**: Railway platform configuration, NOT app code. Possible causes:
-1. Service classified as Worker/Job instead of Web Service
-2. Scale-to-zero or auto-sleep enabled
-3. Min replicas set to 0
+- Only runs in production (when `PORT` env var is set)
+- Pings `/health` every 30 seconds
+- Prevents Railway from detecting "no traffic" and sleeping
 
-**Fix** (in Railway Dashboard):
+**Also configured** (`railway.toml`):
+```toml
+[deploy]
+numReplicas = 1
+```
+
+**Dashboard settings** (if keep-alive not enough):
 | Setting | Required Value |
 |---------|----------------|
 | Service Type | Web Service (not Worker/Job) |
