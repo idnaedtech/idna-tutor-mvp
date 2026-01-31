@@ -37,6 +37,7 @@ from teacher_policy import (
     TeachingMove,
     ErrorType,
     clear_planner,
+    remove_banned_phrases,
 )
 
 
@@ -1187,6 +1188,9 @@ def generate_tutor_response(
             student_answer=student_answer,
         )
 
+    # Remove banned phrases (assistant-y language from GPT)
+    response = remove_banned_phrases(response)
+
     # P0 ENFORCEMENT: Apply strict rules AFTER GPT polishing
     # 1. Max 2 sentences before question
     # 2. Exactly one question per turn
@@ -1234,22 +1238,23 @@ def _polish_teacher_response(
     try:
         client = get_openai_client()
 
-        # Very short prompt - we just want to warm up the phrasing
-        polish_prompt = f"""Make this teacher response warmer and more natural.
-Keep it SHORT (max 20 words). Don't add information, just rephrase:
+        # Strict prompt - rephrase without adding scripted encouragement
+        polish_prompt = f"""Rephrase this for a teacher. Keep it SHORT (max 15 words).
 
-"{base_response}"
+NEVER use: "Great job", "Great effort", "You're close", "Almost there", "Nice try", "Well done", "Excellent", "Wonderful", "Amazing"
 
-Output ONLY the polished response, nothing else."""
+Original: "{base_response}"
+
+Output ONLY the rephrased response."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a warm math tutor. Keep responses very short."},
+                {"role": "system", "content": "You are a direct, warm teacher. No praise phrases. Keep responses very short."},
                 {"role": "user", "content": polish_prompt}
             ],
-            max_tokens=40,
-            temperature=0.7,
+            max_tokens=30,
+            temperature=0.5,  # Lower temperature for consistency
         )
         result = response.choices[0].message.content.strip().strip('"\'')
 

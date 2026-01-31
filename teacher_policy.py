@@ -322,37 +322,84 @@ class TeacherPlan:
 # ============================================================
 
 # Warmth primitives (only ONE per turn, max 8 words each)
+# Per GPT feedback: avoid praise-like phrases when student is wrong
+# Use acknowledgements instead of fake encouragement
 WARMTH_PRIMITIVES = {
-    0: [],  # Neutral - no warmth phrase
-    1: [    # Calm (default)
+    0: [],  # Neutral - no warmth phrase (fast drills)
+    1: [    # Calm (default / correct answer)
         "Okay.",
+        "Right.",
+        "Good.",
+        "Yes.",
+    ],
+    2: [    # Supportive (after wrong attempt) - acknowledgement, NOT praise
+        "Okay.",
+        "Hmm.",
+        "Almost.",
+        "Close.",
+        "Not quite.",
         "Let's see.",
-        "Alright.",
     ],
-    2: [    # Supportive (after wrong attempt)
-        "I see what you did.",
-        "That's a common step.",
-        "Good try.",
-        "You're on the right track.",
-    ],
-    3: [    # Soothing (frustration detected)
-        "This part confuses many students.",
-        "Take your time.",
-        "No rush, think it through.",
-        "It's okay, let's work through this.",
+    3: [    # Soothing (frustration detected) - permission + calm
+        "No worries.",
+        "It's okay.",
+        "Take a moment.",
+        "Let's slow down.",
+        "No problem.",
+        "That's fine.",
     ],
 }
 
-# Phrases to BAN (assistant-y, not teacher-like)
-BANNED_PHRASES = [
-    "as an ai",
-    "i can help you",
-    "let's dive in",
-    "great question",
-    "absolutely",
-    "certainly",
-    "of course",
-    "i'd be happy to",
+# Track recent primitives to avoid repetition (per session)
+_recent_primitives: Dict[str, List[str]] = {}  # session_id -> last 3 primitives
+
+# Phrases to BAN and their replacements (assistant-y → teacher-like)
+BANNED_PHRASE_REPLACEMENTS = {
+    # AI/assistant phrases
+    "as an ai": "",
+    "i can help you": "",
+    "i'd be happy to": "",
+    "i'm here to help": "",
+    # Overused encouragement (sounds fake when wrong)
+    "let's dive in": "",
+    "great question": "",
+    "great job": "",
+    "great effort": "",
+    "great work": "",
+    "excellent": "",
+    "wonderful": "",
+    "fantastic": "",
+    "amazing": "",
+    "awesome": "",
+    "brilliant": "",
+    "perfect": "",
+    "you're doing great": "",
+    "really close": "",
+    "so close": "",
+    "very close": "",
+    "you're almost there": "",
+    "nice try": "",
+    "good job": "",
+    "well done": "",
+    # Filler confirmations
+    "absolutely": "",
+    "certainly": "",
+    "of course": "",
+    "definitely": "",
+    "sure thing": "",
+}
+
+# Expanded frustration phrases (per GPT feedback)
+# Include both apostrophe and non-apostrophe versions
+FRUSTRATION_PHRASES = [
+    "idk", "i don't know", "i dont know", "dont know", "don't know",
+    "no idea", "help", "i give up", "give up", "skip",
+    "skip it", "leave it", "i can't", "i cant", "can't do", "cant do",
+    "this is hard", "too hard", "its hard", "it's hard",
+    "confusing", "confused", "i'm confused", "im confused",
+    "don't understand", "dont understand", "not getting it",
+    "again wrong", "wrong again", "still wrong",
+    "i don't get it", "i dont get it", "makes no sense",
 ]
 
 
@@ -383,11 +430,14 @@ def calculate_warmth_level(
         warmth = 2
 
     # Frustration signals: go to soothing
-    # Note: Only check text-based frustration signals, not short numeric answers
     student_lower = student_answer.lower().strip()
+
+    # Check for frustration phrases (expanded list)
+    has_frustration_phrase = any(phrase in student_lower for phrase in FRUSTRATION_PHRASES)
+
     frustration_signals = [
         consecutive_wrong >= 2,
-        student_lower in ["idk", "i don't know", "dont know", "no idea", "help", "i give up", "skip"],
+        has_frustration_phrase,
         response_time_seconds > 30,  # Long hesitation
     ]
 
@@ -397,26 +447,91 @@ def calculate_warmth_level(
     return warmth
 
 
-def get_warmth_primitive(warmth_level: int) -> str:
-    """Get one warmth phrase for the given level."""
+def get_warmth_primitive(warmth_level: int, session_id: str = "") -> str:
+    """
+    Get one warmth phrase for the given level.
+    Avoids repeating the same primitive within last 3 turns.
+    """
     import random
+
     primitives = WARMTH_PRIMITIVES.get(warmth_level, [])
-    if primitives:
-        return random.choice(primitives)
-    return ""
+    if not primitives:
+        return ""
+
+    # Get recent primitives for this session
+    recent = _recent_primitives.get(session_id, [])
+
+    # Filter out recently used primitives
+    available = [p for p in primitives if p not in recent]
+
+    # If all were used recently, reset and use any
+    if not available:
+        available = primitives
+
+    # Pick one
+    chosen = random.choice(available)
+
+    # Track it (keep last 3)
+    if session_id:
+        recent.append(chosen)
+        if len(recent) > 3:
+            recent.pop(0)
+        _recent_primitives[session_id] = recent
+
+    return chosen
+
+
+def clear_warmth_history(session_id: str):
+    """Clear warmth primitive history for a session."""
+    if session_id in _recent_primitives:
+        del _recent_primitives[session_id]
 
 
 def remove_banned_phrases(text: str) -> str:
-    """Remove assistant-y phrases that break teacher vibe."""
-    result = text
-    for phrase in BANNED_PHRASES:
-        # Case insensitive removal
-        import re
-        pattern = re.compile(re.escape(phrase), re.IGNORECASE)
-        result = pattern.sub("", result)
-    # Clean up extra spaces
-    result = re.sub(r'\s+', ' ', result).strip()
-    return result
+    """
+    Replace assistant-y phrases with teacher equivalents.
+    Uses exact phrase matching with word boundaries.
+
+    Note: Preserves the first sentence (warmth primitive) and only
+    removes banned phrases from the rest of the response.
+    """
+    import re
+
+    # Split at first period/question mark to preserve warmth primitive
+    # Warmth primitives are short (1-3 words) at the start
+    first_break = min(
+        text.find('. ') if text.find('. ') > 0 else len(text),
+        text.find('? ') if text.find('? ') > 0 else len(text),
+    )
+
+    # If first break is within first 20 chars, it's likely the warmth primitive
+    if first_break > 0 and first_break <= 20:
+        warmth_part = text[:first_break + 1]  # Include the period/question
+        rest = text[first_break + 1:].strip()
+    else:
+        warmth_part = ""
+        rest = text
+
+    # Apply banned phrase removal to the rest
+    for banned, replacement in BANNED_PHRASE_REPLACEMENTS.items():
+        # Word boundary matching (case insensitive)
+        pattern = re.compile(r'\b' + re.escape(banned) + r'\b', re.IGNORECASE)
+        rest = pattern.sub(replacement, rest)
+
+    # Clean up: double spaces, leading/trailing commas, etc.
+    rest = re.sub(r'\s+', ' ', rest)  # Multiple spaces → single
+    rest = re.sub(r'^\s*,\s*', '', rest)  # Leading comma
+    rest = re.sub(r'\s*,\s*$', '', rest)  # Trailing comma
+    rest = re.sub(r'\.\s*\.', '.', rest)  # Double periods
+    rest = rest.strip()
+
+    # Recombine
+    if warmth_part and rest:
+        return warmth_part + " " + rest
+    elif warmth_part:
+        return warmth_part
+    else:
+        return rest
 
 
 class TeacherPlanner:
@@ -446,6 +561,7 @@ class TeacherPlanner:
         solution: str = "",
         student_weak_topics: List[str] = None,
         consecutive_wrong: int = 0,
+        session_id: str = "",
     ) -> TeacherPlan:
         """
         Generate a teaching plan based on evaluation.
@@ -463,7 +579,7 @@ class TeacherPlanner:
             consecutive_wrong=consecutive_wrong,
             student_answer=student_answer,
         )
-        warmth_phrase = get_warmth_primitive(warmth)
+        warmth_phrase = get_warmth_primitive(warmth, session_id)
 
         # CORRECT ANSWER
         if is_correct:
@@ -508,6 +624,7 @@ class TeacherPlanner:
             hint_2=hint_2,
             solution=solution,
             consecutive_wrong=consecutive_wrong,
+            session_id=session_id,
         )
 
     def _select_move(self, attempt_number: int, error_type: str) -> TeachingMove:
@@ -585,6 +702,7 @@ class TeacherPlanner:
         hint_2: str,
         solution: str,
         consecutive_wrong: int = 0,
+        session_id: str = "",
     ) -> TeacherPlan:
         """Build a complete teaching plan for the selected move."""
 
@@ -595,7 +713,7 @@ class TeacherPlanner:
             consecutive_wrong=consecutive_wrong,
             student_answer=student_answer,
         )
-        warmth_phrase = get_warmth_primitive(warmth)
+        warmth_phrase = get_warmth_primitive(warmth, session_id)
 
         # Determine expected response type based on correct answer
         expected_type = "number"
@@ -1044,6 +1162,7 @@ def plan_teacher_response(
         hint_1=hint_1,
         hint_2=hint_2,
         solution=solution,
+        session_id=session_id,
     )
 
     # Step 3: Generate response from plan
