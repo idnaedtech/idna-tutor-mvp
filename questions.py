@@ -43,6 +43,30 @@ TODO: Add NCERT exercise references (e.g., "Ex 1.1 Q3")
 # CHAPTER NAMES
 # ============================================================
 
+# ============================================================
+# CHAPTER INTRODUCTIONS - Brief explanations for each chapter
+# ============================================================
+
+CHAPTER_INTROS = {
+    # Math chapters
+    "rational_numbers": "Today we'll work with rational numbers. These are numbers that can be written as fractions, like 3/4 or -2/5. We'll practice adding, subtracting, and comparing them.",
+    "linear_equations": "We're going to solve linear equations. These are equations where we find the value of x, like 2x + 3 = 7. Think of it as detective work to find the missing number!",
+    "quadrilaterals": "Let's explore quadrilaterals - shapes with four sides. We'll look at rectangles, squares, parallelograms, and learn their special properties.",
+    "data_handling": "Today is about data handling. We'll learn to organize information using graphs, find averages, and understand what data tells us.",
+    "squares_roots": "We'll practice squares and square roots. If 5 times 5 is 25, then the square root of 25 is 5. Let's master this!",
+    "cubes_roots": "Today we work with cubes and cube roots. If 3 times 3 times 3 is 27, then the cube root of 27 is 3.",
+    "comparing_quantities": "We'll compare quantities using ratios, percentages, and learn about profit, loss, and discounts - very useful in real life!",
+    "algebraic_expressions": "Let's work with algebraic expressions. We'll learn to simplify expressions like 3x + 2y and use important identities.",
+    "mensuration": "Today is about mensuration - finding areas and volumes of shapes. Very practical for everyday problems!",
+    "exponents": "We'll practice exponents and powers. When we write 2 to the power 3, it means 2 times 2 times 2, which equals 8.",
+    # Science chapters
+    "science_matter": "Let's explore matter and materials - what things are made of and how they behave.",
+    "science_life": "Today we learn about life processes - how living things breathe, eat, and grow.",
+    "science_force": "We'll study force and motion - why things move and what makes them stop.",
+    "science_light": "Let's discover light and sound - how we see and hear the world around us.",
+    "science_nature": "Today is about natural resources - the gifts of nature and how to protect them.",
+}
+
 CHAPTER_NAMES = {
     # Math chapters
     "rational_numbers": "Ch 1: Rational Numbers (परिमेय संख्याएँ)",

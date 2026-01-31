@@ -132,7 +132,7 @@ def log_latency(operation: str, latency_ms: float, **context):
         **context
     )
 
-from questions import ALL_CHAPTERS, CHAPTER_NAMES
+from questions import ALL_CHAPTERS, CHAPTER_NAMES, CHAPTER_INTROS
 from evaluator import check_answer, normalize_spoken_input
 from tutor_intent import (
     generate_tutor_response,
@@ -901,13 +901,13 @@ def get_db():
 # SESSION MANAGEMENT
 # ============================================================
 
-def create_session(session_id: str) -> dict:
+def create_session(session_id: str, student_id: int = None) -> dict:
     now = datetime.now().isoformat()
     with get_db() as conn:
         conn.execute("""
-            INSERT INTO sessions (id, state, started_at, updated_at, questions_asked)
-            VALUES (?, ?, ?, ?, ?)
-        """, (session_id, SessionState.IDLE.value, now, now, '[]'))
+            INSERT INTO sessions (id, state, started_at, updated_at, questions_asked, student_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (session_id, SessionState.IDLE.value, now, now, '[]', student_id or 1))
     return get_session(session_id)
 
 
@@ -1122,9 +1122,9 @@ def get_weak_topics(student_id: int, threshold: float = 60.0) -> list:
 # Runs sync SQLite in thread pool to avoid blocking event loop
 # ============================================================
 
-async def async_create_session(session_id: str) -> dict:
+async def async_create_session(session_id: str, student_id: int = None) -> dict:
     """Async wrapper for create_session."""
-    return await asyncio.to_thread(create_session, session_id)
+    return await asyncio.to_thread(create_session, session_id, student_id)
 
 async def async_get_session(session_id: str) -> Optional[dict]:
     """Async wrapper for get_session."""
@@ -1145,6 +1145,71 @@ async def async_get_topic_performance(session_id: str) -> dict:
 async def async_get_weak_topics(student_id: int, threshold: float = 60.0) -> list:
     """Async wrapper for get_weak_topics."""
     return await asyncio.to_thread(get_weak_topics, student_id, threshold)
+
+
+def get_student_context(student_id: int) -> dict:
+    """
+    Get student context for personalized tutoring.
+    Returns name, weak topics, recent performance, and recommendations.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get student info
+        student = cursor.execute(
+            "SELECT id, name, grade FROM students WHERE id = ?", (student_id,)
+        ).fetchone()
+
+        if not student:
+            return None
+
+        student_name = student['name'] if student['name'] else "there"
+
+        # Get weak topics (below 60% accuracy)
+        weak_topics = get_weak_topics(student_id, threshold=60.0)
+
+        # Get recent session stats (last 7 days)
+        seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+
+        stats = cursor.execute("""
+            SELECT
+                COUNT(*) as session_count,
+                SUM(questions_attempted) as total_questions,
+                AVG(CASE WHEN questions_attempted > 0
+                    THEN CAST(questions_correct AS FLOAT) / questions_attempted * 100
+                    ELSE 0 END) as avg_accuracy
+            FROM sessions
+            WHERE student_id = ? AND started_at > ? AND state = ?
+        """, (student_id, seven_days_ago, SessionState.COMPLETED.value)).fetchone()
+
+        # Get strong topics (above 80% accuracy)
+        strong_topics = cursor.execute("""
+            SELECT
+                a.topic_tag,
+                COUNT(*) as attempts,
+                SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END) as correct
+            FROM attempts a
+            JOIN sessions s ON a.session_id = s.id
+            WHERE s.student_id = ? AND a.topic_tag IS NOT NULL
+            GROUP BY a.topic_tag
+            HAVING COUNT(*) >= 3 AND (SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) >= 80
+        """, (student_id,)).fetchall()
+
+        return {
+            "student_id": student_id,
+            "name": student_name,
+            "grade": student['grade'],
+            "weak_topics": weak_topics,
+            "strong_topics": [t['topic_tag'] for t in strong_topics] if strong_topics else [],
+            "recent_sessions": stats['session_count'] if stats else 0,
+            "recent_accuracy": round(stats['avg_accuracy'], 1) if stats and stats['avg_accuracy'] else None,
+            "is_returning": (stats['session_count'] or 0) > 0
+        }
+
+
+async def async_get_student_context(student_id: int) -> dict:
+    """Async wrapper for get_student_context."""
+    return await asyncio.to_thread(get_student_context, student_id)
 
 
 # ============================================================
@@ -1210,6 +1275,10 @@ def get_random_message(messages: list, **kwargs) -> str:
 # ============================================================
 # REQUEST/RESPONSE MODELS
 # ============================================================
+
+class SessionStartRequest(BaseModel):
+    student_id: Optional[int] = None  # Existing student ID
+    student_name: Optional[str] = None  # For new students or guests
 
 class ChapterRequest(BaseModel):
     session_id: str
@@ -1689,35 +1758,105 @@ async def get_chapters():
 
 
 @app.post("/api/session/start")
-async def start_session():
-    """Start a new tutoring session"""
+async def start_session(request: SessionStartRequest = None):
+    """
+    Start a new tutoring session with optional personalization.
+
+    If student_id is provided, the tutor will:
+    - Greet the student by name
+    - Remember their weak topics
+    - Suggest chapters to practice
+    """
     session_id = str(uuid.uuid4())
 
-    # Run DB operation and GPT call concurrently for better performance
-    await async_create_session(session_id)
+    # Handle None request (for backward compatibility)
+    if request is None:
+        request = SessionStartRequest()
 
-    # Use cached welcome responses (no GPT call needed)
-    welcome = generate_gpt_response(TutorIntent.SESSION_START)
+    # Get student context for personalization
+    student_context = None
+    student_id = request.student_id
+    student_name = request.student_name or "there"
+
+    if student_id:
+        student_context = await async_get_student_context(student_id)
+        if student_context:
+            student_name = student_context['name']
+
+    # Create session with student_id if provided
+    await async_create_session(session_id, student_id=student_id)
+
+    # Build personalized welcome message
+    if student_context and student_context['is_returning']:
+        # Returning student - personalized greeting
+        weak = student_context['weak_topics']
+        accuracy = student_context['recent_accuracy']
+
+        if weak:
+            # Has weak topics - suggest practice
+            weak_topic = weak[0] if len(weak) == 1 else f"{weak[0]} and {weak[1]}"
+            welcome = f"Welcome back, {student_name}! I noticed you could use more practice on {weak_topic}. Want to work on that today, or try something else?"
+        elif accuracy and accuracy >= 80:
+            # Doing well - celebrate and challenge
+            welcome = f"Great to see you, {student_name}! You've been doing really well lately. Ready for some new challenges?"
+        else:
+            # Regular returning student
+            welcome = f"Hello again, {student_name}! Good to have you back. Which chapter shall we practice today?"
+    else:
+        # New student or guest
+        if student_name and student_name != "there":
+            welcome = f"Hello {student_name}! I'm your math tutor. We'll practice together and I'll help you whenever you get stuck. Pick a chapter to start!"
+        else:
+            welcome = "Hello! I'm your math tutor. We'll practice together and I'll help you whenever you get stuck. Pick a chapter to start!"
+
     welcome_ssml = wrap_in_ssml(welcome)
 
-    return {
+    # Build response with recommendations
+    response = {
         "session_id": session_id,
         "message": welcome,
         "ssml": welcome_ssml,
         "chapters": list(ALL_CHAPTERS.keys()),
+        "chapter_names": CHAPTER_NAMES,
         "state": SessionState.IDLE.value
     }
+
+    # Add personalization data if available
+    if student_context:
+        response["student_name"] = student_name
+        response["weak_topics"] = student_context['weak_topics']
+        response["strong_topics"] = student_context['strong_topics']
+        response["recommended_chapter"] = student_context['weak_topics'][0] if student_context['weak_topics'] else None
+
+    return response
 
 
 @app.post("/api/session/chapter")
 async def select_chapter(request: ChapterRequest):
-    """Select a chapter for practice"""
+    """Select a chapter for practice with personalized introduction"""
     session = await async_get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if request.chapter not in ALL_CHAPTERS:
         raise HTTPException(status_code=400, detail="Invalid chapter")
+
+    # Get student's history with this chapter
+    student_id = session.get('student_id')
+    chapter_performance = None
+
+    if student_id:
+        # Check student's past performance on this chapter
+        with get_db() as conn:
+            chapter_performance = conn.execute("""
+                SELECT
+                    COUNT(*) as attempts,
+                    SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct,
+                    AVG(CASE WHEN is_correct THEN 100.0 ELSE 0.0 END) as accuracy
+                FROM attempts a
+                JOIN sessions s ON a.session_id = s.id
+                WHERE s.student_id = ? AND s.chapter = ?
+            """, (student_id, request.chapter)).fetchone()
 
     await async_update_session(
         request.session_id,
@@ -1726,9 +1865,35 @@ async def select_chapter(request: ChapterRequest):
         questions_asked=[]
     )
 
+    # Get chapter intro for a proper teaching introduction
+    chapter_name = CHAPTER_NAMES[request.chapter]
+    chapter_intro = CHAPTER_INTROS.get(request.chapter, "")
+
+    # Build personalized intro based on student's chapter history
+    if chapter_performance and chapter_performance['attempts'] and chapter_performance['attempts'] > 0:
+        accuracy = chapter_performance['accuracy'] or 0
+        attempts = chapter_performance['attempts']
+
+        if accuracy >= 80:
+            # Student is strong in this chapter
+            intro_message = f"You're doing great with this chapter! Last time you got {int(accuracy)}% right. {chapter_intro} Let's try some harder ones today."
+        elif accuracy >= 50:
+            # Moderate performance
+            intro_message = f"Good to practice this again! {chapter_intro} Let's build on what you learned last time."
+        else:
+            # Needs more practice
+            intro_message = f"Let's work on this together. {chapter_intro} Don't worry, I'll guide you step by step."
+    else:
+        # First time with this chapter
+        intro_message = f"Great choice! {chapter_intro} Let's start with an easy one."
+
+    intro_ssml = wrap_in_ssml(intro_message)
+
     return {
-        "message": f"Great! Let's practice {CHAPTER_NAMES[request.chapter]}!",
+        "message": intro_message,
+        "ssml": intro_ssml,
         "chapter": request.chapter,
+        "chapter_name": chapter_name,
         "state": SessionState.CHAPTER_SELECTED.value
     }
 

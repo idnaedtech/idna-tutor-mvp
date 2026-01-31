@@ -23,7 +23,7 @@ import os
 import time
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from openai import OpenAI
 
@@ -40,7 +40,7 @@ if not _gpt_logger.handlers:
 def _log_gpt_call(message: str, **context):
     """Log GPT call with structured JSON."""
     log_entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "level": "INFO",
         "message": message,
         **{k: v for k, v in context.items() if v is not None}
@@ -68,8 +68,9 @@ def get_openai_client():
 # Pre-generated responses - VERY SHORT for voice
 _cached_responses: Dict[str, List[str]] = {
     "session_start": [
-        "Ready to practice?",
-        "Let's start!",
+        "Hello! Great to see you. Which chapter would you like to practice today?",
+        "Hi there! Ready to learn something new? Pick a chapter to begin.",
+        "Welcome back! Let's make today's practice count. Choose a chapter.",
     ],
     "session_end": [
         "Good work today!",
