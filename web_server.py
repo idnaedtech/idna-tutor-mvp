@@ -277,9 +277,39 @@ print("### IDNA EdTech MVP - Clean Architecture ###")
 print("### TutorIntent Layer: ENABLED ###")
 
 
+# Keep-alive task to prevent Railway from sleeping
+_keep_alive_task = None
+
+async def keep_alive_loop():
+    """Ping health endpoint every 30 seconds to prevent Railway auto-sleep"""
+    import aiohttp
+    port = os.environ.get('PORT', '8000')
+    url = f"http://localhost:{port}/health"
+
+    # Wait for server to be fully ready
+    await asyncio.sleep(10)
+
+    print("[KEEP-ALIVE] Started - pinging every 30 seconds")
+
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        pass  # Silent success
+                    else:
+                        print(f"[KEEP-ALIVE] Warning: status {resp.status}")
+            except Exception as e:
+                print(f"[KEEP-ALIVE] Error: {e}")
+
+            await asyncio.sleep(30)  # Ping every 30 seconds
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events"""
+    global _keep_alive_task
+
     # Startup
     init_database()
     print("[STARTUP] IDNA EdTech MVP ready")
@@ -289,9 +319,23 @@ async def lifespan(app: FastAPI):
     print(f"[STARTUP] PORT env: {os.environ.get('PORT', 'not set')}")
     print(f"[STARTUP] Static files: {'static/' if os.path.exists('static') else 'NOT FOUND'}")
 
+    # Start keep-alive task (only in production with PORT env var)
+    if os.environ.get('PORT'):
+        _keep_alive_task = asyncio.create_task(keep_alive_loop())
+        print("[STARTUP] Keep-alive task: ENABLED")
+
     yield
 
-    # Shutdown - cleanup temp credentials file
+    # Shutdown - cancel keep-alive task
+    if _keep_alive_task:
+        _keep_alive_task.cancel()
+        try:
+            await _keep_alive_task
+        except asyncio.CancelledError:
+            pass
+        print("[SHUTDOWN] Keep-alive task stopped")
+
+    # Cleanup temp credentials file
     global _tts_creds_file
     if _tts_creds_file and os.path.exists(_tts_creds_file.name):
         try:
