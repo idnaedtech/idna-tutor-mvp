@@ -714,6 +714,7 @@ After:  "Not quite. What do you find?"
 | **Chatbot Tell Removal** | **Architecture** | **Banned phrases removed, GPT prompt constrained** |
 | **Frustration Detection** | **Feature** | **Expanded phrases: "i cant", "this is hard", "confusing"** |
 | **Primitive Tracking** | **Feature** | **No repeats within 3 turns per session** |
+| **Railway Keep-Alive** | **Infrastructure** | **Background task pings /health every 30s to prevent auto-sleep** |
 | Indian English voice | Voice | Changed TTS to `en-IN-Neural2-A` (warm Indian female), rate 0.92 |
 | Stop command handling | Feature | "let's stop", "bye", "i'm done" now end session gracefully |
 | Greeting flow fix | UI | Shows welcome + chapter intro before questions |
@@ -730,3 +731,77 @@ After:  "Not quite. What do you find?"
 | Disaster recovery guide | Docs | DISASTER_RECOVERY.md with full backup/restore steps |
 | NCERT alignment | Questions | Updated questions.py with full chapter list |
 | Sequential speech | UI | Greeting + chapter intro speak separately (faster first response) |
+
+---
+
+## Session Summary (January 31, 2026 - Evening)
+
+### What Was Done This Session
+
+**Goal:** Make the tutor feel like a real teacher, not a chatbot (based on ChatGPT feedback).
+
+#### 1. Warmth Policy Implementation
+- Added warmth levels 0-3 (neutral → calm → supportive → soothing)
+- Warmth primitives prepended to responses (e.g., "Okay.", "Not quite.", "No worries.")
+- Primitives are acknowledgements, NOT fake praise
+
+#### 2. Chatbot Tell Removal
+- Banned phrases removed: "Great job", "Excellent", "You're close", "Of course"
+- GPT polishing prompt updated to avoid praise phrases
+- Preserves warmth primitive at start during banned phrase removal
+
+#### 3. Escalation Ladder Fixed
+- Attempt 1: PROBE (diagnose)
+- Attempt 2: HINT_STEP
+- Attempt 3: WORKED_EXAMPLE
+- Attempt 4+: REVEAL (gated)
+
+#### 4. Frustration Detection Expanded
+- Now detects: "idk", "i cant", "this is hard", "confusing", "skip", "dont understand"
+- Triggers warmth level 3 (soothing)
+
+#### 5. Primitive Repetition Tracking
+- Tracks last 3 primitives per session
+- Won't repeat same phrase within 3 turns
+
+#### 6. Railway Keep-Alive
+- Background task pings /health every 30 seconds
+- Prevents Railway from auto-sleeping the container
+
+### Files Modified
+| File | Changes |
+|------|---------|
+| `teacher_policy.py` | Warmth levels, primitives, frustration detection, banned phrases |
+| `tutor_intent.py` | GPT prompt constraints, banned phrase removal |
+| `web_server.py` | Keep-alive task, session_id passing, cursor fix |
+| `railway.toml` | numReplicas = 1 |
+| `requirements.txt` | Added aiohttp |
+| `CLAUDE.md` | Full documentation |
+
+### Git Commits (Latest)
+```
+dd7a551 - Document Railway keep-alive fix
+43a3caa - Add keep-alive to prevent Railway auto-sleep
+b76561e - Fix Railway auto-sleep: set numReplicas = 1
+3a2c07c - Update CLAUDE.md with warmth policy improvements
+8f846c2 - Remove chatbot tells and improve warmth policy
+c69348a - Implement warmth policy for teacher-like tutoring
+```
+
+### Next Steps (For Future Sessions)
+1. **Test Railway deployment** - Check if keep-alive prevents auto-sleep
+2. **Demo scenarios** - Create scripted demo per ChatGPT recommendation
+3. **Parent dashboard** - Simple summary screen for parents
+4. **Event logging** - For student modeling and analytics
+5. **Hindi language support** - If needed for target audience
+
+### Local Testing
+```bash
+cd C:\Users\User\Documents\idna
+python web_server.py
+# Open http://localhost:8000
+```
+
+### Production URL
+Check Railway dashboard for the deployed URL.
+
