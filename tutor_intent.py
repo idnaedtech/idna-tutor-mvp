@@ -1330,25 +1330,59 @@ def _p0_enforce_max_sentences(text: str, max_sentences: int = 2) -> str:
 
 
 def _p0_enforce_one_question(text: str) -> str:
-    """P0: Only ONE question per turn."""
-    if text.count('?') <= 1:
-        return text
+    """
+    P0: Only ONE meaningful question per turn.
 
-    parts = text.split('?')
-    if len(parts) <= 2:
-        return text
+    Strategy (per ChatGPT feedback):
+    - Remove rhetorical questions ("OK?", "Right?", "Got it?")
+    - Keep the FIRST substantive question (the diagnostic), not the last
+    """
+    import re
 
-    # Keep last question, convert earlier to statements
-    result = []
-    for i, part in enumerate(parts[:-1]):
+    # Rhetorical/filler questions to remove
+    RHETORICAL = [
+        r"\bOK\?\s*",
+        r"\bOkay\?\s*",
+        r"\bRight\?\s*",
+        r"\bGot it\?\s*",
+        r"\bMakes sense\?\s*",
+        r"\bYes\?\s*",
+        r"\bNo\?\s*",
+        r"\bDoes that help\?\s*",
+        r"\bDoes that make sense\?\s*",
+    ]
+
+    # Remove rhetorical questions
+    cleaned = text
+    for pattern in RHETORICAL:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+
+    # Count remaining questions
+    q_count = cleaned.count('?')
+    if q_count <= 1:
+        return cleaned.strip()
+
+    # Multiple questions - keep FIRST substantive one
+    parts = cleaned.split('?')
+
+    # First part with content + ? is our question
+    result_parts = []
+    question_added = False
+
+    for i, part in enumerate(parts[:-1]):  # Skip last empty part
         part = part.strip()
-        if part:
-            if i < len(parts) - 2:
-                result.append(part + ".")
-            else:
-                result.append(part + "?")
+        if not part:
+            continue
 
-    return " ".join(result)
+        if not question_added:
+            # This is our first (diagnostic) question - keep it
+            result_parts.append(part + "?")
+            question_added = True
+        else:
+            # Convert later questions to statements
+            result_parts.append(part + ".")
+
+    return " ".join(result_parts)
 
 
 def _p0_enforce_ends_with_question(text: str, is_teaching: bool) -> str:
@@ -1367,15 +1401,72 @@ def _p0_enforce_ends_with_question(text: str, is_teaching: bool) -> str:
     return f"{text} {random.choice(checks)}"
 
 
-def apply_p0_enforcement(response: str, teacher_move: str) -> str:
-    """Apply all P0 enforcement rules AFTER GPT polishing."""
-    teaching_moves = ["probe", "hint_step", "worked_example", "error_explain", "reframe", "recap"]
-    is_teaching = teacher_move in teaching_moves
+def _p0_enforce_word_count(text: str, max_words: int = 55) -> str:
+    """
+    P0: Max 55 words before question (backstop for sentence cap).
+    Truncates at word limit while preserving question if present.
+    """
+    words = text.split()
+    if len(words) <= max_words:
+        return text
 
+    # Find where question mark is
+    truncated = " ".join(words[:max_words])
+
+    # Check if we cut off a question
+    if '?' in text and '?' not in truncated:
+        # Find the question in original and append it
+        q_start = text.rfind('?')
+        # Get the question sentence
+        q_sentence_start = text.rfind('.', 0, q_start)
+        if q_sentence_start == -1:
+            q_sentence_start = 0
+        else:
+            q_sentence_start += 1
+        question = text[q_sentence_start:q_start + 1].strip()
+
+        # Truncate statements and add question
+        statement_words = words[:max_words - len(question.split()) - 1]
+        truncated = " ".join(statement_words)
+        if not truncated.endswith('.'):
+            truncated += "."
+        truncated += " " + question
+
+    return truncated
+
+
+def apply_p0_enforcement(response: str, teacher_move: str) -> str:
+    """
+    Apply all P0 enforcement rules AFTER GPT polishing.
+
+    Rules:
+    1. Max 2 sentences (question preserved)
+    2. Remove rhetorical questions, keep first substantive question
+    3. Teaching moves must end with question
+    4. Max 55 words (backstop)
+    5. Reveal: EXPLICITLY allowed to skip question (documented exception)
+    """
+    # Moves that require a check question
+    TEACHING_MOVES = ["probe", "hint_step", "worked_example", "error_explain", "reframe", "recap"]
+
+    # Moves that DON'T require question (explicit exception)
+    NO_QUESTION_MOVES = ["reveal", "confirm", "challenge"]
+
+    is_teaching = teacher_move in TEACHING_MOVES
+    skip_question = teacher_move in NO_QUESTION_MOVES
+
+    # 1. Max 2 sentences
     response = _p0_enforce_max_sentences(response, max_sentences=2)
+
+    # 2. One question rule (removes rhetorical, keeps first substantive)
     response = _p0_enforce_one_question(response)
-    if is_teaching:
+
+    # 3. Must end with question (except reveal/confirm)
+    if is_teaching and not skip_question:
         response = _p0_enforce_ends_with_question(response, is_teaching=True)
+
+    # 4. Word count backstop
+    response = _p0_enforce_word_count(response, max_words=55)
 
     return response
 

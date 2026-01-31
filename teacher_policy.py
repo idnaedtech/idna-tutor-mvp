@@ -309,6 +309,9 @@ class TeacherPlan:
     check_question: Optional[str]      # Quick follow-up check
     tone: str                          # warm/firm/neutral
     max_words: int                     # Hard limit on response length
+    # New fields per ChatGPT feedback
+    expected_response_type: str = "number"  # "number" | "yes_no" | "short_explanation"
+    max_response_words: int = 10            # Expected student response length
 
 
 class TeacherPlanner:
@@ -388,9 +391,17 @@ class TeacherPlanner:
         )
 
     def _select_move(self, attempt_number: int, error_type: str) -> TeachingMove:
-        """Select teaching move based on attempt and error type."""
+        """
+        Select teaching move based on attempt and error type.
 
-        # Attempt 1: Probe or hint
+        Escalation ladder (per ChatGPT feedback - reveal is gated):
+        - Attempt 1: probe or hint_step (diagnostic)
+        - Attempt 2: hint_step or reframe (targeted help)
+        - Attempt 3: worked_example (show similar problem)
+        - Attempt 4+: reveal (only after sustained struggle)
+        """
+
+        # Attempt 1: Probe or hint (diagnostic)
         if attempt_number == 1:
             # If we know the error type, target it
             if error_type == ErrorType.SIGN_ERROR.value:
@@ -400,15 +411,19 @@ class TeacherPlanner:
             else:
                 return TeachingMove.HINT_STEP  # General hint
 
-        # Attempt 2: Escalate to worked example or reframe
+        # Attempt 2: Targeted help
         elif attempt_number == 2:
             if error_type in [ErrorType.CONCEPT_MISUNDERSTANDING.value,
                              ErrorType.WORD_PROBLEM_TRANSLATION.value]:
                 return TeachingMove.REFRAME
             else:
-                return TeachingMove.WORKED_EXAMPLE
+                return TeachingMove.HINT_STEP  # More specific hint
 
-        # Attempt 3+: Reveal with explanation
+        # Attempt 3: Worked example (show how)
+        elif attempt_number == 3:
+            return TeachingMove.WORKED_EXAMPLE
+
+        # Attempt 4+: Reveal (gated - only after sustained struggle)
         else:
             return TeachingMove.REVEAL
 
@@ -450,6 +465,16 @@ class TeacherPlanner:
     ) -> TeacherPlan:
         """Build a complete teaching plan for the selected move."""
 
+        # Determine expected response type based on correct answer
+        expected_type = "number"
+        max_resp_words = 5
+        if correct_answer.lower() in ["yes", "no"]:
+            expected_type = "yes_no"
+            max_resp_words = 3
+        elif "/" in correct_answer:
+            expected_type = "number"  # fraction
+            max_resp_words = 5
+
         if move == TeachingMove.PROBE:
             return TeacherPlan(
                 teacher_move=move,
@@ -459,6 +484,8 @@ class TeacherPlanner:
                 check_question=None,
                 tone="warm",
                 max_words=25,
+                expected_response_type="short_explanation",
+                max_response_words=15,
             )
 
         elif move == TeachingMove.HINT_STEP:
@@ -470,6 +497,8 @@ class TeacherPlanner:
                 check_question=None,
                 tone="neutral",
                 max_words=30,
+                expected_response_type=expected_type,
+                max_response_words=max_resp_words,
             )
 
         elif move == TeachingMove.WORKED_EXAMPLE:
@@ -478,9 +507,11 @@ class TeacherPlanner:
                 goal="Show similar simpler example",
                 prompt_to_student="Now apply the same idea to your question.",
                 explanation=hint_2 or f"Let me show you a simpler case first.",
-                check_question="Does that make sense?",
+                check_question=None,  # Removed rhetorical "Does that make sense?"
                 tone="warm",
                 max_words=45,
+                expected_response_type=expected_type,
+                max_response_words=max_resp_words,
             )
 
         elif move == TeachingMove.ERROR_EXPLAIN:
@@ -490,9 +521,11 @@ class TeacherPlanner:
                 goal="Name and fix the specific error",
                 prompt_to_student=f"You made a {error_name}. {error_hint}",
                 explanation="",
-                check_question="What should it be?",
+                check_question=None,  # Question is in prompt
                 tone="firm",
                 max_words=35,
+                expected_response_type=expected_type,
+                max_response_words=max_resp_words,
             )
 
         elif move == TeachingMove.REFRAME:
@@ -501,12 +534,15 @@ class TeacherPlanner:
                 goal="Explain differently",
                 prompt_to_student="Think of it this way...",
                 explanation=hint_2 or solution[:100] if solution else "",
-                check_question="Now what do you get?",
+                check_question=None,  # Removed rhetorical
                 tone="warm",
                 max_words=45,
+                expected_response_type=expected_type,
+                max_response_words=max_resp_words,
             )
 
         elif move == TeachingMove.REVEAL:
+            # Reveal: explicit exception - no question required (documented)
             return TeacherPlan(
                 teacher_move=move,
                 goal="Show correct answer with brief explanation",
@@ -515,6 +551,8 @@ class TeacherPlanner:
                 check_question=None,
                 tone="warm",
                 max_words=40,
+                expected_response_type="none",  # No response expected
+                max_response_words=0,
             )
 
         elif move == TeachingMove.CHALLENGE:
@@ -767,6 +805,9 @@ def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
         "sentence_count": sentence_count,
         "question_count": question_count,
         "ends_with_question": ends_with_q,
+        # New fields for UI/barge-in (per ChatGPT feedback)
+        "expected_response_type": plan.expected_response_type,
+        "max_response_words": plan.max_response_words,
     }
 
 
@@ -848,7 +889,8 @@ def plan_teacher_response(
     # Add diagnosis info
     result["error_type"] = error_diagnosis.get("error_type")
     result["error_confidence"] = error_diagnosis.get("confidence", 0)
-    result["move_to_next"] = is_correct or attempt_number >= 3
+    # Gated reveal: only move to next after attempt 4+ (per ChatGPT feedback)
+    result["move_to_next"] = is_correct or attempt_number >= 4
     result["show_answer"] = plan.teacher_move == TeachingMove.REVEAL
 
     return result
