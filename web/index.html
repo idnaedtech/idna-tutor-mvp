@@ -760,25 +760,40 @@
         async function startSession() {
             showTyping();
             try {
-                const data = await api('/api/session/start', 'POST');
-                sessionId = data.session_id;
+                // Step 1: Start session and get personalized greeting
+                const startData = await api('/api/session/start', 'POST');
+                sessionId = startData.session_id;
 
-                currentChapter = chapterDropdown.value;
-                await api('/api/session/chapter', 'POST', {
-                    session_id: sessionId,
-                    chapter: currentChapter
-                });
-
+                // Switch to chat view
                 welcomeScreen.classList.add('hidden');
                 chatArea.classList.add('active');
                 inputArea.style.display = 'block';
                 endBtn.style.display = 'block';
+                hideTyping();
 
-                await getNextQuestion();
+                // Step 2: Show and speak the welcome message
+                addMessage(startData.message, 'tutor', '', false);
+
+                // Step 3: Select chapter and get intro
+                currentChapter = chapterDropdown.value;
+                const chapterData = await api('/api/session/chapter', 'POST', {
+                    session_id: sessionId,
+                    chapter: currentChapter
+                });
+
+                // Step 4: Show chapter intro, then speak welcome + intro together
+                addMessage(chapterData.message, 'tutor', '', false);
+
+                // Combine welcome and chapter intro for speech
+                const fullIntro = startData.message + ' ' + chapterData.message;
+                speak(fullIntro, null, {
+                    onComplete: () => getNextQuestion()
+                });
+
             } catch (e) {
+                hideTyping();
                 alert('Error: ' + e.message);
             }
-            hideTyping();
         }
 
         // Get next question
@@ -882,7 +897,20 @@
                 const payload = { text, voice: 'nova' };
                 if (ssml) payload.ssml = ssml;
                 const data = await api('/api/text-to-speech', 'POST', payload);
+
+                if (!data.audio) {
+                    console.error('TTS returned no audio');
+                    throw new Error('No audio data');
+                }
+
                 currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
+
+                currentAudio.onerror = (e) => {
+                    console.error('Audio playback error:', e);
+                    setStatus('');
+                    if (onComplete) onComplete();
+                };
+
                 currentAudio.onended = () => {
                     setStatus('');
                     currentAudio = null;
@@ -899,7 +927,16 @@
                         }, 300);
                     }
                 };
-                currentAudio.play();
+
+                // Try to play with user gesture requirement handling
+                const playPromise = currentAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.error('Audio play failed:', error);
+                        setStatus('');
+                        if (onComplete) onComplete();
+                    });
+                }
             } catch (e) {
                 console.error('TTS error:', e);
                 setStatus('');
@@ -914,6 +951,11 @@
         let mediaRecorder = null;
         let audioChunks = [];
 
+        let recordingTimeout = null;
+        let silenceTimeout = null;
+        let audioContext = null;
+        let analyser = null;
+
         async function startRecording() {
             // BARGE-IN: Stop tutor audio immediately when student starts speaking
             stopTTS();
@@ -923,13 +965,57 @@
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
 
+                // Set up silence detection
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                source.connect(analyser);
+
+                let silenceStart = null;
+                const silenceThreshold = 0.01; // Adjust sensitivity
+                const silenceDuration = 1500; // Stop after 1.5s of silence
+
+                function checkSilence() {
+                    if (!isListening) return;
+
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    analyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b) / dataArray.length / 255;
+
+                    if (average < silenceThreshold) {
+                        if (!silenceStart) silenceStart = Date.now();
+                        else if (Date.now() - silenceStart > silenceDuration) {
+                            // Silence detected for long enough - auto stop
+                            stopRecording();
+                            return;
+                        }
+                    } else {
+                        silenceStart = null; // Reset on sound
+                    }
+
+                    silenceTimeout = requestAnimationFrame(checkSilence);
+                }
+
                 mediaRecorder.ondataavailable = (e) => {
                     audioChunks.push(e.data);
                 };
 
                 mediaRecorder.onstop = async () => {
-                    // Stop all tracks
+                    // Clean up
                     stream.getTracks().forEach(track => track.stop());
+                    if (audioContext) {
+                        audioContext.close();
+                        audioContext = null;
+                    }
+                    if (silenceTimeout) {
+                        cancelAnimationFrame(silenceTimeout);
+                        silenceTimeout = null;
+                    }
+                    if (recordingTimeout) {
+                        clearTimeout(recordingTimeout);
+                        recordingTimeout = null;
+                    }
 
                     // Create audio blob and send to Whisper API
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
@@ -940,7 +1026,16 @@
                 isListening = true;
                 voiceBtn.classList.add('recording');
                 voiceBtn.textContent = '⏹';
-                setStatus('Listening...', 'listening');
+                setStatus('Listening... (auto-stops after silence)', 'listening');
+
+                // Start silence detection
+                checkSilence();
+
+                // Max recording time (8 seconds) as fallback
+                recordingTimeout = setTimeout(() => {
+                    if (isListening) stopRecording();
+                }, 8000);
+
             } catch (e) {
                 console.error('Microphone error:', e);
                 setStatus('Microphone not available', 'error');
