@@ -312,6 +312,111 @@ class TeacherPlan:
     # New fields per ChatGPT feedback
     expected_response_type: str = "number"  # "number" | "yes_no" | "short_explanation"
     max_response_words: int = 10            # Expected student response length
+    # Warmth Policy fields
+    warmth_level: int = 1                   # 0=neutral, 1=calm, 2=supportive, 3=soothing
+    warmth_primitive: str = ""              # One warmth phrase (max 8 words)
+
+
+# ============================================================
+# WARMTH POLICY (makes tutor feel human, not examiner)
+# ============================================================
+
+# Warmth primitives (only ONE per turn, max 8 words each)
+WARMTH_PRIMITIVES = {
+    0: [],  # Neutral - no warmth phrase
+    1: [    # Calm (default)
+        "Okay.",
+        "Let's see.",
+        "Alright.",
+    ],
+    2: [    # Supportive (after wrong attempt)
+        "I see what you did.",
+        "That's a common step.",
+        "Good try.",
+        "You're on the right track.",
+    ],
+    3: [    # Soothing (frustration detected)
+        "This part confuses many students.",
+        "Take your time.",
+        "No rush, think it through.",
+        "It's okay, let's work through this.",
+    ],
+}
+
+# Phrases to BAN (assistant-y, not teacher-like)
+BANNED_PHRASES = [
+    "as an ai",
+    "i can help you",
+    "let's dive in",
+    "great question",
+    "absolutely",
+    "certainly",
+    "of course",
+    "i'd be happy to",
+]
+
+
+def calculate_warmth_level(
+    attempt_number: int,
+    is_correct: bool,
+    consecutive_wrong: int = 0,
+    response_time_seconds: float = 0,
+    student_answer: str = "",
+) -> int:
+    """
+    Calculate warmth level based on context.
+
+    0 = neutral (fast drills)
+    1 = calm (default)
+    2 = supportive (after wrong attempt / hesitation)
+    3 = soothing (frustration signals)
+    """
+    # Default: calm
+    warmth = 1
+
+    # Correct answer: stay calm
+    if is_correct:
+        return 1
+
+    # Wrong answer: increase warmth
+    if not is_correct:
+        warmth = 2
+
+    # Frustration signals: go to soothing
+    # Note: Only check text-based frustration signals, not short numeric answers
+    student_lower = student_answer.lower().strip()
+    frustration_signals = [
+        consecutive_wrong >= 2,
+        student_lower in ["idk", "i don't know", "dont know", "no idea", "help", "i give up", "skip"],
+        response_time_seconds > 30,  # Long hesitation
+    ]
+
+    if any(frustration_signals):
+        warmth = 3
+
+    return warmth
+
+
+def get_warmth_primitive(warmth_level: int) -> str:
+    """Get one warmth phrase for the given level."""
+    import random
+    primitives = WARMTH_PRIMITIVES.get(warmth_level, [])
+    if primitives:
+        return random.choice(primitives)
+    return ""
+
+
+def remove_banned_phrases(text: str) -> str:
+    """Remove assistant-y phrases that break teacher vibe."""
+    result = text
+    for phrase in BANNED_PHRASES:
+        # Case insensitive removal
+        import re
+        pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+        result = pattern.sub("", result)
+    # Clean up extra spaces
+    result = re.sub(r'\s+', ' ', result).strip()
+    return result
 
 
 class TeacherPlanner:
@@ -340,6 +445,7 @@ class TeacherPlanner:
         hint_2: str = "",
         solution: str = "",
         student_weak_topics: List[str] = None,
+        consecutive_wrong: int = 0,
     ) -> TeacherPlan:
         """
         Generate a teaching plan based on evaluation.
@@ -350,6 +456,15 @@ class TeacherPlanner:
         error_type = error_diagnosis.get("error_type", ErrorType.UNKNOWN.value)
         error_hint = error_diagnosis.get("hint", "")
 
+        # Calculate warmth level based on context
+        warmth = calculate_warmth_level(
+            attempt_number=attempt_number,
+            is_correct=is_correct,
+            consecutive_wrong=consecutive_wrong,
+            student_answer=student_answer,
+        )
+        warmth_phrase = get_warmth_primitive(warmth)
+
         # CORRECT ANSWER
         if is_correct:
             move = TeachingMove.CONFIRM
@@ -357,14 +472,18 @@ class TeacherPlanner:
                 # Quick correct - maybe challenge them
                 move = TeachingMove.CHALLENGE if self._should_challenge() else TeachingMove.CONFIRM
 
+            # Per ChatGPT: even confirm should end with quick check
+            # "Correct. Now, what's the rule you used in one line?"
             return TeacherPlan(
                 teacher_move=move,
                 goal="Acknowledge success and reinforce understanding",
-                prompt_to_student="",  # No question needed for confirm
-                explanation=f"The answer {correct_answer} is correct.",
+                prompt_to_student="What rule did you use?",  # Quick check even on correct
+                explanation=f"Correct!",
                 check_question=None,
                 tone="warm",
                 max_words=20,
+                warmth_level=warmth,
+                warmth_primitive=warmth_phrase,
             )
 
         # WRONG ANSWER - Choose teaching move based on attempt and error
@@ -388,42 +507,45 @@ class TeacherPlanner:
             hint_1=hint_1,
             hint_2=hint_2,
             solution=solution,
+            consecutive_wrong=consecutive_wrong,
         )
 
     def _select_move(self, attempt_number: int, error_type: str) -> TeachingMove:
         """
         Select teaching move based on attempt and error type.
 
-        Escalation ladder (per ChatGPT feedback - reveal is gated):
-        - Attempt 1: probe or hint_step (diagnostic)
-        - Attempt 2: hint_step or reframe (targeted help)
-        - Attempt 3: worked_example (show similar problem)
-        - Attempt 4+: reveal (only after sustained struggle)
+        Escalation ladder (per ChatGPT feedback):
+        - Attempt 1: PROBE (diagnose - locate the misunderstanding)
+        - Attempt 2: hint_step (small step based on diagnosis)
+        - Attempt 3: reframe OR worked_example (change representation)
+        - Attempt 4+: reveal (last resort, gated)
+
+        Key insight: "hint_step is not diagnostic. Probe locates misunderstanding."
         """
 
-        # Attempt 1: Probe or hint (diagnostic)
+        # Attempt 1: PROBE (diagnostic question to locate misunderstanding)
         if attempt_number == 1:
-            # If we know the error type, target it
-            if error_type == ErrorType.SIGN_ERROR.value:
-                return TeachingMove.PROBE  # "Is it positive or negative?"
-            elif error_type == ErrorType.FRACTION_ADDITION.value:
-                return TeachingMove.ERROR_EXPLAIN  # Name the common mistake
-            else:
-                return TeachingMove.HINT_STEP  # General hint
+            return TeachingMove.PROBE
 
-        # Attempt 2: Targeted help
+        # Attempt 2: HINT_STEP (small step based on diagnosis)
         elif attempt_number == 2:
+            # Use error_type to choose targeted hint
+            if error_type == ErrorType.SIGN_ERROR.value:
+                return TeachingMove.REFRAME  # Number line visualization
+            elif error_type == ErrorType.WRONG_OPERATION.value:
+                return TeachingMove.HINT_STEP  # Probe keyword then hint
+            else:
+                return TeachingMove.HINT_STEP
+
+        # Attempt 3: REFRAME or WORKED_EXAMPLE (change representation)
+        elif attempt_number == 3:
             if error_type in [ErrorType.CONCEPT_MISUNDERSTANDING.value,
-                             ErrorType.WORD_PROBLEM_TRANSLATION.value]:
+                             ErrorType.SIGN_ERROR.value]:
                 return TeachingMove.REFRAME
             else:
-                return TeachingMove.HINT_STEP  # More specific hint
+                return TeachingMove.WORKED_EXAMPLE
 
-        # Attempt 3: Worked example (show how)
-        elif attempt_number == 3:
-            return TeachingMove.WORKED_EXAMPLE
-
-        # Attempt 4+: Reveal (gated - only after sustained struggle)
+        # Attempt 4+: REVEAL (gated - last resort)
         else:
             return TeachingMove.REVEAL
 
@@ -462,8 +584,18 @@ class TeacherPlanner:
         hint_1: str,
         hint_2: str,
         solution: str,
+        consecutive_wrong: int = 0,
     ) -> TeacherPlan:
         """Build a complete teaching plan for the selected move."""
+
+        # Calculate warmth level based on context
+        warmth = calculate_warmth_level(
+            attempt_number=attempt_number,
+            is_correct=False,  # _build_plan only called for wrong answers
+            consecutive_wrong=consecutive_wrong,
+            student_answer=student_answer,
+        )
+        warmth_phrase = get_warmth_primitive(warmth)
 
         # Determine expected response type based on correct answer
         expected_type = "number"
@@ -486,6 +618,8 @@ class TeacherPlanner:
                 max_words=25,
                 expected_response_type="short_explanation",
                 max_response_words=15,
+                warmth_level=warmth,
+                warmth_primitive=warmth_phrase,
             )
 
         elif move == TeachingMove.HINT_STEP:
@@ -499,6 +633,8 @@ class TeacherPlanner:
                 max_words=30,
                 expected_response_type=expected_type,
                 max_response_words=max_resp_words,
+                warmth_level=warmth,
+                warmth_primitive=warmth_phrase,
             )
 
         elif move == TeachingMove.WORKED_EXAMPLE:
@@ -512,6 +648,8 @@ class TeacherPlanner:
                 max_words=45,
                 expected_response_type=expected_type,
                 max_response_words=max_resp_words,
+                warmth_level=warmth,
+                warmth_primitive=warmth_phrase,
             )
 
         elif move == TeachingMove.ERROR_EXPLAIN:
@@ -526,6 +664,8 @@ class TeacherPlanner:
                 max_words=35,
                 expected_response_type=expected_type,
                 max_response_words=max_resp_words,
+                warmth_level=warmth,
+                warmth_primitive=warmth_phrase,
             )
 
         elif move == TeachingMove.REFRAME:
@@ -539,10 +679,13 @@ class TeacherPlanner:
                 max_words=45,
                 expected_response_type=expected_type,
                 max_response_words=max_resp_words,
+                warmth_level=warmth,
+                warmth_primitive=warmth_phrase,
             )
 
         elif move == TeachingMove.REVEAL:
             # Reveal: explicit exception - no question required (documented)
+            # Warmth level 2 (supportive) for reveal - student struggled
             return TeacherPlan(
                 teacher_move=move,
                 goal="Show correct answer with brief explanation",
@@ -553,6 +696,8 @@ class TeacherPlanner:
                 max_words=40,
                 expected_response_type="none",  # No response expected
                 max_response_words=0,
+                warmth_level=2,  # Supportive - student needs encouragement
+                warmth_primitive="No problem, let's see the answer.",
             )
 
         elif move == TeachingMove.CHALLENGE:
@@ -564,6 +709,8 @@ class TeacherPlanner:
                 check_question=None,
                 tone="warm",
                 max_words=20,
+                warmth_level=1,  # Calm
+                warmth_primitive="",
             )
 
         else:  # CONFIRM
@@ -575,6 +722,8 @@ class TeacherPlanner:
                 check_question=None,
                 tone="warm",
                 max_words=20,
+                warmth_level=1,  # Calm
+                warmth_primitive="",
             )
 
     def _get_error_name(self, error_type: str) -> str:
@@ -752,8 +901,16 @@ def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
     - Max 2 sentences before asking a question
     - Must end with exactly ONE question (if teaching move)
     - One-question rule (never ask multiple questions)
+
+    WARMTH POLICY:
+    - Prepend warmth primitive (max 8 words) if present
+    - Only one warmth phrase per turn
     """
     parts = []
+
+    # Add warmth primitive FIRST if present (max 8 words acknowledgement)
+    if plan.warmth_primitive:
+        parts.append(plan.warmth_primitive.strip())
 
     # Add explanation if present
     if plan.explanation:
@@ -768,6 +925,9 @@ def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
         parts.append(plan.check_question.strip())
 
     response = " ".join(parts)
+
+    # === WARMTH POLICY: Remove banned phrases ===
+    response = remove_banned_phrases(response)
 
     # === P0 ENFORCEMENT ===
 
@@ -808,6 +968,9 @@ def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
         # New fields for UI/barge-in (per ChatGPT feedback)
         "expected_response_type": plan.expected_response_type,
         "max_response_words": plan.max_response_words,
+        # Warmth policy
+        "warmth_level": plan.warmth_level,
+        "warmth_primitive": plan.warmth_primitive,
     }
 
 

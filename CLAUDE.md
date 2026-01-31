@@ -644,13 +644,43 @@ Created `DISASTER_RECOVERY.md` with:
 5. **REFRAME** - Explain using different representation
 6. **REVEAL** - Show answer after max attempts
 
+**Escalation Ladder (per ChatGPT feedback):**
+- Attempt 1: PROBE (diagnose - locate misunderstanding)
+- Attempt 2: HINT_STEP (small step based on diagnosis)
+- Attempt 3: WORKED_EXAMPLE (change representation)
+- Attempt 4+: REVEAL (last resort, gated)
+
+**Warmth Policy (January 31, 2026):**
+Makes the tutor feel human, not like an examiner.
+
+| Warmth Level | Trigger | Example Primitives |
+|--------------|---------|-------------------|
+| 0 (neutral) | Fast drills | (none) |
+| 1 (calm) | Default/correct | "Okay.", "Let's see." |
+| 2 (supportive) | Wrong answer | "Good try.", "I see what you did." |
+| 3 (soothing) | Frustration signals | "Take your time.", "This part confuses many students." |
+
+Frustration signals that trigger level 3:
+- 2+ consecutive wrong answers
+- Giving up phrases: "idk", "i don't know", "skip", "help"
+- Long hesitation (>30s response time)
+
+Warmth primitives are prepended to responses (max 8 words):
+- Level 2 example: "Good try. Your answer should be a fraction. What do you get?"
+- Level 3 example: "Take your time. What step did you do first?"
+
+**Banned Phrases (assistant-y, not teacher-like):**
+- "As an AI...", "I can help you...", "Let's dive in...", "Great question..."
+- Replaced with teacher equivalents: "Okay.", "Let's do it step by step."
+
 **API Response Fields:**
 ```json
 {
-  "teacher_move": "error_explain",
-  "error_type": "sign_error",
-  "goal": "Name and fix the specific error",
-  "message": "Check the sign - is it positive or negative?"
+  "teacher_move": "probe",
+  "error_type": "incomplete_answer",
+  "goal": "Find what student doesn't understand",
+  "warmth_level": 2,
+  "message": "Good try. Your answer should be a fraction. What do you get?"
 }
 ```
 
@@ -663,6 +693,8 @@ Created `DISASTER_RECOVERY.md` with:
 | Item | Type | Implementation |
 |------|------|----------------|
 | **Teacher Policy** | **Architecture** | **Error diagnosis + teaching moves (ChatGPT recommendation)** |
+| **Warmth Policy** | **Architecture** | **Warmth levels 0-3, primitives, frustration detection** |
+| **Escalation Ladder** | **Architecture** | **probe → hint_step → worked_example → reveal** |
 | Indian English voice | Voice | Changed TTS to `en-IN-Neural2-A` (warm Indian female), rate 0.92 |
 | Stop command handling | Feature | "let's stop", "bye", "i'm done" now end session gracefully |
 | Greeting flow fix | UI | Shows welcome + chapter intro before questions |

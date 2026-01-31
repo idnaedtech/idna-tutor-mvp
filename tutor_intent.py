@@ -1142,6 +1142,8 @@ def generate_tutor_response(
         sentence_count=teacher_plan.get("sentence_count"),
         question_count=teacher_plan.get("question_count"),
         ends_with_question=teacher_plan.get("ends_with_question"),
+        warmth_level=teacher_plan.get("warmth_level"),
+        warmth_primitive=teacher_plan.get("warmth_primitive"),
     )
 
     # Map teacher moves to TutorIntent for backward compatibility
@@ -1208,6 +1210,8 @@ def generate_tutor_response(
         "teacher_move": teacher_plan["teacher_move"],
         "error_type": teacher_plan.get("error_type"),
         "goal": teacher_plan.get("goal"),
+        # Warmth policy
+        "warmth_level": teacher_plan.get("warmth_level", 1),
     }
 
 

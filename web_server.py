@@ -1151,10 +1151,8 @@ def get_student_context(student_id: int) -> dict:
     Returns name, weak topics, recent performance, and recommendations.
     """
     with get_db() as conn:
-        cursor = conn.cursor()
-
         # Get student info
-        student = cursor.execute(
+        student = conn.execute(
             "SELECT id, name, grade FROM students WHERE id = ?", (student_id,)
         ).fetchone()
 
@@ -1169,7 +1167,7 @@ def get_student_context(student_id: int) -> dict:
         # Get recent session stats (last 7 days)
         seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
-        stats = cursor.execute("""
+        stats = conn.execute("""
             SELECT
                 COUNT(*) as session_count,
                 SUM(questions_attempted) as total_questions,
@@ -1181,7 +1179,7 @@ def get_student_context(student_id: int) -> dict:
         """, (student_id, seven_days_ago, SessionState.COMPLETED.value)).fetchone()
 
         # Get strong topics (above 80% accuracy)
-        strong_topics = cursor.execute("""
+        strong_topics = conn.execute("""
             SELECT
                 a.topic_tag,
                 COUNT(*) as attempts,
@@ -2292,6 +2290,7 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
             "teacher_move": tutor_result.get("teacher_move"),
             "error_type": tutor_result.get("error_type"),
             "goal": tutor_result.get("goal"),
+            "warmth_level": tutor_result.get("warmth_level", 1),
         }
         # Store in idempotency cache
         _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
@@ -2347,6 +2346,7 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
                 "teacher_move": tutor_result.get("teacher_move"),
                 "error_type": tutor_result.get("error_type"),
                 "goal": tutor_result.get("goal"),
+                "warmth_level": tutor_result.get("warmth_level", 1),
             }
             # Store in idempotency cache
             _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
@@ -2380,6 +2380,7 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
                 "teacher_move": tutor_result.get("teacher_move"),
                 "error_type": tutor_result.get("error_type"),
                 "goal": tutor_result.get("goal"),
+                "warmth_level": tutor_result.get("warmth_level", 1),
             }
             # Store in idempotency cache
             _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
