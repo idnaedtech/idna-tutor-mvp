@@ -781,13 +781,16 @@
                     chapter: currentChapter
                 });
 
-                // Step 4: Show chapter intro, then speak welcome + intro together
+                // Step 4: Show chapter intro
                 addMessage(chapterData.message, 'tutor', '', false);
 
-                // Combine welcome and chapter intro for speech
-                const fullIntro = startData.message + ' ' + chapterData.message;
-                speak(fullIntro, null, {
-                    onComplete: () => getNextQuestion()
+                // Speak greeting first (faster), then chapter intro, then get question
+                speak(startData.message, null, {
+                    onComplete: () => {
+                        speak(chapterData.message, null, {
+                            onComplete: () => getNextQuestion()
+                        });
+                    }
                 });
 
             } catch (e) {

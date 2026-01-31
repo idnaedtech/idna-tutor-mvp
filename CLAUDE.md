@@ -16,9 +16,14 @@
 
 ```
 Brain = FSM (flow control) + Evaluator (deterministic)
+Teacher Policy = Error diagnosis + Teaching move selection (structured)
 LLM = Language layer ONLY (phrasing, not judging)
 TutorIntent = Teaching micro-behaviors
 ```
+
+**2-Pass Approach (per ChatGPT analysis):**
+1. **Pass 1 (Planner):** Teacher Policy decides WHAT teaching move to use
+2. **Pass 2 (Speaker):** GPT renders it in natural teacher voice
 
 **Single Entry Point:** `web_server.py` is the only server file. No gRPC, no orchestrator.
 
@@ -28,6 +33,7 @@ TutorIntent = Teaching micro-behaviors
 |------|---------|
 | `web_server.py` | Main FastAPI app - FSM, API endpoints, TTS/STT integration |
 | `tutor_intent.py` | Natural language generation, teaching intents, voice pacing |
+| `teacher_policy.py` | **NEW** Error diagnosis, teaching moves, planner (ChatGPT architecture) |
 | `questions.py` | Question bank (ALL_CHAPTERS, CHAPTER_NAMES) |
 | `evaluator.py` | Answer evaluation - handles fractions, words, units, spoken variants |
 | `subject_pack.py` | Subject pack management |
@@ -597,9 +603,58 @@ Created `DISASTER_RECOVERY.md` with:
 | P3 | Multi-subject evaluator scaffolding | Future feature | |
 | P3 | Tutor behavior test suite | Testing | |
 
+### Teacher Policy Architecture (January 31, 2026)
+
+**Problem Solved:** Tutor felt like a quiz master (chatbot), not a real teacher.
+
+**Solution:** Implemented ChatGPT's recommended Teacher Policy architecture.
+
+**Key Concepts:**
+
+| Concept | Description |
+|---------|-------------|
+| Error Taxonomy | Diagnose WHY student got it wrong (sign_error, fraction_addition, etc.) |
+| Teaching Moves | Fixed menu: Probe, Hint-Step, Worked-Example, Error-Explain, Reframe, Reveal |
+| TEACH → CHECK Rule | Never teach without asking a check question in the same turn |
+| 2-Pass Approach | Pass 1: Planner decides move. Pass 2: GPT renders in teacher voice |
+| Repetition Breaker | If same move fails twice, force a different approach |
+| Word Limit | Max 55 words before asking a question |
+
+**Error Types (Math):**
+- `sign_error` - Got +/- wrong
+- `arithmetic_slip` - Simple calculation mistake
+- `fraction_addition` - Added denominators (common error)
+- `common_denominator` - Forgot to find LCD
+- `word_problem_translation` - Couldn't parse word problem
+- `incomplete_answer` - Didn't give proper answer
+
+**Teaching Moves:**
+1. **PROBE** - Ask diagnostic question to find misunderstanding
+2. **HINT_STEP** - Give smallest next step (not the answer)
+3. **WORKED_EXAMPLE** - Show similar simpler example
+4. **ERROR_EXPLAIN** - Name the error and fix it
+5. **REFRAME** - Explain using different representation
+6. **REVEAL** - Show answer after max attempts
+
+**API Response Fields:**
+```json
+{
+  "teacher_move": "error_explain",
+  "error_type": "sign_error",
+  "goal": "Name and fix the specific error",
+  "message": "Check the sign - is it positive or negative?"
+}
+```
+
+**Files:**
+- `teacher_policy.py` - Error taxonomy, teaching moves, TeacherPlanner class
+- `tutor_intent.py` - Updated to use teacher policy (2-pass approach)
+- `web_server.py` - Passes session_id for move tracking
+
 ### Completed Items (January 31, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| **Teacher Policy** | **Architecture** | **Error diagnosis + teaching moves (ChatGPT recommendation)** |
 | Indian English voice | Voice | Changed TTS to `en-IN-Neural2-A` (warm Indian female), rate 0.92 |
 | Stop command handling | Feature | "let's stop", "bye", "i'm done" now end session gracefully |
 | Greeting flow fix | UI | Shows welcome + chapter intro before questions |
@@ -615,3 +670,4 @@ Created `DISASTER_RECOVERY.md` with:
 | TTS timing | UI | Waits for audio.onended before next question |
 | Disaster recovery guide | Docs | DISASTER_RECOVERY.md with full backup/restore steps |
 | NCERT alignment | Questions | Updated questions.py with full chapter list |
+| Sequential speech | UI | Greeting + chapter intro speak separately (faster first response) |

@@ -3,17 +3,20 @@ IDNA EdTech - TutorIntent Layer
 ================================
 This module implements the TutorIntent system for natural, human-like teaching behavior.
 
-Architecture (per PRD):
+Architecture (per PRD + ChatGPT Teacher Policy):
 - Brain = FSM (flow control) + Evaluator (deterministic)
+- Teacher Policy = Decides WHAT teaching move to use (structured)
 - LLM = Language layer ONLY (phrasing, not judging)
 - TutorIntent = Controls teaching micro-behaviors
 
 Key Principles:
-1. Voice pacing: max 2 sentences per turn
-2. One idea per sentence
-3. Avoid robotic transitions ("Now," "Therefore," "Next,")
-4. Warm, encouraging tone for Tier 2/3 Indian students
-5. USE GPT for natural phrasing - never sound robotic
+1. Diagnose errors - know WHY student got it wrong
+2. Choose teaching move - from fixed menu (Probe, Hint, Example, etc.)
+3. One question per turn - teachers don't ask 3 questions
+4. Max 55 words before asking - this is spoken aloud
+5. TEACH → CHECK rule - always follow teaching with a check question
+6. Voice pacing: max 2 sentences per turn
+7. Warm, encouraging tone for Tier 2/3 Indian students
 """
 
 from enum import Enum
@@ -26,6 +29,15 @@ import logging
 from datetime import datetime, timezone
 from functools import lru_cache
 from openai import OpenAI
+
+# Import Teacher Policy for structured teaching decisions
+from teacher_policy import (
+    plan_teacher_response,
+    diagnose_error,
+    TeachingMove,
+    ErrorType,
+    clear_planner,
+)
 
 
 # Simple structured logger for GPT calls
@@ -1087,47 +1099,79 @@ def generate_tutor_response(
     solution: str = "",
     correct_answer: str = "",
     student_answer: str = "",
+    session_id: str = "",
 ) -> Dict[str, Any]:
     """
-    Generate a tutor response using GPT for natural phrasing.
+    Generate a tutor response using Teacher Policy + GPT.
 
-    The FSM decides the intent (WHAT to say).
-    GPT decides the phrasing (HOW to say it).
+    Architecture (2-pass approach per ChatGPT analysis):
+    - Pass 1: Teacher Policy decides WHAT teaching move to use (structured)
+    - Pass 2: GPT renders it in natural teacher voice
 
-    PERFORMANCE: Optimized to minimize GPT calls:
-    - Uses cached responses for move_on transitions (no extra GPT call)
-    - Main response may use cache for common intents
+    Key behaviors:
+    - Diagnoses WHY student got it wrong (error taxonomy)
+    - Chooses from fixed teaching moves (Probe, Hint, Example, etc.)
+    - One question per turn
+    - Max 55 words before asking a question
+    - TEACH → CHECK rule enforced
     """
-    # Determine intent from FSM state
-    tutor = TutorVoice()
-    intent = tutor.determine_intent(
+    # PASS 1: Teacher Policy - Structured decision making
+    # This decides the teaching move and builds a plan
+    teacher_plan = plan_teacher_response(
+        session_id=session_id or "default",
         is_correct=is_correct,
-        attempt_number=attempt_number,
-    )
-
-    # Select appropriate hint based on attempt
-    hint = ""
-    if intent == TutorIntent.GUIDE_THINKING:
-        hint = hint_1 or "Think about what operation you need."
-    elif intent == TutorIntent.NUDGE_CORRECTION:
-        hint = hint_2 or hint_1 or "Check your calculation carefully."
-
-    # Generate natural response using GPT (with caching)
-    response = generate_gpt_response(
-        intent=intent,
-        question=question,
-        student_answer=student_answer,
-        hint=hint,
-        solution=solution or f"The answer is {correct_answer}",
         correct_answer=correct_answer,
+        student_answer=student_answer,
+        question_text=question,
         attempt_number=attempt_number,
+        hint_1=hint_1,
+        hint_2=hint_2,
+        solution=solution,
     )
 
-    # Determine if we should move to next question
-    should_move = is_correct or attempt_number >= 3
+    # Map teacher moves to TutorIntent for backward compatibility
+    move_to_intent = {
+        TeachingMove.CONFIRM.value: TutorIntent.CONFIRM_CORRECT,
+        TeachingMove.CHALLENGE.value: TutorIntent.CONFIRM_CORRECT,
+        TeachingMove.PROBE.value: TutorIntent.GUIDE_THINKING,
+        TeachingMove.HINT_STEP.value: TutorIntent.GUIDE_THINKING,
+        TeachingMove.WORKED_EXAMPLE.value: TutorIntent.NUDGE_CORRECTION,
+        TeachingMove.ERROR_EXPLAIN.value: TutorIntent.NUDGE_CORRECTION,
+        TeachingMove.REFRAME.value: TutorIntent.NUDGE_CORRECTION,
+        TeachingMove.RECAP.value: TutorIntent.NUDGE_CORRECTION,
+        TeachingMove.REVEAL.value: TutorIntent.EXPLAIN_ONCE,
+        TeachingMove.CHECK_UNDERSTANDING.value: TutorIntent.GUIDE_THINKING,
+    }
+    intent = move_to_intent.get(teacher_plan["teacher_move"], TutorIntent.GUIDE_THINKING)
 
-    # DON'T append move_on phrase - keep response short for TTS
-    # UI handles transition separately
+    # PASS 2: GPT renders the plan in natural voice
+    # Use the teacher plan's response as the base, but let GPT make it warmer
+    base_response = teacher_plan["response"]
+
+    # For simple confirmations, use GPT for variety
+    if is_correct and attempt_number <= 2:
+        response = generate_gpt_response(
+            intent=intent,
+            question=question,
+            student_answer=student_answer,
+            hint="",
+            solution=solution or f"The answer is {correct_answer}",
+            correct_answer=correct_answer,
+            attempt_number=attempt_number,
+        )
+    else:
+        # For teaching moves, use the structured plan but polish with GPT
+        # This ensures we follow the teaching strategy while sounding natural
+        response = _polish_teacher_response(
+            base_response=base_response,
+            teacher_move=teacher_plan["teacher_move"],
+            error_type=teacher_plan.get("error_type"),
+            correct_answer=correct_answer,
+            student_answer=student_answer,
+        )
+
+    # Enforce word limit (max 55 words before a question)
+    response = _enforce_word_limit(response, max_words=55)
 
     # Wrap in SSML for natural voice pauses
     ssml = wrap_in_ssml(response)
@@ -1136,10 +1180,83 @@ def generate_tutor_response(
         "intent": intent.value,
         "response": response,
         "ssml": ssml,
-        "move_to_next": should_move,
-        "show_answer": intent == TutorIntent.EXPLAIN_ONCE,
+        "move_to_next": teacher_plan["move_to_next"],
+        "show_answer": teacher_plan["show_answer"],
         "attempt_number": attempt_number,
+        # New fields from teacher policy
+        "teacher_move": teacher_plan["teacher_move"],
+        "error_type": teacher_plan.get("error_type"),
+        "goal": teacher_plan.get("goal"),
     }
+
+
+def _polish_teacher_response(
+    base_response: str,
+    teacher_move: str,
+    error_type: str,
+    correct_answer: str,
+    student_answer: str,
+) -> str:
+    """
+    Polish the structured teacher response to sound more natural.
+    Uses GPT but with strict constraints from the teaching plan.
+    """
+    # For simple cases, the base response is already good
+    if teacher_move in [TeachingMove.REVEAL.value, TeachingMove.CONFIRM.value]:
+        return base_response
+
+    # Try to make it warmer with GPT, but fall back to base if needed
+    try:
+        client = get_openai_client()
+
+        # Very short prompt - we just want to warm up the phrasing
+        polish_prompt = f"""Make this teacher response warmer and more natural.
+Keep it SHORT (max 20 words). Don't add information, just rephrase:
+
+"{base_response}"
+
+Output ONLY the polished response, nothing else."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a warm math tutor. Keep responses very short."},
+                {"role": "user", "content": polish_prompt}
+            ],
+            max_tokens=40,
+            temperature=0.7,
+        )
+        result = response.choices[0].message.content.strip().strip('"\'')
+
+        # Only use polished version if it's not much longer
+        if len(result.split()) <= len(base_response.split()) + 5:
+            return result
+    except Exception:
+        pass
+
+    return base_response
+
+
+def _enforce_word_limit(text: str, max_words: int = 55) -> str:
+    """Enforce word limit - teachers don't monologue."""
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+
+    # Truncate at word limit
+    truncated = " ".join(words[:max_words])
+
+    # Try to end at a sentence boundary
+    last_period = truncated.rfind('.')
+    last_question = truncated.rfind('?')
+    last_end = max(last_period, last_question)
+
+    if last_end > max_words // 2:  # If we have a decent sentence
+        truncated = truncated[:last_end + 1]
+    elif not truncated.endswith(('.', '?', '!')):
+        truncated += "."
+
+    return truncated
 
 
 # For testing

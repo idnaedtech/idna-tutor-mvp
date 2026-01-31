@@ -2178,7 +2178,8 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
     print(f"[DEBUG EVAL] Correct answer: {repr(question['answer'])} bytes: {question['answer'].encode('utf-8')}")
     print(f"[DEBUG EVAL] Result: {is_correct}")
 
-    # Generate natural tutor response using TutorIntent layer
+    # Generate natural tutor response using Teacher Policy + TutorIntent layer
+    # Teacher Policy diagnoses errors and chooses teaching moves
     with Timer() as tutor_timer:
         tutor_result = generate_tutor_response(
             is_correct=is_correct,
@@ -2189,6 +2190,7 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
             solution=question.get('solution', f"The answer is {question['answer']}."),
             correct_answer=question['answer'],
             student_answer=request.answer,  # Pass what student actually said
+            session_id=request.session_id,  # For teacher policy move tracking
         )
 
     # Log answer evaluation
@@ -2201,6 +2203,8 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
         is_correct=is_correct,
         attempt_number=attempt_count,
         intent=tutor_result.get("intent"),
+        teacher_move=tutor_result.get("teacher_move"),  # Teacher policy move
+        error_type=tutor_result.get("error_type"),      # Diagnosed error
         tutor_latency_ms=tutor_timer.elapsed_ms,
         difficulty=question.get('difficulty', 1),
     )
@@ -2284,6 +2288,10 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
             "difficulty": current_difficulty,
             "new_difficulty": new_diff,
             "difficulty_changed": difficulty_changed,
+            # Teacher Policy fields
+            "teacher_move": tutor_result.get("teacher_move"),
+            "error_type": tutor_result.get("error_type"),
+            "goal": tutor_result.get("goal"),
         }
         # Store in idempotency cache
         _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
@@ -2335,6 +2343,10 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
                 "difficulty": current_difficulty,
                 "new_difficulty": new_diff,
                 "difficulty_changed": difficulty_changed,
+                # Teacher Policy fields
+                "teacher_move": tutor_result.get("teacher_move"),
+                "error_type": tutor_result.get("error_type"),
+                "goal": tutor_result.get("goal"),
             }
             # Store in idempotency cache
             _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
@@ -2364,6 +2376,10 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
                 "move_to_next": False,
                 "state": SessionState.SHOWING_HINT.value,
                 "difficulty": current_difficulty,
+                # Teacher Policy fields
+                "teacher_move": tutor_result.get("teacher_move"),
+                "error_type": tutor_result.get("error_type"),
+                "goal": tutor_result.get("goal"),
             }
             # Store in idempotency cache
             _store_idempotency(request.session_id, question['id'], request.idempotency_key, response)
