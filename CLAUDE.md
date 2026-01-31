@@ -289,7 +289,7 @@ Log events include:
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
 
-## Current State (January 30, 2026)
+## Current State (January 31, 2026)
 
 ### Deployment Status
 - **Railway**: Auto-deploys from GitHub `main` branch
@@ -522,9 +522,10 @@ Created `DISASTER_RECOVERY.md` with:
 | P3 | Multi-subject evaluator scaffolding | Future feature | |
 | P3 | Tutor behavior test suite | Testing | |
 
-### Completed Items (January 30, 2026)
+### Completed Items (January 31, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| Deprecation fix | Code | `datetime.utcnow()` → `datetime.now(timezone.utc)` in `web_server.py` |
 | Audio barge-in | UI | Mic click, chat click, Escape, Spacebar all stop TTS |
 | UI phase states | Enhancement | LISTENING/SPEAKING/PROCESSING with pulsing dot indicator |
 | Short responses | Tutor | 30-60 token limits, no Hindi mixing, pure English |

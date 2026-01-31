@@ -30,7 +30,7 @@ import asyncio
 import logging
 import time
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager, asynccontextmanager
 from functools import lru_cache
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
@@ -76,7 +76,7 @@ class StructuredLogger:
     def _format_log(self, level: str, message: str, **context) -> str:
         """Format log entry as JSON."""
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": level,
             "message": message,
             **context
