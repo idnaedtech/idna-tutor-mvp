@@ -355,6 +355,32 @@ Log events include:
     - After 2 failures, suggests text input instead of voice
     - `suggest_text_input` flag in response
 
+### Railway Container Shutdown Issue (January 31, 2026)
+
+**Problem**: Railway stops container ~5 seconds after startup despite `/health` returning 200 OK.
+
+**Timeline from logs**:
+```
+06:39:57 - Uvicorn running on 8080
+06:39:58 - /health 200 OK  ✓
+06:40:02 - Stopping Container  ← Platform kills it 4 seconds later
+```
+
+**Root Cause**: Railway platform configuration, NOT app code. Possible causes:
+1. Service classified as Worker/Job instead of Web Service
+2. Scale-to-zero or auto-sleep enabled
+3. Min replicas set to 0
+
+**Fix** (in Railway Dashboard):
+| Setting | Required Value |
+|---------|----------------|
+| Service Type | Web Service (not Worker/Job) |
+| Min Replicas | 1 (not 0) |
+| Auto-sleep | Disabled |
+| Public Domain | Enabled |
+
+**Status**: Pending - requires Railway dashboard configuration change.
+
 ### Deployment Fixes (January 30, 2026)
 Several fixes were needed for Railway deployment:
 1. **Lazy asyncio.Lock init**: Can't create `asyncio.Lock()` at module level
@@ -514,6 +540,8 @@ Created `DISASTER_RECOVERY.md` with:
 ### Remaining Items
 | Priority | Item | Type | Notes |
 |----------|------|------|-------|
+| P0 | Railway container shutdown | Infrastructure | Container stops 5s after health check - fix in Railway dashboard |
+| P1 | Cost controls | Infrastructure | STT/TTS caps, max session length, max questions/session |
 | P1 | Hindi language support | Feature | Needs: Hindi TTS voice, Whisper hints, evaluator variants |
 | P2 | OpenAPI spec / JSON schemas | Documentation | |
 | P2 | Rate limiting per student | Infrastructure | |
