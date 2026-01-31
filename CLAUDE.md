@@ -651,27 +651,34 @@ Created `DISASTER_RECOVERY.md` with:
 - Attempt 4+: REVEAL (last resort, gated)
 
 **Warmth Policy (January 31, 2026):**
-Makes the tutor feel human, not like an examiner.
+Makes the tutor feel human, not like an examiner. Uses acknowledgements, NOT fake praise.
 
 | Warmth Level | Trigger | Example Primitives |
 |--------------|---------|-------------------|
 | 0 (neutral) | Fast drills | (none) |
-| 1 (calm) | Default/correct | "Okay.", "Let's see." |
-| 2 (supportive) | Wrong answer | "Good try.", "I see what you did." |
-| 3 (soothing) | Frustration signals | "Take your time.", "This part confuses many students." |
+| 1 (calm) | Default/correct | "Okay.", "Right.", "Good." |
+| 2 (supportive) | Wrong answer | "Okay.", "Hmm.", "Close.", "Not quite." |
+| 3 (soothing) | Frustration signals | "No worries.", "It's okay.", "Let's slow down." |
 
-Frustration signals that trigger level 3:
+**Frustration Detection (expanded):**
 - 2+ consecutive wrong answers
-- Giving up phrases: "idk", "i don't know", "skip", "help"
+- Giving up phrases: "idk", "i cant", "this is hard", "confusing", "skip", "dont understand"
 - Long hesitation (>30s response time)
 
-Warmth primitives are prepended to responses (max 8 words):
-- Level 2 example: "Good try. Your answer should be a fraction. What do you get?"
-- Level 3 example: "Take your time. What step did you do first?"
+**Primitive Repetition Tracking:**
+- Tracks last 3 primitives per session
+- Won't repeat same phrase within 3 turns
 
-**Banned Phrases (assistant-y, not teacher-like):**
-- "As an AI...", "I can help you...", "Let's dive in...", "Great question..."
-- Replaced with teacher equivalents: "Okay.", "Let's do it step by step."
+**Banned Phrases (removed from GPT output):**
+- Fake praise: "Great job", "Excellent", "Amazing", "Well done", "You're close"
+- Filler: "Absolutely", "Certainly", "Of course"
+- AI tells: "As an AI...", "I can help you..."
+
+**Example Response Flow:**
+```
+Before: "Great effort! You're really close! Can you try again?"
+After:  "Not quite. What do you find?"
+```
 
 **API Response Fields:**
 ```json
@@ -680,7 +687,7 @@ Warmth primitives are prepended to responses (max 8 words):
   "error_type": "incomplete_answer",
   "goal": "Find what student doesn't understand",
   "warmth_level": 2,
-  "message": "Good try. Your answer should be a fraction. What do you get?"
+  "message": "Not quite. What do you find?"
 }
 ```
 
@@ -693,8 +700,11 @@ Warmth primitives are prepended to responses (max 8 words):
 | Item | Type | Implementation |
 |------|------|----------------|
 | **Teacher Policy** | **Architecture** | **Error diagnosis + teaching moves (ChatGPT recommendation)** |
-| **Warmth Policy** | **Architecture** | **Warmth levels 0-3, primitives, frustration detection** |
+| **Warmth Policy** | **Architecture** | **Warmth levels 0-3, acknowledgements (not fake praise)** |
 | **Escalation Ladder** | **Architecture** | **probe → hint_step → worked_example → reveal** |
+| **Chatbot Tell Removal** | **Architecture** | **Banned phrases removed, GPT prompt constrained** |
+| **Frustration Detection** | **Feature** | **Expanded phrases: "i cant", "this is hard", "confusing"** |
+| **Primitive Tracking** | **Feature** | **No repeats within 3 turns per session** |
 | Indian English voice | Voice | Changed TTS to `en-IN-Neural2-A` (warm Indian female), rate 0.92 |
 | Stop command handling | Feature | "let's stop", "bye", "i'm done" now end session gracefully |
 | Greeting flow fix | UI | Shows welcome + chapter intro before questions |
