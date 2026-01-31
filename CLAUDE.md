@@ -528,6 +528,52 @@ speak(message, ssml, {
 });
 ```
 
+### Personalized Tutoring (January 31, 2026)
+
+**Problem**: Tutor acted like a quiz master - no greeting, no context, jumped straight to questions.
+
+**Solution**: Full personalization based on student history.
+
+**Session Start** (`/api/session/start`):
+- Accepts optional `student_id` and `student_name`
+- Fetches student context: name, weak topics, strong topics, recent accuracy
+- Personalized greetings:
+  - New student: "Hello {name}! I'm your math tutor..."
+  - Returning with weak topics: "Welcome back! I noticed you could use more practice on {topic}..."
+  - Returning doing well: "Great to see you! You've been doing really well..."
+- Returns `weak_topics`, `strong_topics`, `recommended_chapter` in response
+
+**Chapter Selection** (`/api/session/chapter`):
+- Checks student's past performance on selected chapter
+- Personalized intro based on history:
+  - First time: "Great choice! {chapter_intro} Let's start easy."
+  - Strong (80%+): "You're doing great! Let's try harder ones."
+  - Moderate: "Good to practice this again!"
+  - Needs work: "Let's work on this together. I'll guide you."
+
+**Chapter Introductions** (`questions.py`):
+- Added `CHAPTER_INTROS` dict with explanations for all 15 chapters
+- Each chapter has 2-3 sentence intro explaining what student will learn
+
+**New Request Model**:
+```python
+class SessionStartRequest(BaseModel):
+    student_id: Optional[int] = None
+    student_name: Optional[str] = None
+```
+
+**New Function** (`get_student_context`):
+```python
+# Returns:
+{
+    "name": "Rahul",
+    "weak_topics": ["fractions", "equations"],
+    "strong_topics": ["squares"],
+    "recent_accuracy": 72.5,
+    "is_returning": True
+}
+```
+
 ### Disaster Recovery Guide (January 30, 2026)
 
 Created `DISASTER_RECOVERY.md` with:
@@ -553,7 +599,9 @@ Created `DISASTER_RECOVERY.md` with:
 ### Completed Items (January 31, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
-| Deprecation fix | Code | `datetime.utcnow()` → `datetime.now(timezone.utc)` in `web_server.py` |
+| Personalized tutoring | Feature | Student context, weak/strong topics, personalized greetings |
+| Chapter introductions | Feature | `CHAPTER_INTROS` dict with explanations for all 15 chapters |
+| Deprecation fix | Code | `datetime.utcnow()` → `datetime.now(timezone.utc)` in both files |
 | Audio barge-in | UI | Mic click, chat click, Escape, Spacebar all stop TTS |
 | UI phase states | Enhancement | LISTENING/SPEAKING/PROCESSING with pulsing dot indicator |
 | Short responses | Tutor | 30-60 token limits, no Hindi mixing, pure English |
