@@ -562,8 +562,147 @@ class TeacherPlanner:
 
 
 # ============================================================
-# RESPONSE GENERATOR (Pass 2: Speaking)
+# RESPONSE GENERATOR (Pass 2: Speaking) + ENFORCEMENT
 # ============================================================
+
+# P0 ENFORCEMENT: Acceptance criteria
+MAX_SENTENCES_BEFORE_QUESTION = 2
+ONE_QUESTION_RULE = True  # Only one question per turn
+MUST_END_WITH_QUESTION = True  # Teaching turns must end with question
+
+# Moves that MUST end with a check question (TEACH → CHECK rule)
+TEACHING_MOVES_REQUIRE_CHECK = {
+    TeachingMove.PROBE,
+    TeachingMove.HINT_STEP,
+    TeachingMove.WORKED_EXAMPLE,
+    TeachingMove.ERROR_EXPLAIN,
+    TeachingMove.REFRAME,
+    TeachingMove.RECAP,
+}
+
+# Moves that don't need a check question
+NO_CHECK_REQUIRED = {
+    TeachingMove.CONFIRM,
+    TeachingMove.CHALLENGE,  # Challenge IS the question
+    TeachingMove.REVEAL,     # Showing answer, moving on
+}
+
+# Default check questions when plan doesn't have one
+DEFAULT_CHECK_QUESTIONS = [
+    "What do you get?",
+    "Try again?",
+    "What's your answer?",
+    "Can you try?",
+]
+
+
+def _count_sentences(text: str) -> int:
+    """Count sentences in text."""
+    import re
+    # Split on sentence endings
+    sentences = re.split(r'[.!?]+', text)
+    # Filter empty
+    return len([s for s in sentences if s.strip()])
+
+
+def _count_questions(text: str) -> int:
+    """Count questions in text."""
+    return text.count('?')
+
+
+def _ends_with_question(text: str) -> bool:
+    """Check if text ends with a question."""
+    text = text.strip()
+    return text.endswith('?')
+
+
+def _enforce_max_sentences(text: str, max_sentences: int = 2) -> str:
+    """
+    P0 ENFORCEMENT: Max 2 sentences before the question.
+    Truncates if too long.
+    """
+    import re
+
+    # Split into sentences (keep delimiters)
+    parts = re.split(r'([.!?]+)', text)
+
+    # Reconstruct sentences
+    sentences = []
+    current = ""
+    for part in parts:
+        if re.match(r'^[.!?]+$', part):
+            current += part
+            if current.strip():
+                sentences.append(current.strip())
+            current = ""
+        else:
+            current = part
+
+    if current.strip():
+        sentences.append(current.strip())
+
+    # If within limit, return as-is
+    if len(sentences) <= max_sentences:
+        return text
+
+    # Truncate to max sentences
+    return " ".join(sentences[:max_sentences])
+
+
+def _enforce_one_question(text: str) -> str:
+    """
+    P0 ENFORCEMENT: Only ONE question per turn.
+    Keeps only the last question if multiple exist.
+    """
+    if _count_questions(text) <= 1:
+        return text
+
+    import re
+
+    # Split on question marks
+    parts = text.split('?')
+
+    if len(parts) <= 2:
+        return text
+
+    # Keep statements before last question + last question
+    # "What's 2+2? And 3+3?" → "What's 2+2. And 3+3?"
+    statements = parts[:-2]
+    last_question = parts[-2]
+
+    # Convert earlier questions to statements
+    result_parts = []
+    for stmt in statements:
+        stmt = stmt.strip()
+        if stmt:
+            result_parts.append(stmt + ".")
+
+    result_parts.append(last_question.strip() + "?")
+
+    return " ".join(result_parts)
+
+
+def _enforce_ends_with_question(text: str, move: TeachingMove) -> str:
+    """
+    P0 ENFORCEMENT: Teaching moves MUST end with a question.
+    Adds default check question if missing.
+    """
+    if move not in TEACHING_MOVES_REQUIRE_CHECK:
+        return text
+
+    if _ends_with_question(text):
+        return text
+
+    # Add a default check question
+    import random
+    check = random.choice(DEFAULT_CHECK_QUESTIONS)
+
+    text = text.strip()
+    if not text.endswith(('.', '!', '?')):
+        text += "."
+
+    return f"{text} {check}"
+
 
 def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
     """
@@ -571,10 +710,10 @@ def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
 
     This is Pass 2: Render the plan in teacher voice.
 
-    Rules:
-    - Max 55 words before asking a question
-    - One question per turn
-    - Must end with a question if not CONFIRM/REVEAL
+    P0 ENFORCEMENT (strict rules):
+    - Max 2 sentences before asking a question
+    - Must end with exactly ONE question (if teaching move)
+    - One-question rule (never ask multiple questions)
     """
     parts = []
 
@@ -586,19 +725,36 @@ def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
     if plan.prompt_to_student:
         parts.append(plan.prompt_to_student.strip())
 
-    # Add check question if present (for CHECK rule)
+    # Add check question if present (for TEACH → CHECK rule)
     if plan.check_question:
         parts.append(plan.check_question.strip())
 
     response = " ".join(parts)
 
-    # Enforce word limit
+    # === P0 ENFORCEMENT ===
+
+    # 1. Max 2 sentences before question
+    response = _enforce_max_sentences(response, MAX_SENTENCES_BEFORE_QUESTION)
+
+    # 2. One question rule
+    if ONE_QUESTION_RULE:
+        response = _enforce_one_question(response)
+
+    # 3. Must end with question (for teaching moves)
+    if MUST_END_WITH_QUESTION:
+        response = _enforce_ends_with_question(response, plan.teacher_move)
+
+    # 4. Final word limit check
     words = response.split()
     if len(words) > plan.max_words:
         response = " ".join(words[:plan.max_words])
-        # Make sure we end cleanly
         if not response.endswith(('.', '?', '!')):
-            response += "."
+            response += "?"  # Prefer question ending
+
+    # Count for metrics
+    sentence_count = _count_sentences(response)
+    question_count = _count_questions(response)
+    ends_with_q = _ends_with_question(response)
 
     return {
         "response": response,
@@ -607,6 +763,10 @@ def generate_teacher_response(plan: TeacherPlan) -> Dict[str, Any]:
         "tone": plan.tone,
         "has_check_question": plan.check_question is not None,
         "max_words": plan.max_words,
+        # P0 metrics for acceptance criteria
+        "sentence_count": sentence_count,
+        "question_count": question_count,
+        "ends_with_question": ends_with_q,
     }
 
 

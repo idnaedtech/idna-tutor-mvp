@@ -1129,6 +1129,21 @@ def generate_tutor_response(
         solution=solution,
     )
 
+    # P0 REQUIREMENT: Log planner JSON for every turn
+    _log_gpt_call(
+        "Teacher planner output",
+        event="teacher_plan",
+        session_id=session_id,
+        is_correct=is_correct,
+        attempt_number=attempt_number,
+        teacher_move=teacher_plan.get("teacher_move"),
+        error_type=teacher_plan.get("error_type"),
+        goal=teacher_plan.get("goal"),
+        sentence_count=teacher_plan.get("sentence_count"),
+        question_count=teacher_plan.get("question_count"),
+        ends_with_question=teacher_plan.get("ends_with_question"),
+    )
+
     # Map teacher moves to TutorIntent for backward compatibility
     move_to_intent = {
         TeachingMove.CONFIRM.value: TutorIntent.CONFIRM_CORRECT,
@@ -1170,7 +1185,13 @@ def generate_tutor_response(
             student_answer=student_answer,
         )
 
-    # Enforce word limit (max 55 words before a question)
+    # P0 ENFORCEMENT: Apply strict rules AFTER GPT polishing
+    # 1. Max 2 sentences before question
+    # 2. Exactly one question per turn
+    # 3. Teaching moves must end with question
+    response = apply_p0_enforcement(response, teacher_plan.get("teacher_move", ""))
+
+    # Also enforce word limit
     response = _enforce_word_limit(response, max_words=55)
 
     # Wrap in SSML for natural voice pauses
@@ -1257,6 +1278,106 @@ def _enforce_word_limit(text: str, max_words: int = 55) -> str:
         truncated += "."
 
     return truncated
+
+
+# ============================================================
+# P0 ENFORCEMENT (applied AFTER GPT polishing)
+# ============================================================
+
+def _count_sentences(text: str) -> int:
+    """Count sentences in text."""
+    import re
+    sentences = re.split(r'[.!?]+', text)
+    return len([s for s in sentences if s.strip()])
+
+
+def _p0_enforce_max_sentences(text: str, max_sentences: int = 2) -> str:
+    """
+    P0: Max 2 sentences total (including the question).
+    Keeps the question if present, truncates statements.
+    """
+    import re
+
+    # Split into sentences (keep punctuation)
+    parts = re.split(r'([.!?]+)', text)
+    sentences = []
+    current = ""
+    for part in parts:
+        if re.match(r'^[.!?]+$', part):
+            current += part
+            if current.strip():
+                sentences.append(current.strip())
+            current = ""
+        else:
+            current = part
+    if current.strip():
+        sentences.append(current.strip())
+
+    if len(sentences) <= max_sentences:
+        return text
+
+    # Check if last sentence is a question - preserve it
+    has_question = sentences[-1].endswith('?') if sentences else False
+
+    if has_question:
+        # Keep last sentence (question) + first (max-1) statements
+        question = sentences[-1]
+        statements = sentences[:-1][:max_sentences - 1]
+        return " ".join(statements + [question])
+    else:
+        # No question - just truncate
+        return " ".join(sentences[:max_sentences])
+
+
+def _p0_enforce_one_question(text: str) -> str:
+    """P0: Only ONE question per turn."""
+    if text.count('?') <= 1:
+        return text
+
+    parts = text.split('?')
+    if len(parts) <= 2:
+        return text
+
+    # Keep last question, convert earlier to statements
+    result = []
+    for i, part in enumerate(parts[:-1]):
+        part = part.strip()
+        if part:
+            if i < len(parts) - 2:
+                result.append(part + ".")
+            else:
+                result.append(part + "?")
+
+    return " ".join(result)
+
+
+def _p0_enforce_ends_with_question(text: str, is_teaching: bool) -> str:
+    """P0: Teaching moves MUST end with question."""
+    if not is_teaching:
+        return text
+
+    text = text.strip()
+    if text.endswith('?'):
+        return text
+
+    import random
+    checks = ["What do you get?", "Try again?", "What's your answer?"]
+    if not text.endswith(('.', '!')):
+        text += "."
+    return f"{text} {random.choice(checks)}"
+
+
+def apply_p0_enforcement(response: str, teacher_move: str) -> str:
+    """Apply all P0 enforcement rules AFTER GPT polishing."""
+    teaching_moves = ["probe", "hint_step", "worked_example", "error_explain", "reframe", "recap"]
+    is_teaching = teacher_move in teaching_moves
+
+    response = _p0_enforce_max_sentences(response, max_sentences=2)
+    response = _p0_enforce_one_question(response)
+    if is_teaching:
+        response = _p0_enforce_ends_with_question(response, is_teaching=True)
+
+    return response
 
 
 # For testing
