@@ -1187,12 +1187,12 @@ def get_student_context(student_id: int) -> dict:
             SELECT
                 a.topic_tag,
                 COUNT(*) as attempts,
-                SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END) as correct
+                SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct
             FROM attempts a
             JOIN sessions s ON a.session_id = s.id
             WHERE s.student_id = ? AND a.topic_tag IS NOT NULL
             GROUP BY a.topic_tag
-            HAVING COUNT(*) >= 3 AND (SUM(CASE WHEN a.is_correct THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) >= 80
+            HAVING COUNT(*) >= 3 AND (SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) >= 80
         """, (student_id,)).fetchall()
 
         return {
@@ -1851,8 +1851,8 @@ async def select_chapter(request: ChapterRequest):
             chapter_performance = conn.execute("""
                 SELECT
                     COUNT(*) as attempts,
-                    SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct,
-                    AVG(CASE WHEN is_correct THEN 100.0 ELSE 0.0 END) as accuracy
+                    SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct,
+                    AVG(CASE WHEN is_correct = 1 THEN 100.0 ELSE 0.0 END) as accuracy
                 FROM attempts a
                 JOIN sessions s ON a.session_id = s.id
                 WHERE s.student_id = ? AND s.chapter = ?
