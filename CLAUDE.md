@@ -415,10 +415,11 @@ Several fixes were needed for Railway deployment:
   };
   ```
 
-**Voice Quality** (TTS improvements):
-- Changed from `en-IN-Wavenet-A` to `en-US-Neural2-F`
-- Adjusted settings: `speaking_rate=0.95, pitch=-1.0, volume_gain_db=3.0`
-- Voice is now warmer and less nasal/robotic
+**Voice Quality** (TTS improvements - Updated Jan 31):
+- Now using Indian English: `en-IN-Neural2-A` (warm Indian female voice)
+- Settings: `speaking_rate=0.92, pitch=-0.5, volume_gain_db=3.0`
+- Fallback: `en-IN-Neural2-D` (Indian male voice)
+- Voice is warmer, slower, natural Indian accent for target audience
 
 **Answer Evaluation** (`evaluator.py`):
 - Fixed negative fraction handling: "minus 1 by 7" → "-1/7"
@@ -599,6 +600,11 @@ Created `DISASTER_RECOVERY.md` with:
 ### Completed Items (January 31, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| Indian English voice | Voice | Changed TTS to `en-IN-Neural2-A` (warm Indian female), rate 0.92 |
+| Stop command handling | Feature | "let's stop", "bye", "i'm done" now end session gracefully |
+| Greeting flow fix | UI | Shows welcome + chapter intro before questions |
+| Auto-stop recording | UI | Silence detection (1.5s) + max 8s timeout |
+| Postgres CASE WHEN fix | Bug | `is_correct = 1` for Postgres boolean compatibility |
 | Personalized tutoring | Feature | Student context, weak/strong topics, personalized greetings |
 | Chapter introductions | Feature | `CHAPTER_INTROS` dict with explanations for all 15 chapters |
 | Deprecation fix | Code | `datetime.utcnow()` → `datetime.now(timezone.utc)` in both files |
