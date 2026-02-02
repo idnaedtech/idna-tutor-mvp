@@ -39,6 +39,35 @@ TutorIntent = Teaching micro-behaviors
 | `subject_pack.py` | Subject pack management |
 | `web/index.html` | Student learning interface |
 | `static/` | Static assets |
+| `.claude/settings.json` | Claude Code hooks configuration |
+| `.claude/hooks/` | Auto-review hook scripts |
+
+## Claude Code Configuration
+
+The project includes auto-review hooks in `.claude/` that enforce code quality on every edit.
+
+### How It Works
+1. **PostToolUse Hook** (`log_modified_files.sh`): Logs every file modified by Write/Edit/MultiEdit to `.claude/_state/modified_files.log`
+2. **Stop Hook** (`auto_review_gate.sh`): When Claude stops, triggers an adversarial code review agent
+
+### Code Review Rules (Enforced Automatically)
+| Rule | Description |
+|------|-------------|
+| No vague naming | Ban `helper/utils/manager` unless domain-accurate |
+| No silent defaults | No fallback for missing data unless justified |
+| Domain logic placement | Tutor logic in `tutor_core/decision_engine/policy`, NOT in API handlers |
+| Separation of concerns | Evaluator must not leak into tutor response generation |
+| Test coverage | If behavior changed, add/update minimal tests |
+
+### Files
+```
+.claude/
+├── settings.json          # Hook configuration
+├── hooks/
+│   ├── log_modified_files.sh   # Tracks modified files
+│   └── auto_review_gate.sh     # Triggers review on stop
+└── _state/                # Runtime state (gitignored)
+```
 
 ## FSM States
 
