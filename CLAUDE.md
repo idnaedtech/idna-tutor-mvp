@@ -295,12 +295,12 @@ Log events include:
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
 
-## Current State (January 31, 2026)
+## Current State (February 2, 2026)
 
 ### Deployment Status
 - **Railway**: Auto-deploys from GitHub `main` branch
 - **Database**: Postgres (production), SQLite (development)
-- **Latest Deploy**: Fixed Postgres migration for `attempts` table columns
+- **Latest Deploy**: Fixed health check Postgres detection, added Claude auto-review hooks
 
 ### Completed
 - Bug fixes (7 bugs fixed)
@@ -411,6 +411,9 @@ Several fixes were needed for Railway deployment:
 7. **Postgres schema mismatch**: Sessions table had wrong schema from previous deployment
    - Auto-detects missing `id` column and drops/recreates tables
    - Prevents "column does not exist" errors
+8. **Health check Postgres fix** (February 2, 2026): `/health` endpoint showed "initializing" on Railway
+   - Was checking `os.path.exists(DB_PATH)` for SQLite file, but Railway uses Postgres
+   - Fixed: `"connected" if (USE_POSTGRES or os.path.exists(DB_PATH)) else "initializing"`
 
 ### Voice & STT Improvements (January 30, 2026)
 
@@ -705,9 +708,11 @@ After:  "Not quite. What do you find?"
 - `tutor_intent.py` - Updated to use teacher policy (2-pass approach)
 - `web_server.py` - Passes session_id for move tracking
 
-### Completed Items (January 31, 2026)
+### Completed Items (February 2, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| **Claude Auto-Review Hooks** | **Tooling** | **PostToolUse logs modified files, Stop hook triggers adversarial code review** |
+| **Health Check Postgres Fix** | **Bug** | **`/health` now correctly reports "connected" when using Postgres** |
 | **Teacher Policy** | **Architecture** | **Error diagnosis + teaching moves (ChatGPT recommendation)** |
 | **Warmth Policy** | **Architecture** | **Warmth levels 0-3, acknowledgements (not fake praise)** |
 | **Escalation Ladder** | **Architecture** | **probe → hint_step → worked_example → reveal** |
