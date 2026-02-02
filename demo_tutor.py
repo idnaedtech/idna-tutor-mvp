@@ -14,7 +14,7 @@ Flow:
 Run: python demo_tutor.py
 """
 
-from evaluator import check_answer, normalize_spoken_input
+from evaluator import check_answer
 
 # ============================================================
 # THE CONCEPT: Adding fractions with same denominator
@@ -64,9 +64,8 @@ def run_demo():
     print_tutor(f"Now you try. {question['text']}")
 
     # Step 3: Evaluate the student's answer
+    # Note: check_answer() handles normalization internally (spoken variants like "minus 1 by 7")
     student_answer = get_student_input()
-    normalized = normalize_spoken_input(student_answer)
-
     is_correct = check_answer(question["answer"], student_answer)
 
     if is_correct:

@@ -33,9 +33,10 @@ TutorIntent = Teaching micro-behaviors
 |------|---------|
 | `web_server.py` | Main FastAPI app - FSM, API endpoints, TTS/STT integration |
 | `tutor_intent.py` | Natural language generation, teaching intents, voice pacing |
-| `teacher_policy.py` | **NEW** Error diagnosis, teaching moves, planner (ChatGPT architecture) |
+| `teacher_policy.py` | Error diagnosis, teaching moves, planner (ChatGPT architecture) |
 | `questions.py` | Question bank (ALL_CHAPTERS, CHAPTER_NAMES) |
 | `evaluator.py` | Answer evaluation - handles fractions, words, units, spoken variants |
+| `demo_tutor.py` | Single-concept demo showing human-like teaching behavior |
 | `subject_pack.py` | Subject pack management |
 | `web/index.html` | Student learning interface |
 | `static/` | Static assets |
@@ -202,6 +203,21 @@ client = OpenAI(
 ```bash
 python test_api.py
 ```
+
+## Demo
+
+Run the single-concept tutor demo to see human-like teaching behavior:
+
+```bash
+python demo_tutor.py
+```
+
+The demo teaches adding fractions with same denominator:
+1. Explains the concept step by step
+2. Asks one checking question
+3. Evaluates the answer (handles spoken variants like "minus 1 by 7")
+4. If wrong: gives corrective feedback + one retry
+5. If correct: acknowledges and ends
 
 ## Deployment (Railway)
 
@@ -740,6 +756,7 @@ After:  "Not quite. What do you find?"
 ### Completed Items (February 2, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| **Demo Tutor Script** | **Demo** | **`demo_tutor.py` - single concept demo showing human-like teaching (explain → check → feedback → retry)** |
 | **Claude Auto-Review Hooks** | **Tooling** | **PostToolUse logs modified files, Stop hook triggers adversarial code review** |
 | **Health Check Postgres Fix** | **Bug** | **`/health` now correctly reports "connected" when using Postgres** |
 | **Teacher Policy** | **Architecture** | **Error diagnosis + teaching moves (ChatGPT recommendation)** |
