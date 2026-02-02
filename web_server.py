@@ -1756,7 +1756,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "database": "connected" if os.path.exists(DB_PATH) else "initializing",
+        "database": "connected" if (USE_POSTGRES or os.path.exists(DB_PATH)) else "initializing",
         "tutor_intent": "enabled",
         "tts_provider": "google" if get_google_tts_client() else "openai"
     }
