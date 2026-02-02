@@ -43,6 +43,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from google.cloud import texttospeech
 
+# Import Live API router for Gemini Live integration
+from routes.live_api import router as live_router
+
 
 # ============================================================
 # STRUCTURED LOGGING (PRD: session_id, student_id, latencies)
@@ -360,6 +363,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Live API router for Gemini Live integration
+app.include_router(live_router)
 
 
 @app.middleware("http")
