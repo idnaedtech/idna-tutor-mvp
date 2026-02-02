@@ -804,6 +804,7 @@ class TeacherPlanner:
         elif move == TeachingMove.REVEAL:
             # Reveal: explicit exception - no question required (documented)
             # Warmth level 2 (supportive) for reveal - student struggled
+            reveal_warmth = get_warmth_primitive(2, session_id)
             return TeacherPlan(
                 teacher_move=move,
                 goal="Show correct answer with brief explanation",
@@ -815,7 +816,7 @@ class TeacherPlanner:
                 expected_response_type="none",  # No response expected
                 max_response_words=0,
                 warmth_level=2,  # Supportive - student needs encouragement
-                warmth_primitive="No problem, let's see the answer.",
+                warmth_primitive=reveal_warmth,
             )
 
         elif move == TeachingMove.CHALLENGE:
