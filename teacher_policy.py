@@ -24,6 +24,19 @@ import re
 # ERROR TAXONOMY (Math - Class 8 CBSE)
 # ============================================================
 
+class TeachingPhase(Enum):
+    """
+    Soft teaching phase — internal to teacher_policy.
+    Tracks where we are in the teaching cycle for a given question.
+    """
+    PRESENT = "present"        # Present the question
+    ATTEMPT = "attempt"        # Student attempts answer
+    DIAGNOSE = "diagnose"      # Diagnose the error
+    SCAFFOLD = "scaffold"      # Provide scaffolding (hints, examples)
+    CHECK = "check"            # Check understanding with micro-question
+    ADVANCE = "advance"        # Move to next question
+
+
 class ErrorType(Enum):
     """
     Math error taxonomy for diagnosis.
@@ -562,6 +575,9 @@ class TeacherPlanner:
         student_weak_topics: List[str] = None,
         consecutive_wrong: int = 0,
         session_id: str = "",
+        # Enriched data (Stage 1)
+        micro_check_question: str = "",
+        solution_steps: List[str] = None,
     ) -> TeacherPlan:
         """
         Generate a teaching plan based on evaluation.
@@ -625,6 +641,8 @@ class TeacherPlanner:
             solution=solution,
             consecutive_wrong=consecutive_wrong,
             session_id=session_id,
+            micro_check_question=micro_check_question,
+            solution_steps=solution_steps or [],
         )
 
     def _select_move(self, attempt_number: int, error_type: str) -> TeachingMove:
@@ -703,6 +721,8 @@ class TeacherPlanner:
         solution: str,
         consecutive_wrong: int = 0,
         session_id: str = "",
+        micro_check_question: str = "",
+        solution_steps: List[str] = None,
     ) -> TeacherPlan:
         """Build a complete teaching plan for the selected move."""
 
@@ -726,10 +746,12 @@ class TeacherPlanner:
             max_resp_words = 5
 
         if move == TeachingMove.PROBE:
+            # Use verified micro_check question when available (enriched data)
+            probe_prompt = micro_check_question or error_hint or "What step did you do first?"
             return TeacherPlan(
                 teacher_move=move,
                 goal="Find what student doesn't understand",
-                prompt_to_student=error_hint or "What step did you do first?",
+                prompt_to_student=probe_prompt,
                 explanation="",
                 check_question=None,
                 tone="warm",
@@ -741,10 +763,12 @@ class TeacherPlanner:
             )
 
         elif move == TeachingMove.HINT_STEP:
+            # Use enriched micro_hint from matched_mistake when available
+            hint_prompt = hint_1 or error_hint
             return TeacherPlan(
                 teacher_move=move,
                 goal="Give smallest next step",
-                prompt_to_student=f"Try again: {hint_1}" if hint_1 else error_hint,
+                prompt_to_student=f"Try again: {hint_prompt}" if hint_prompt else "Try again.",
                 explanation="",
                 check_question=None,
                 tone="neutral",
@@ -756,12 +780,18 @@ class TeacherPlanner:
             )
 
         elif move == TeachingMove.WORKED_EXAMPLE:
+            # Use solution_steps when available for richer explanation
+            steps = solution_steps or []
+            if steps and len(steps) >= 2:
+                explanation = f"{steps[0]} {steps[1]}"
+            else:
+                explanation = hint_2 or "Let me show you a simpler case first."
             return TeacherPlan(
                 teacher_move=move,
                 goal="Show similar simpler example",
                 prompt_to_student="Now apply the same idea to your question.",
-                explanation=hint_2 or f"Let me show you a simpler case first.",
-                check_question=None,  # Removed rhetorical "Does that make sense?"
+                explanation=explanation,
+                check_question=None,
                 tone="warm",
                 max_words=45,
                 expected_response_type=expected_type,
@@ -1125,12 +1155,18 @@ def plan_teacher_response(
     hint_2: str = "",
     solution: str = "",
     question_type: str = "numeric",
+    # Enriched data from evaluate_answer (Stage 1)
+    eval_result: Optional[Dict] = None,
+    common_mistakes: Optional[List[Dict]] = None,
+    micro_checks: Optional[List[str]] = None,
+    solution_steps: Optional[List[str]] = None,
+    target_skill: str = "",
 ) -> Dict[str, Any]:
     """
     Main entry point: Plan and generate teacher response.
 
     Combines:
-    1. Error diagnosis
+    1. Error diagnosis (uses eval_result.matched_mistake when available)
     2. Teaching move selection
     3. Response generation
 
@@ -1140,10 +1176,26 @@ def plan_teacher_response(
     - error_type: What error was diagnosed (if wrong)
     - goal: What this response aims to achieve
     """
+    common_mistakes = common_mistakes or []
+    micro_checks = micro_checks or []
+    solution_steps = solution_steps or []
+
     # Step 1: Diagnose error (if wrong)
+    # Prefer eval_result from enriched evaluator when available
     if is_correct:
         error_diagnosis = {"error_type": None, "confidence": 1.0, "hint": ""}
+    elif eval_result and eval_result.get("matched_mistake"):
+        # Use deterministic diagnosis from common_mistakes match
+        matched = eval_result["matched_mistake"]
+        error_diagnosis = {
+            "error_type": matched.get("error_type", ErrorType.UNKNOWN.value),
+            "confidence": 1.0,  # Deterministic match = high confidence
+            "hint": matched.get("micro_hint", ""),
+            "missing_concept": None,
+            "diagnosis": matched.get("diagnosis", ""),
+        }
     else:
+        # Fall back to heuristic diagnosis
         error_diagnosis = diagnose_error(
             correct_answer=correct_answer,
             student_answer=student_answer,
@@ -1153,6 +1205,17 @@ def plan_teacher_response(
 
     # Step 2: Get planner and create plan
     planner = get_planner(session_id)
+
+    # Use micro_check as probe question when available
+    probe_question = ""
+    if micro_checks and attempt_number <= len(micro_checks):
+        probe_question = micro_checks[attempt_number - 1]
+
+    # Use matched_mistake micro_hint for HINT_STEP when available
+    enriched_hint = ""
+    if eval_result and eval_result.get("micro_hint"):
+        enriched_hint = eval_result["micro_hint"]
+
     plan = planner.plan(
         is_correct=is_correct,
         error_diagnosis=error_diagnosis,
@@ -1160,10 +1223,12 @@ def plan_teacher_response(
         question_text=question_text,
         correct_answer=correct_answer,
         student_answer=student_answer,
-        hint_1=hint_1,
+        hint_1=enriched_hint or hint_1,
         hint_2=hint_2,
         solution=solution,
         session_id=session_id,
+        micro_check_question=probe_question,
+        solution_steps=solution_steps,
     )
 
     # Step 3: Generate response from plan

@@ -782,6 +782,72 @@ class TutorVoice:
         }
 
 
+def validate_teaching_output(
+    text: str,
+    solution_steps: list = None,
+    correct_answer: str = "",
+    accept_also: list = None,
+    teacher_move: str = "",
+) -> tuple:
+    """
+    Validate LLM teaching output against verified content.
+
+    Rejects output that:
+    1. Contains numbers NOT in solution_steps/answer/accept_also (hallucination)
+    2. Exceeds 55 words
+    3. Doesn't end with a question (for teaching moves)
+
+    Returns:
+        (is_valid: bool, reason: str)
+    """
+    import re
+
+    if not text:
+        return False, "empty_output"
+
+    # Rule 1: Word count
+    words = text.split()
+    if len(words) > 55:
+        return False, "too_long"
+
+    # Rule 2: Check for hallucinated numbers
+    # Build set of allowed numbers from verified content
+    allowed_numbers = set()
+
+    # Add answer
+    if correct_answer:
+        for num in re.findall(r'-?\d+(?:/\d+)?(?:\.\d+)?', correct_answer):
+            allowed_numbers.add(num)
+
+    # Add accept_also
+    for alt in (accept_also or []):
+        for num in re.findall(r'-?\d+(?:/\d+)?(?:\.\d+)?', str(alt)):
+            allowed_numbers.add(num)
+
+    # Add numbers from solution_steps
+    for step in (solution_steps or []):
+        for num in re.findall(r'-?\d+(?:/\d+)?(?:\.\d+)?', str(step)):
+            allowed_numbers.add(num)
+
+    # Also allow small digits (1-10) which are common in teaching
+    for i in range(11):
+        allowed_numbers.add(str(i))
+
+    # Extract numbers from LLM output
+    output_numbers = re.findall(r'-?\d+(?:/\d+)?(?:\.\d+)?', text)
+
+    for num in output_numbers:
+        if num not in allowed_numbers:
+            return False, f"hallucinated_number:{num}"
+
+    # Rule 3: Teaching moves should end with question
+    TEACHING_MOVES = ["probe", "hint_step", "worked_example", "error_explain", "reframe", "recap"]
+    if teacher_move in TEACHING_MOVES and not text.strip().endswith("?"):
+        return False, "no_question"
+
+    return True, "ok"
+
+
 def generate_gpt_response(
     intent: TutorIntent,
     question: str = "",
@@ -902,7 +968,7 @@ MAX 30 WORDS total.""",
     user_prompt = intent_instructions.get(intent, "Respond helpfully.")
 
     try:
-        client = get_openai_client()
+        from llm_client import generate as llm_generate
 
         # STRICT token limits - short responses for voice
         if intent in [TutorIntent.EXPLAIN_STEPS, TutorIntent.EXPLAIN_ONCE]:
@@ -912,29 +978,29 @@ MAX 30 WORDS total.""",
         else:
             max_tokens = 30  # Very short confirmations
 
-        # Time the GPT API call
+        # Use llm_client (model-agnostic, respects cost_guard)
         start_time = time.perf_counter()
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": TUTOR_PERSONA},
-                {"role": "user", "content": user_prompt}
-            ],
+        result = llm_generate(
+            system_prompt=TUTOR_PERSONA,
+            user_prompt=user_prompt,
             max_tokens=max_tokens,
-            temperature=0.7,  # Lower temperature for more consistent short responses
+            temperature=0.7,
         )
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-        result = response.choices[0].message.content.strip()
-        # Remove quotes if GPT wrapped the response
+        if not result:
+            # LLM returned empty (cost guard blocked or error) — use template
+            tutor = TutorVoice()
+            return tutor.get_response(intent, question=question, hint=hint, solution=solution)
+
+        # Remove quotes if LLM wrapped the response
         result = result.strip('"').strip("'")
 
-        # Log GPT call completion
+        # Log call completion
         _log_gpt_call(
-            "GPT response generated",
+            "LLM response generated",
             event="gpt_complete",
             intent=intent.value,
-            model="gpt-4o-mini",
             latency_ms=latency_ms,
             max_tokens=max_tokens,
             response_length=len(result),
@@ -947,13 +1013,13 @@ MAX 30 WORDS total.""",
         return result
     except Exception as e:
         _log_gpt_call(
-            f"GPT error: {str(e)}",
+            f"LLM error: {str(e)}",
             event="gpt_error",
             intent=intent.value,
             error_type=type(e).__name__,
             error_message=str(e),
         )
-        # Fallback to template if GPT fails
+        # Fallback to template if LLM fails
         tutor = TutorVoice()
         return tutor.get_response(intent, question=question, hint=hint, solution=solution)
 
@@ -1101,6 +1167,12 @@ def generate_tutor_response(
     correct_answer: str = "",
     student_answer: str = "",
     session_id: str = "",
+    # Enriched data from evaluate_answer (Stage 1)
+    eval_result: dict = None,
+    common_mistakes: list = None,
+    micro_checks: list = None,
+    solution_steps: list = None,
+    target_skill: str = "",
 ) -> Dict[str, Any]:
     """
     Generate a tutor response using Teacher Policy + GPT.
@@ -1115,9 +1187,14 @@ def generate_tutor_response(
     - One question per turn
     - Max 55 words before asking a question
     - TEACH → CHECK rule enforced
+
+    Stage 1 enriched data (when available):
+    - eval_result: from evaluate_answer() with matched_mistake
+    - common_mistakes/micro_checks/solution_steps: from enriched question
     """
     # PASS 1: Teacher Policy - Structured decision making
     # This decides the teaching move and builds a plan
+    # Pass enriched data through to teacher_policy for better scaffolding
     teacher_plan = plan_teacher_response(
         session_id=session_id or "default",
         is_correct=is_correct,
@@ -1128,6 +1205,11 @@ def generate_tutor_response(
         hint_1=hint_1,
         hint_2=hint_2,
         solution=solution,
+        eval_result=eval_result,
+        common_mistakes=common_mistakes,
+        micro_checks=micro_checks,
+        solution_steps=solution_steps,
+        target_skill=target_skill,
     )
 
     # P0 REQUIREMENT: Log planner JSON for every turn
@@ -1191,6 +1273,24 @@ def generate_tutor_response(
     # Remove banned phrases (assistant-y language from GPT)
     response = remove_banned_phrases(response)
 
+    # VALIDATION: Check LLM output against verified content (Stage 2)
+    # If validation fails, fall back to the deterministic teacher_policy response
+    is_valid, reason = validate_teaching_output(
+        text=response,
+        solution_steps=solution_steps or [],
+        correct_answer=correct_answer,
+        accept_also=None,
+        teacher_move=teacher_plan.get("teacher_move", ""),
+    )
+    if not is_valid and reason.startswith("hallucinated_number"):
+        _log_gpt_call(
+            "LLM output rejected: hallucinated number",
+            event="validation_rejected",
+            reason=reason,
+            teacher_move=teacher_plan.get("teacher_move"),
+        )
+        response = base_response  # Fall back to deterministic
+
     # P0 ENFORCEMENT: Apply strict rules AFTER GPT polishing
     # 1. Max 2 sentences before question
     # 2. Exactly one question per turn
@@ -1228,17 +1328,17 @@ def _polish_teacher_response(
 ) -> str:
     """
     Polish the structured teacher response to sound more natural.
-    Uses GPT but with strict constraints from the teaching plan.
+    Uses LLM client but with strict constraints from the teaching plan.
     """
     # For simple cases, the base response is already good
     if teacher_move in [TeachingMove.REVEAL.value, TeachingMove.CONFIRM.value]:
         return base_response
 
-    # Try to make it warmer with GPT, but fall back to base if needed
+    # Try to make it warmer with LLM, but fall back to base if needed
     try:
-        client = get_openai_client()
+        from llm_client import generate
 
-        # Strict prompt - rephrase without adding scripted encouragement
+        system = "You are a direct, warm teacher. No praise phrases. Keep responses very short."
         polish_prompt = f"""Rephrase this for a teacher. Keep it SHORT (max 15 words).
 
 NEVER use: "Great job", "Great effort", "You're close", "Almost there", "Nice try", "Well done", "Excellent", "Wonderful", "Amazing"
@@ -1247,16 +1347,11 @@ Original: "{base_response}"
 
 Output ONLY the rephrased response."""
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a direct, warm teacher. No praise phrases. Keep responses very short."},
-                {"role": "user", "content": polish_prompt}
-            ],
-            max_tokens=30,
-            temperature=0.5,  # Lower temperature for consistency
-        )
-        result = response.choices[0].message.content.strip().strip('"\'')
+        result = generate(system, polish_prompt, max_tokens=30, temperature=0.5)
+        if not result:
+            return base_response
+
+        result = result.strip('"\'')
 
         # Only use polished version if it's not much longer
         if len(result.split()) <= len(base_response.split()) + 5:

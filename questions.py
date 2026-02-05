@@ -48,23 +48,23 @@ TODO: Add NCERT exercise references (e.g., "Ex 1.1 Q3")
 # ============================================================
 
 CHAPTER_INTROS = {
-    # Math chapters
-    "rational_numbers": "Today we'll work with rational numbers. These are numbers that can be written as fractions, like 3/4 or -2/5. We'll practice adding, subtracting, and comparing them.",
-    "linear_equations": "We're going to solve linear equations. These are equations where we find the value of x, like 2x + 3 = 7. Think of it as detective work to find the missing number!",
-    "quadrilaterals": "Let's explore quadrilaterals - shapes with four sides. We'll look at rectangles, squares, parallelograms, and learn their special properties.",
-    "data_handling": "Today is about data handling. We'll learn to organize information using graphs, find averages, and understand what data tells us.",
-    "squares_roots": "We'll practice squares and square roots. If 5 times 5 is 25, then the square root of 25 is 5. Let's master this!",
-    "cubes_roots": "Today we work with cubes and cube roots. If 3 times 3 times 3 is 27, then the cube root of 27 is 3.",
-    "comparing_quantities": "We'll compare quantities using ratios, percentages, and learn about profit, loss, and discounts - very useful in real life!",
-    "algebraic_expressions": "Let's work with algebraic expressions. We'll learn to simplify expressions like 3x + 2y and use important identities.",
-    "mensuration": "Today is about mensuration - finding areas and volumes of shapes. Very practical for everyday problems!",
-    "exponents": "We'll practice exponents and powers. When we write 2 to the power 3, it means 2 times 2 times 2, which equals 8.",
+    # Math chapters - SHORT, like a real teacher would say
+    "rational_numbers": "Rational numbers. Let's go.",
+    "linear_equations": "Equations. Find x.",
+    "quadrilaterals": "Shapes with four sides.",
+    "data_handling": "Graphs and averages.",
+    "squares_roots": "Squares and roots.",
+    "cubes_roots": "Cubes and cube roots.",
+    "comparing_quantities": "Ratios and percentages.",
+    "algebraic_expressions": "Algebra. Simplify expressions.",
+    "mensuration": "Areas and volumes.",
+    "exponents": "Powers and exponents.",
     # Science chapters
-    "science_matter": "Let's explore matter and materials - what things are made of and how they behave.",
-    "science_life": "Today we learn about life processes - how living things breathe, eat, and grow.",
-    "science_force": "We'll study force and motion - why things move and what makes them stop.",
-    "science_light": "Let's discover light and sound - how we see and hear the world around us.",
-    "science_nature": "Today is about natural resources - the gifts of nature and how to protect them.",
+    "science_matter": "Matter and materials.",
+    "science_life": "Life processes.",
+    "science_force": "Force and motion.",
+    "science_light": "Light and sound.",
+    "science_nature": "Natural resources.",
 }
 
 CHAPTER_NAMES = {
@@ -102,7 +102,29 @@ ALL_CHAPTERS = {
             "answer": "-1/7",
             "hint": "Same denominator, just add numerators: -3 + 2 = -1",
             "solution": "Since both fractions have the same denominator 7, we just add the numerators: -3 + 2 = -1. So the answer is -1/7.",
-            "difficulty": 1
+            "difficulty": 1,
+            # Enriched fields (Stage 1)
+            "answer_type": "numeric",
+            "accept_also": ["-1/7"],
+            "target_skill": "rn_add_same_denom",
+            "hint_1": "Both fractions have 7 on the bottom. What happens to the top numbers?",
+            "hint_2": "Add the numerators: -3 + 2 = ?",
+            "solution_steps": [
+                "Both fractions have the same denominator: 7",
+                "Add the numerators: -3 + 2 = -1",
+                "Keep the denominator: answer is -1/7",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "1/7", "error_type": "sign_error", "diagnosis": "Forgot the negative sign when adding -3 + 2", "micro_hint": "Is -3 + 2 positive or negative?"},
+                {"wrong_answer": "-1/14", "error_type": "fraction_addition", "diagnosis": "Added the denominators too (7+7=14)", "micro_hint": "When denominators are the same, do you add them?"},
+                {"wrong_answer": "5/7", "error_type": "wrong_operation", "diagnosis": "Subtracted instead of adding: |-3 - 2| = 5", "micro_hint": "The question says add. What is -3 + 2?"},
+            ],
+            "micro_checks": [
+                "What do you do with the denominators when they're the same?",
+                "What is -3 + 2?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "addition_same_denominator",
         },
         {
             "id": "rn_002",
@@ -110,7 +132,28 @@ ALL_CHAPTERS = {
             "answer": "-5/8",
             "hint": "Additive inverse means change the sign",
             "solution": "The additive inverse of a number is what you add to get zero. For 5/8, we change the sign to get -5/8. Check: 5/8 + (-5/8) = 0.",
-            "difficulty": 1
+            "difficulty": 1,
+            "answer_type": "numeric",
+            "accept_also": ["-5/8"],
+            "target_skill": "rn_additive_inverse",
+            "hint_1": "Additive inverse means: what do you add to get zero?",
+            "hint_2": "Just change the sign. 5/8 becomes...?",
+            "solution_steps": [
+                "Additive inverse of a number gives 0 when added",
+                "Change the sign: 5/8 becomes -5/8",
+                "Check: 5/8 + (-5/8) = 0",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "5/8", "error_type": "concept_misunderstanding", "diagnosis": "Returned the same number without changing sign", "micro_hint": "If you add 5/8 + 5/8, do you get zero?"},
+                {"wrong_answer": "8/5", "error_type": "concept_misunderstanding", "diagnosis": "Flipped the fraction (that's multiplicative inverse)", "micro_hint": "That's the reciprocal. Additive inverse means change the sign."},
+                {"wrong_answer": "-8/5", "error_type": "concept_misunderstanding", "diagnosis": "Both flipped and negated", "micro_hint": "Just change the sign. Don't flip the fraction."},
+            ],
+            "micro_checks": [
+                "What does additive inverse mean?",
+                "What do you add to 5/8 to get zero?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "additive_inverse",
         },
         {
             "id": "rn_003",
@@ -118,7 +161,28 @@ ALL_CHAPTERS = {
             "answer": "-1/2",
             "hint": "Multiply numerators and denominators: (2×-3)/(3×4) = -6/12 = -1/2",
             "solution": "Multiply the numerators: 2 × (-3) = -6. Multiply the denominators: 3 × 4 = 12. So we get -6/12. Simplify by dividing both by 6: -1/2.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["-1/2", "-6/12", "-3/6"],
+            "target_skill": "rn_multiply",
+            "hint_1": "Multiply top × top and bottom × bottom. What sign does the answer have?",
+            "hint_2": "2 × (-3) = ? and 3 × 4 = ? Now simplify.",
+            "solution_steps": [
+                "Multiply numerators: 2 × (-3) = -6",
+                "Multiply denominators: 3 × 4 = 12",
+                "Result: -6/12. Simplify: -1/2",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "1/2", "error_type": "sign_error", "diagnosis": "Forgot negative sign: positive × negative = negative", "micro_hint": "When you multiply a positive by a negative, is the result positive or negative?"},
+                {"wrong_answer": "-6/12", "error_type": "fraction_simplify", "diagnosis": "Correct value but didn't simplify", "micro_hint": "Can you simplify -6/12? What divides both 6 and 12?"},
+                {"wrong_answer": "-5/7", "error_type": "fraction_addition", "diagnosis": "Added instead of multiplying: (2-3)/(3+4)", "micro_hint": "This is multiplication, not addition. Multiply top × top."},
+            ],
+            "micro_checks": [
+                "What is 2 × (-3)?",
+                "What is the GCD of 6 and 12?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "multiplication",
         },
         {
             "id": "rn_004",
@@ -126,7 +190,28 @@ ALL_CHAPTERS = {
             "answer": "-9/7",
             "hint": "Flip the fraction, keep the sign",
             "solution": "The multiplicative inverse is what you multiply to get 1. Flip the fraction: -7/9 becomes -9/7. The sign stays negative. Check: (-7/9) × (-9/7) = 63/63 = 1.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["-9/7"],
+            "target_skill": "rn_multiplicative_inverse",
+            "hint_1": "Multiplicative inverse means: what do you multiply to get 1?",
+            "hint_2": "Flip the fraction. The sign stays the same.",
+            "solution_steps": [
+                "Multiplicative inverse gives 1 when multiplied",
+                "Flip: -7/9 becomes -9/7",
+                "Check: (-7/9) × (-9/7) = 63/63 = 1",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "9/7", "error_type": "sign_error", "diagnosis": "Flipped but dropped the negative sign", "micro_hint": "Should the sign change when you flip?"},
+                {"wrong_answer": "7/9", "error_type": "sign_error", "diagnosis": "Changed sign and flipped (that's -1 × inverse)", "micro_hint": "Just flip. The sign stays negative."},
+                {"wrong_answer": "-7/9", "error_type": "concept_misunderstanding", "diagnosis": "Returned the same number (confused with additive inverse)", "micro_hint": "Multiplicative inverse means flip the fraction."},
+            ],
+            "micro_checks": [
+                "What does multiplicative inverse mean?",
+                "What do you get when you flip -7/9?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "multiplicative_inverse",
         },
         {
             "id": "rn_005",
@@ -134,7 +219,26 @@ ALL_CHAPTERS = {
             "answer": "yes",
             "hint": "0 can be written as 0/1",
             "solution": "Yes! A rational number is any number that can be written as p/q where q is not zero. Zero can be written as 0/1, 0/2, or 0/any-number. So 0 is rational.",
-            "difficulty": 1
+            "difficulty": 1,
+            "answer_type": "keyword",
+            "accept_also": ["yes", "haan", "true", "correct"],
+            "target_skill": "rn_identify",
+            "hint_1": "A rational number can be written as p/q. Can zero be written that way?",
+            "hint_2": "Try writing 0 as a fraction: 0/1. Is 1 ≠ 0?",
+            "solution_steps": [
+                "Rational number = p/q where q ≠ 0",
+                "0 = 0/1 (q = 1 ≠ 0)",
+                "So yes, 0 is rational",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "no", "error_type": "concept_misunderstanding", "diagnosis": "Thinks zero cannot be a rational number", "micro_hint": "Can you write 0 as 0/1? Is that p/q form?"},
+            ],
+            "micro_checks": [
+                "What is the definition of a rational number?",
+                "Can you write 0 as a fraction?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "identification",
         },
         {
             "id": "rn_006",
@@ -142,7 +246,29 @@ ALL_CHAPTERS = {
             "answer": "-5/4",
             "hint": "Divide = multiply by reciprocal: -5/6 × 3/2 = -15/12 = -5/4",
             "solution": "To divide fractions, multiply by the reciprocal. So -5/6 ÷ 2/3 becomes -5/6 × 3/2. Multiply: (-5 × 3)/(6 × 2) = -15/12. Simplify by dividing by 3: -5/4.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["-5/4", "-15/12"],
+            "target_skill": "rn_divide",
+            "hint_1": "To divide fractions, multiply by the reciprocal of the second fraction.",
+            "hint_2": "Flip 2/3 to get 3/2. Now multiply: -5/6 × 3/2 = ?",
+            "solution_steps": [
+                "Dividing = multiply by reciprocal",
+                "Flip 2/3 → 3/2",
+                "Multiply: (-5 × 3)/(6 × 2) = -15/12",
+                "Simplify: -5/4",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "5/4", "error_type": "sign_error", "diagnosis": "Forgot negative sign", "micro_hint": "Negative divided by positive gives...?"},
+                {"wrong_answer": "-10/18", "error_type": "wrong_operation", "diagnosis": "Multiplied directly without flipping: (-5×2)/(6×3)", "micro_hint": "Did you flip the second fraction before multiplying?"},
+                {"wrong_answer": "-15/12", "error_type": "fraction_simplify", "diagnosis": "Correct value but not simplified", "micro_hint": "Can you simplify -15/12? What's the GCD of 15 and 12?"},
+            ],
+            "micro_checks": [
+                "What is the reciprocal of 2/3?",
+                "What is -5 × 3?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "division",
         },
         {
             "id": "rn_007",
@@ -150,7 +276,26 @@ ALL_CHAPTERS = {
             "answer": "3/8",
             "hint": "Average: (1/4 + 1/2)/2 = (1/4 + 2/4)/2 = (3/4)/2 = 3/8",
             "solution": "Take the average of the two numbers. First, make denominators same: 1/4 and 2/4. Add them: 1/4 + 2/4 = 3/4. Divide by 2: (3/4)/2 = 3/8. So 3/8 is between 1/4 and 1/2.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["3/8", "1/3", "2/5", "5/12", "7/16"],
+            "target_skill": "rn_between",
+            "hint_1": "One way: find the average of the two numbers.",
+            "hint_2": "Add 1/4 + 1/2 = 3/4. Now divide by 2.",
+            "solution_steps": [
+                "Average = (1/4 + 1/2) / 2",
+                "1/4 + 1/2 = 1/4 + 2/4 = 3/4",
+                "(3/4) / 2 = 3/8",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "1/3", "error_type": "arithmetic_slip", "diagnosis": "1/3 is between 1/4 and 1/2 — actually this is correct!", "micro_hint": "That works too! 1/4 < 1/3 < 1/2."},
+                {"wrong_answer": "2/6", "error_type": "fraction_simplify", "diagnosis": "Correct (=1/3) but could simplify", "micro_hint": "Can you simplify 2/6?"},
+            ],
+            "micro_checks": [
+                "How do you find a number between two fractions?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "between_rationals",
         },
         {
             "id": "rn_008",
@@ -158,7 +303,30 @@ ALL_CHAPTERS = {
             "answer": "-5/6",
             "hint": "LCM of 2 and 3 is 6: -3/6 + -2/6 = -5/6",
             "solution": "Find LCM of 2 and 3, which is 6. Convert: -1/2 = -3/6 and -1/3 = -2/6. Now add: -3/6 + (-2/6) = -5/6.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["-5/6"],
+            "target_skill": "rn_add_diff_denom",
+            "hint_1": "The denominators are different. What's the LCM of 2 and 3?",
+            "hint_2": "LCM is 6. Convert: -1/2 = -3/6 and -1/3 = -2/6. Now add.",
+            "solution_steps": [
+                "Find LCM of 2 and 3 = 6",
+                "Convert: -1/2 = -3/6",
+                "Convert: -1/3 = -2/6",
+                "Add: -3/6 + (-2/6) = -5/6",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "-2/5", "error_type": "fraction_addition", "diagnosis": "Added both numerators and denominators: (-1-1)/(2+3)", "micro_hint": "You can't add denominators. Find the LCM first."},
+                {"wrong_answer": "5/6", "error_type": "sign_error", "diagnosis": "Got magnitude right but forgot both are negative", "micro_hint": "Both fractions are negative. Is the sum positive or negative?"},
+                {"wrong_answer": "-1/6", "error_type": "arithmetic_slip", "diagnosis": "Subtracted numerators: -3 - (-2) = -1 instead of adding", "micro_hint": "You need to add -3 + (-2), not subtract."},
+                {"wrong_answer": "-2/6", "error_type": "common_denominator", "diagnosis": "Only converted one fraction", "micro_hint": "Did you convert BOTH fractions to sixths?"},
+            ],
+            "micro_checks": [
+                "What is the LCM of 2 and 3?",
+                "What is -3 + (-2)?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "addition_different_denominator",
         },
         {
             "id": "rn_009",
@@ -166,7 +334,29 @@ ALL_CHAPTERS = {
             "answer": "2/3",
             "hint": "GCD of 12 and 18 is 6. Divide both by 6",
             "solution": "Find the GCD of 12 and 18. Factors of 12: 1,2,3,4,6,12. Factors of 18: 1,2,3,6,9,18. GCD is 6. Divide both by 6: 12÷6 = 2, 18÷6 = 3. Answer: 2/3.",
-            "difficulty": 1
+            "difficulty": 1,
+            "answer_type": "numeric",
+            "accept_also": ["2/3"],
+            "target_skill": "rn_simplify",
+            "hint_1": "Find the biggest number that divides both 12 and 18.",
+            "hint_2": "GCD is 6. Divide 12 by 6 and 18 by 6.",
+            "solution_steps": [
+                "Find GCD of 12 and 18",
+                "GCD = 6",
+                "12 ÷ 6 = 2, 18 ÷ 6 = 3",
+                "Answer: 2/3",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "4/6", "error_type": "fraction_simplify", "diagnosis": "Divided by 3 instead of GCD 6 — not fully simplified", "micro_hint": "Can 4/6 be simplified further? What divides both 4 and 6?"},
+                {"wrong_answer": "6/9", "error_type": "fraction_simplify", "diagnosis": "Divided by 2 instead of GCD 6", "micro_hint": "Is 6/9 in lowest terms? What's the GCD of 6 and 9?"},
+                {"wrong_answer": "3/2", "error_type": "arithmetic_slip", "diagnosis": "Flipped numerator and denominator", "micro_hint": "12 is the numerator (top) and 18 is the denominator (bottom)."},
+            ],
+            "micro_checks": [
+                "What is the GCD of 12 and 18?",
+                "Is 4/6 fully simplified?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "simplification",
         },
         {
             "id": "rn_010",
@@ -174,16 +364,56 @@ ALL_CHAPTERS = {
             "answer": "additive inverse",
             "hint": "When sum is zero, they are inverses",
             "solution": "When you add a number and its opposite and get zero, that's the additive inverse property. For example: 5 + (-5) = 0. The -a is called the additive inverse of a.",
-            "difficulty": 1
+            "difficulty": 1,
+            "answer_type": "keyword",
+            "accept_also": ["additive inverse", "additive inverse property", "inverse"],
+            "target_skill": "rn_additive_inverse",
+            "hint_1": "What do you call the number that gives zero when added?",
+            "hint_2": "It's the additive _____ property.",
+            "solution_steps": [
+                "a + (-a) = 0",
+                "This is the additive inverse property",
+                "-a is the additive inverse of a",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "multiplicative inverse", "error_type": "concept_misunderstanding", "diagnosis": "Confused additive (sum=0) with multiplicative (product=1)", "micro_hint": "Multiplicative inverse gives 1. This gives 0. Which is it?"},
+                {"wrong_answer": "zero property", "error_type": "concept_misunderstanding", "diagnosis": "Named it incorrectly", "micro_hint": "The property is about inverses. Additive _____."},
+            ],
+            "micro_checks": [
+                "What is the difference between additive and multiplicative inverse?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "properties",
         },
-        # NEW QUESTIONS
         {
             "id": "rn_011",
             "text": "What is 3/4 - 5/6?",
             "answer": "-1/12",
             "hint": "LCM of 4 and 6 is 12. Convert: 9/12 - 10/12",
             "solution": "Find LCM of 4 and 6, which is 12. Convert: 3/4 = 9/12 and 5/6 = 10/12. Subtract: 9/12 - 10/12 = -1/12.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["-1/12"],
+            "target_skill": "rn_subtract",
+            "hint_1": "Denominators are different. Find the LCM of 4 and 6.",
+            "hint_2": "LCM is 12. 3/4 = 9/12 and 5/6 = 10/12. Now subtract.",
+            "solution_steps": [
+                "Find LCM of 4 and 6 = 12",
+                "Convert: 3/4 = 9/12",
+                "Convert: 5/6 = 10/12",
+                "Subtract: 9/12 - 10/12 = -1/12",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "1/12", "error_type": "sign_error", "diagnosis": "Got 9-10 = 1 instead of -1", "micro_hint": "What is 9 - 10? Is it positive or negative?"},
+                {"wrong_answer": "-2/2", "error_type": "fraction_addition", "diagnosis": "Subtracted both: (3-5)/(4-6) = -2/-2", "micro_hint": "You can't subtract denominators. Find the LCM."},
+                {"wrong_answer": "-2/10", "error_type": "fraction_addition", "diagnosis": "Subtracted numerators and added denominators", "micro_hint": "Find the LCM first. Don't add or subtract denominators."},
+            ],
+            "micro_checks": [
+                "What is the LCM of 4 and 6?",
+                "What is 9 - 10?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "subtraction_different_denominator",
         },
         {
             "id": "rn_012",
@@ -191,7 +421,29 @@ ALL_CHAPTERS = {
             "answer": "5/12",
             "hint": "Find 3/4 - 1/3 using LCM of 4 and 3",
             "solution": "We need 3/4 - 1/3. LCM of 4 and 3 is 12. Convert: 3/4 = 9/12, 1/3 = 4/12. Subtract: 9/12 - 4/12 = 5/12 kg left.",
-            "difficulty": 3
+            "difficulty": 3,
+            "answer_type": "numeric",
+            "accept_also": ["5/12"],
+            "target_skill": "rn_word_problem",
+            "hint_1": "He uses rice, so you subtract. What is 3/4 - 1/3?",
+            "hint_2": "LCM of 4 and 3 is 12. Convert both fractions.",
+            "solution_steps": [
+                "Uses = subtract: 3/4 - 1/3",
+                "LCM of 4 and 3 = 12",
+                "3/4 = 9/12, 1/3 = 4/12",
+                "9/12 - 4/12 = 5/12 kg",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "2/1", "error_type": "fraction_addition", "diagnosis": "Subtracted both: (3-1)/(4-3) = 2/1", "micro_hint": "You can't subtract denominators. Find the LCM."},
+                {"wrong_answer": "13/12", "error_type": "wrong_operation", "diagnosis": "Added instead of subtracted: 9/12 + 4/12", "micro_hint": "He uses rice, so is it addition or subtraction?"},
+                {"wrong_answer": "-5/12", "error_type": "sign_error", "diagnosis": "Subtracted in wrong order: 1/3 - 3/4", "micro_hint": "Ram had 3/4 and used 1/3. Which is bigger?"},
+            ],
+            "micro_checks": [
+                "What operation does 'uses' tell you to do?",
+                "What is the LCM of 4 and 3?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "word_problem",
         },
         {
             "id": "rn_013",
@@ -199,7 +451,29 @@ ALL_CHAPTERS = {
             "answer": "1/4",
             "hint": "Negative × Negative = Positive. Multiply: (2×5)/(5×8)",
             "solution": "Negative times negative is positive. Multiply numerators: 2 × 5 = 10. Multiply denominators: 5 × 8 = 40. Result: 10/40 = 1/4.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["1/4", "10/40", "5/20"],
+            "target_skill": "rn_multiply",
+            "hint_1": "Negative times negative equals...?",
+            "hint_2": "Multiply: (2×5)/(5×8) = 10/40. Simplify.",
+            "solution_steps": [
+                "Negative × negative = positive",
+                "Multiply numerators: 2 × 5 = 10",
+                "Multiply denominators: 5 × 8 = 40",
+                "Simplify: 10/40 = 1/4",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "-1/4", "error_type": "sign_error", "diagnosis": "Negative × negative should be positive", "micro_hint": "What is negative times negative?"},
+                {"wrong_answer": "10/40", "error_type": "fraction_simplify", "diagnosis": "Correct but not simplified", "micro_hint": "Can you simplify 10/40?"},
+                {"wrong_answer": "-7/13", "error_type": "fraction_addition", "diagnosis": "Added instead of multiplied: (-2-5)/(5+8)", "micro_hint": "This is multiplication. Multiply top × top, bottom × bottom."},
+            ],
+            "micro_checks": [
+                "What sign does the answer have?",
+                "What is 10/40 simplified?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "multiplication",
         },
         {
             "id": "rn_014",
@@ -207,7 +481,27 @@ ALL_CHAPTERS = {
             "answer": "-3/4",
             "hint": "Convert to same denominator and compare. Less negative = greater",
             "solution": "LCM of 4 and 6 is 12. -3/4 = -9/12, -5/6 = -10/12. Since -9 > -10, we have -9/12 > -10/12. So -3/4 is greater.",
-            "difficulty": 2
+            "difficulty": 2,
+            "answer_type": "numeric",
+            "accept_also": ["-3/4", "-9/12"],
+            "target_skill": "rn_compare",
+            "hint_1": "Convert both to the same denominator, then compare.",
+            "hint_2": "LCM is 12. -3/4 = -9/12, -5/6 = -10/12. Which is bigger: -9 or -10?",
+            "solution_steps": [
+                "Find LCM of 4 and 6 = 12",
+                "-3/4 = -9/12, -5/6 = -10/12",
+                "-9 > -10 (less negative = greater)",
+                "So -3/4 is greater",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "-5/6", "error_type": "concept_misunderstanding", "diagnosis": "Thought bigger denominator or numerator means greater", "micro_hint": "For negative numbers, less negative = greater. Is -9 or -10 bigger?"},
+                {"wrong_answer": "5/6", "error_type": "sign_error", "diagnosis": "Dropped the negative signs when comparing", "micro_hint": "Both numbers are negative. Which is closer to zero?"},
+            ],
+            "micro_checks": [
+                "Which is greater: -9 or -10?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "comparison",
         },
         {
             "id": "rn_015",
@@ -215,7 +509,26 @@ ALL_CHAPTERS = {
             "answer": "1/2",
             "hint": "Divide 0 to 1 into 4 parts: 1/4, 2/4, 3/4",
             "solution": "Three rational numbers between 0 and 1: 1/4, 1/2, 3/4. The middle one is 1/2 (or 2/4).",
-            "difficulty": 1
+            "difficulty": 1,
+            "answer_type": "numeric",
+            "accept_also": ["1/2", "2/4", "0.5"],
+            "target_skill": "rn_between",
+            "hint_1": "Split the gap between 0 and 1 into 4 equal parts.",
+            "hint_2": "The three numbers are 1/4, 2/4, 3/4. Which is in the middle?",
+            "solution_steps": [
+                "Divide 0 to 1 into 4 parts",
+                "Three numbers: 1/4, 2/4, 3/4",
+                "Middle one: 2/4 = 1/2",
+            ],
+            "common_mistakes": [
+                {"wrong_answer": "1/4", "error_type": "arithmetic_slip", "diagnosis": "Gave the first number instead of the middle", "micro_hint": "That's between 0 and 1, but is it the middle of the three?"},
+                {"wrong_answer": "3/4", "error_type": "arithmetic_slip", "diagnosis": "Gave the last number instead of the middle", "micro_hint": "That's between 0 and 1, but is it the middle of the three?"},
+            ],
+            "micro_checks": [
+                "If you split 0 to 1 into 4 parts, what are the three numbers?",
+            ],
+            "topic": "rational_numbers",
+            "subtopic": "between_rationals",
         },
     ],
 

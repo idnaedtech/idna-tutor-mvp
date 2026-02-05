@@ -49,6 +49,10 @@ class Canonical(TypedDict):
     difficulty: int                 # 1-5 scale
     topic: str
     subtopic: str
+    # Enriched fields (Stage 1 — Real Teacher architecture)
+    common_mistakes: List[dict]     # [{wrong_answer, error_type, diagnosis, micro_hint}]
+    micro_checks: List[str]         # Verified check questions for PROBE move
+    target_skill: str               # Skill graph ID (see skill_graph.py)
 
 
 class EvalResult(TypedDict):
@@ -242,15 +246,18 @@ class MathSubjectPack(SubjectPack):
             question_id=q['id'],
             question_text=q['text'],
             expected_answer=q['answer'],
-            answer_type=q.get('type', 'numeric'),
-            hint_1=q.get('hint_1', 'Think about the concept.'),
-            hint_2=q.get('hint_2', 'Check your calculation.'),
+            answer_type=q.get('answer_type', q.get('type', 'numeric')),
+            hint_1=q.get('hint_1', q.get('hint', 'Think about the concept.')),
+            hint_2=q.get('hint_2', q.get('hint', 'Check your calculation.')),
             solution_steps=q.get('solution_steps', [f"The answer is {q['answer']}"]),
             required_keywords=[],
-            acceptable_variants=q.get('variants', []),
+            acceptable_variants=q.get('accept_also', q.get('variants', [])),
             difficulty=q.get('difficulty', 3),
             topic=q.get('topic', ''),
-            subtopic=q.get('subtopic', '')
+            subtopic=q.get('subtopic', ''),
+            common_mistakes=q.get('common_mistakes', []),
+            micro_checks=q.get('micro_checks', []),
+            target_skill=q.get('target_skill', ''),
         )
     
     def normalize_answer(self, student_utterance: str) -> str:

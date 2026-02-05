@@ -340,12 +340,12 @@ Log events include:
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
 
-## Current State (February 2, 2026)
+## Current State (February 4, 2026)
 
 ### Deployment Status
 - **Railway**: Auto-deploys from GitHub `main` branch
 - **Database**: Postgres (production), SQLite (development)
-- **Latest Deploy**: Fixed health check Postgres detection, added Claude auto-review hooks
+- **Latest Deploy**: Ultra-short messages fix - removed chatbot verbosity
 
 ### Completed
 - Bug fixes (7 bugs fixed)
@@ -753,9 +753,10 @@ After:  "Not quite. What do you find?"
 - `tutor_intent.py` - Updated to use teacher policy (2-pass approach)
 - `web_server.py` - Passes session_id for move tracking
 
-### Completed Items (February 2, 2026)
+### Completed Items (February 4, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| **Ultra-Short Messages** | **UX** | **Removed chatbot verbosity - welcome, chapter intros, and transitions now 3-8 words max** |
 | **Demo Tutor Script** | **Demo** | **`demo_tutor.py` - single concept demo showing human-like teaching (explain → check → feedback → retry)** |
 | **Claude Auto-Review Hooks** | **Tooling** | **PostToolUse logs modified files, Stop hook triggers adversarial code review** |
 | **Health Check Postgres Fix** | **Bug** | **`/health` now correctly reports "connected" when using Postgres** |
@@ -855,4 +856,34 @@ python web_server.py
 
 ### Production URL
 Check Railway dashboard for the deployed URL.
+
+---
+
+## Session Summary (February 4, 2026)
+
+### What Was Done This Session
+
+**Goal:** Remove chatbot verbosity - make tutor sound like a real teacher.
+
+#### 1. Ultra-Short Welcome Messages
+**Before:** "Hello! I'm your math tutor. We'll practice together and I'll help you whenever you get stuck. Pick a chapter to start!"
+**After:** "Hi! Pick a chapter to start."
+
+#### 2. Ultra-Short Chapter Intros
+**Before:** "Today we'll work with rational numbers. These are numbers that can be written as fractions, like 3/4 or -2/5. We'll practice adding, subtracting, and comparing them."
+**After:** "Rational numbers. Let's go."
+
+#### 3. Ultra-Short Transition Messages
+**Before:** "Let's work on this together. Don't worry, I'll guide you step by step."
+**After:** "I'll help."
+
+### Files Modified
+| File | Changes |
+|------|---------|
+| `web_server.py` | Shortened welcome messages (lines 1850-1856), chapter intro templates (lines 1923-1934) |
+| `questions.py` | Shortened all `CHAPTER_INTROS` to 2-5 words each |
+| `CLAUDE.md` | Updated current state and completed items |
+
+### Design Principle
+Real teachers don't give long explanations upfront. They say "Let's go" and start teaching. The tutor now follows this pattern - minimal preamble, maximum action.
 

@@ -427,6 +427,121 @@ def eval_safe(expr: str) -> Optional[float]:
         return None
 
 
+# =============================================================================
+# ENHANCED EVALUATOR — wraps check_answer() with common_mistakes matching
+# =============================================================================
+
+def evaluate_answer(
+    correct_answer: str,
+    student_answer: str,
+    question: dict = None,
+) -> dict:
+    """
+    Enhanced answer evaluation that wraps check_answer() and matches
+    against common_mistakes from enriched question data.
+
+    Returns:
+        {
+            "is_correct": bool,
+            "score": float,          # 1.0 correct, 0.0 wrong
+            "feedback_tag": str,     # "CORRECT", "SIGN_ERROR", "UNKNOWN", etc.
+            "normalized_answer": str,
+            "matched_mistake": dict | None,  # from common_mistakes[]
+            "diagnosis": str | None,
+            "micro_hint": str | None,
+        }
+    """
+    if not student_answer:
+        return {
+            "is_correct": False,
+            "score": 0.0,
+            "feedback_tag": "NO_ANSWER",
+            "normalized_answer": "",
+            "matched_mistake": None,
+            "diagnosis": "No answer provided",
+            "micro_hint": "Give it a try!",
+        }
+
+    # Step 1: Use existing deterministic check
+    is_correct = check_answer(correct_answer, student_answer)
+
+    # Step 2: Normalize student answer for matching
+    normalized = normalize_spoken_input(student_answer)
+    norm_for_match = normalize_answer(normalized)
+
+    if is_correct:
+        return {
+            "is_correct": True,
+            "score": 1.0,
+            "feedback_tag": "CORRECT",
+            "normalized_answer": norm_for_match,
+            "matched_mistake": None,
+            "diagnosis": None,
+            "micro_hint": None,
+        }
+
+    # Step 3: Match against common_mistakes (if question has them)
+    common_mistakes = (question or {}).get("common_mistakes", [])
+
+    for mistake in common_mistakes:
+        wrong = mistake.get("wrong_answer", "")
+        # Normalize the expected wrong answer the same way
+        norm_wrong = normalize_answer(wrong)
+
+        if norm_for_match == norm_wrong:
+            return {
+                "is_correct": False,
+                "score": 0.0,
+                "feedback_tag": mistake.get("error_type", "UNKNOWN").upper(),
+                "normalized_answer": norm_for_match,
+                "matched_mistake": mistake,
+                "diagnosis": mistake.get("diagnosis", ""),
+                "micro_hint": mistake.get("micro_hint", ""),
+            }
+
+        # Also check fraction equivalence for wrong answers
+        if "/" in norm_wrong or "/" in norm_for_match:
+            if fractions_equivalent(norm_for_match, norm_wrong):
+                return {
+                    "is_correct": False,
+                    "score": 0.0,
+                    "feedback_tag": mistake.get("error_type", "UNKNOWN").upper(),
+                    "normalized_answer": norm_for_match,
+                    "matched_mistake": mistake,
+                    "diagnosis": mistake.get("diagnosis", ""),
+                    "micro_hint": mistake.get("micro_hint", ""),
+                }
+
+        # Check numeric equivalence for wrong answers
+        try:
+            wrong_val = eval_safe(norm_wrong)
+            student_val = eval_safe(norm_for_match)
+            if wrong_val is not None and student_val is not None:
+                if abs(wrong_val - student_val) < 0.0001:
+                    return {
+                        "is_correct": False,
+                        "score": 0.0,
+                        "feedback_tag": mistake.get("error_type", "UNKNOWN").upper(),
+                        "normalized_answer": norm_for_match,
+                        "matched_mistake": mistake,
+                        "diagnosis": mistake.get("diagnosis", ""),
+                        "micro_hint": mistake.get("micro_hint", ""),
+                    }
+        except Exception:
+            pass
+
+    # Step 4: No common_mistake matched — generic UNKNOWN
+    return {
+        "is_correct": False,
+        "score": 0.0,
+        "feedback_tag": "UNKNOWN",
+        "normalized_answer": norm_for_match,
+        "matched_mistake": None,
+        "diagnosis": None,
+        "micro_hint": None,
+    }
+
+
 # For testing
 if __name__ == "__main__":
     print("=== Evaluator Test ===\n")

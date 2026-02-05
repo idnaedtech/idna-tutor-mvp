@@ -136,7 +136,7 @@ def log_latency(operation: str, latency_ms: float, **context):
     )
 
 from questions import ALL_CHAPTERS, CHAPTER_NAMES, CHAPTER_INTROS
-from evaluator import check_answer, normalize_spoken_input
+from evaluator import check_answer, normalize_spoken_input, evaluate_answer
 from tutor_intent import (
     generate_tutor_response,
     generate_gpt_response,
@@ -727,6 +727,30 @@ def init_sqlite_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_attempts_topic ON attempts(topic_tag, is_correct)")
 
+    # Add new columns to attempts for enriched evaluation (Stage 1)
+    for col, col_type in [("error_type", "TEXT"), ("target_skill", "TEXT")]:
+        try:
+            cursor.execute(f"ALTER TABLE attempts ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+    # Student skills tracking table (Stage 1)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS student_skills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            skill_id TEXT NOT NULL,
+            attempts INTEGER DEFAULT 0,
+            correct INTEGER DEFAULT 0,
+            last_error_type TEXT,
+            mastery_level REAL DEFAULT 0.0,
+            updated_at TEXT NOT NULL,
+            UNIQUE(student_id, skill_id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_student_skills_student ON student_skills(student_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_student_skills_skill ON student_skills(skill_id)")
+
     cursor.execute("SELECT COUNT(*) FROM students")
     if cursor.fetchone()[0] == 0:
         cursor.execute(
@@ -848,6 +872,8 @@ def init_postgres_database():
             ("asr_confidence", "REAL"),
             ("input_mode", "TEXT DEFAULT 'text'"),
             ("latency_ms", "INTEGER"),
+            ("error_type", "TEXT"),
+            ("target_skill", "TEXT"),
         ]
         for col, col_type in attempts_columns:
             try:
@@ -863,6 +889,28 @@ def init_postgres_database():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_attempts_topic ON attempts(topic_tag, is_correct)")
         except Exception as e:
             print(f"[DB] Index creation skipped: {e}")
+
+        # Student skills tracking table (Stage 1)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS student_skills (
+                id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL,
+                skill_id TEXT NOT NULL,
+                attempts INTEGER DEFAULT 0,
+                correct INTEGER DEFAULT 0,
+                last_error_type TEXT,
+                mastery_level REAL DEFAULT 0.0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(student_id, skill_id)
+            )
+        """)
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_student_skills_student ON student_skills(student_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_student_skills_skill ON student_skills(skill_id)")
+        except Exception:
+            pass
+
+        conn.commit()
 
         # Default student if none exists
         cursor.execute("SELECT COUNT(*) FROM students")
@@ -1024,6 +1072,9 @@ def record_attempt(
     asr_confidence: Optional[float] = None,
     input_mode: str = "text",
     latency_ms: Optional[int] = None,
+    # Stage 1 enriched fields
+    error_type: Optional[str] = None,
+    target_skill: Optional[str] = None,
 ) -> int:
     """
     Record a student's answer attempt to the database.
@@ -1060,14 +1111,16 @@ def record_attempt(
                 INSERT INTO attempts
                 (session_id, question_id, topic_tag, attempt_no, is_correct,
                  hint_level_used, answer_text, difficulty, created_at,
-                 raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms,
+                 error_type, target_skill)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
             """, (
                 session_id, question_id, topic_tag, attempt_no,
                 1 if is_correct else 0, hint_level_used, answer_text,
                 difficulty, now,
-                raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms
+                raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms,
+                error_type, target_skill
             ))
             result = cursor.fetchone()
             return result['id'] if result else 0
@@ -1077,15 +1130,86 @@ def record_attempt(
                 INSERT INTO attempts
                 (session_id, question_id, topic_tag, attempt_no, is_correct,
                  hint_level_used, answer_text, difficulty, created_at,
-                 raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms,
+                 error_type, target_skill)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 session_id, question_id, topic_tag, attempt_no,
                 1 if is_correct else 0, hint_level_used, answer_text,
                 difficulty, now,
-                raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms
+                raw_utterance, normalized_answer, asr_confidence, input_mode, latency_ms,
+                error_type, target_skill
             ))
             return cursor.lastrowid
+
+
+def update_student_skill(
+    student_id: int,
+    skill_id: str,
+    is_correct: bool,
+    error_type: Optional[str] = None,
+):
+    """
+    Update student_skills table after each attempt (Stage 1).
+    Uses UPSERT (INSERT ... ON CONFLICT UPDATE) for atomicity.
+    """
+    if not skill_id:
+        return
+    now = datetime.now().isoformat()
+    with get_db() as conn:
+        if USE_POSTGRES:
+            conn.execute("""
+                INSERT INTO student_skills (student_id, skill_id, attempts, correct, last_error_type, mastery_level, updated_at)
+                VALUES (%s, %s, 1, %s, %s, %s, %s)
+                ON CONFLICT (student_id, skill_id) DO UPDATE SET
+                    attempts = student_skills.attempts + 1,
+                    correct = student_skills.correct + %s,
+                    last_error_type = COALESCE(%s, student_skills.last_error_type),
+                    mastery_level = CASE
+                        WHEN (student_skills.correct + %s) = 0 THEN 0.0
+                        ELSE CAST(student_skills.correct + %s AS REAL) / (student_skills.attempts + 1)
+                    END,
+                    updated_at = %s
+            """, (
+                student_id, skill_id,
+                1 if is_correct else 0,
+                error_type,
+                1.0 if is_correct else 0.0,
+                now,
+                # ON CONFLICT params
+                1 if is_correct else 0,
+                error_type,
+                1 if is_correct else 0,
+                1 if is_correct else 0,
+                now,
+            ))
+        else:
+            # SQLite: INSERT OR REPLACE pattern
+            row = conn.execute(
+                "SELECT attempts, correct FROM student_skills WHERE student_id = ? AND skill_id = ?",
+                (student_id, skill_id)
+            ).fetchone()
+            if row:
+                new_attempts = (row['attempts'] or 0) + 1
+                new_correct = (row['correct'] or 0) + (1 if is_correct else 0)
+                mastery = new_correct / new_attempts if new_attempts > 0 else 0.0
+                conn.execute("""
+                    UPDATE student_skills
+                    SET attempts = ?, correct = ?, last_error_type = COALESCE(?, last_error_type),
+                        mastery_level = ?, updated_at = ?
+                    WHERE student_id = ? AND skill_id = ?
+                """, (new_attempts, new_correct, error_type, mastery, now, student_id, skill_id))
+            else:
+                mastery = 1.0 if is_correct else 0.0
+                conn.execute("""
+                    INSERT INTO student_skills (student_id, skill_id, attempts, correct, last_error_type, mastery_level, updated_at)
+                    VALUES (?, ?, 1, ?, ?, ?, ?)
+                """, (student_id, skill_id, 1 if is_correct else 0, error_type, mastery, now))
+
+
+async def async_update_student_skill(**kwargs):
+    """Async wrapper for update_student_skill."""
+    return await asyncio.to_thread(lambda: update_student_skill(**kwargs))
 
 
 def get_session_attempts(session_id: str) -> list:
@@ -1847,13 +1971,13 @@ async def start_session(request: SessionStartRequest = None):
             welcome = f"Great to see you, {student_name}! You've been doing really well lately. Ready for some new challenges?"
         else:
             # Regular returning student
-            welcome = f"Hello again, {student_name}! Good to have you back. Which chapter shall we practice today?"
+            welcome = f"Hey {student_name}! What should we practice?"
     else:
         # New student or guest
         if student_name and student_name != "there":
-            welcome = f"Hello {student_name}! I'm your math tutor. We'll practice together and I'll help you whenever you get stuck. Pick a chapter to start!"
+            welcome = f"Hi {student_name}! Pick a chapter."
         else:
-            welcome = "Hello! I'm your math tutor. We'll practice together and I'll help you whenever you get stuck. Pick a chapter to start!"
+            welcome = "Hi! Pick a chapter to start."
 
     welcome_ssml = wrap_in_ssml(welcome)
 
@@ -1921,17 +2045,17 @@ async def select_chapter(request: ChapterRequest):
         attempts = chapter_performance['attempts']
 
         if accuracy >= 80:
-            # Student is strong in this chapter
-            intro_message = f"You're doing great with this chapter! Last time you got {int(accuracy)}% right. {chapter_intro} Let's try some harder ones today."
+            # Student is strong - skip intro, go harder
+            intro_message = f"{chapter_intro} Harder ones today."
         elif accuracy >= 50:
-            # Moderate performance
-            intro_message = f"Good to practice this again! {chapter_intro} Let's build on what you learned last time."
+            # Moderate - brief
+            intro_message = f"{chapter_intro} Let's practice."
         else:
-            # Needs more practice
-            intro_message = f"Let's work on this together. {chapter_intro} Don't worry, I'll guide you step by step."
+            # Needs work - encouraging but short
+            intro_message = f"{chapter_intro} I'll help."
     else:
-        # First time with this chapter
-        intro_message = f"Great choice! {chapter_intro} Let's start with an easy one."
+        # First time - just start
+        intro_message = f"{chapter_intro} Here we go."
 
     intro_ssml = wrap_in_ssml(intro_message)
 
@@ -2216,29 +2340,38 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
     # Normalize the answer for comparison and logging
     normalized_answer = normalize_spoken_input(request.answer)
 
-    # Use enhanced evaluator (handles spoken variants like "2 by 3" → "2/3")
-    is_correct = check_answer(question['answer'], request.answer)
+    # Use enhanced evaluator with common_mistakes matching (Stage 1)
+    # Falls back to check_answer() for unenriched questions
+    eval_result = evaluate_answer(question['answer'], request.answer, question)
+    is_correct = eval_result["is_correct"]
     attempt_count = (session['attempt_count'] or 0) + 1
 
     # Debug logging for answer evaluation (includes byte repr for encoding issues)
     print(f"[DEBUG EVAL] Student raw: {repr(request.answer)} bytes: {request.answer.encode('utf-8')}")
     print(f"[DEBUG EVAL] Student normalized: {repr(normalized_answer)}")
     print(f"[DEBUG EVAL] Correct answer: {repr(question['answer'])} bytes: {question['answer'].encode('utf-8')}")
-    print(f"[DEBUG EVAL] Result: {is_correct}")
+    print(f"[DEBUG EVAL] Result: {is_correct}, tag: {eval_result.get('feedback_tag')}")
 
     # Generate natural tutor response using Teacher Policy + TutorIntent layer
     # Teacher Policy diagnoses errors and chooses teaching moves
+    # Pass enriched data when available for better scaffolding
     with Timer() as tutor_timer:
         tutor_result = generate_tutor_response(
             is_correct=is_correct,
             attempt_number=attempt_count,
             question=question.get('text', ''),
-            hint_1=question.get('hint', 'Think about the concept carefully.'),
+            hint_1=question.get('hint_1', question.get('hint', 'Think about the concept carefully.')),
             hint_2=question.get('hint_2', question.get('hint', 'Think step by step.')),
             solution=question.get('solution', f"The answer is {question['answer']}."),
             correct_answer=question['answer'],
-            student_answer=request.answer,  # Pass what student actually said
-            session_id=request.session_id,  # For teacher policy move tracking
+            student_answer=request.answer,
+            session_id=request.session_id,
+            # Enriched data from evaluate_answer (Stage 1)
+            eval_result=eval_result,
+            common_mistakes=question.get('common_mistakes', []),
+            micro_checks=question.get('micro_checks', []),
+            solution_steps=question.get('solution_steps', []),
+            target_skill=question.get('target_skill', ''),
         )
 
     # Log answer evaluation
@@ -2263,6 +2396,10 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
 
     # Run attempt recording concurrently with other operations
     # Include debug/audit fields for debugging and analytics
+    # Extract error info from eval_result for recording
+    eval_error_type = eval_result.get("feedback_tag") if not is_correct else None
+    eval_target_skill = question.get("target_skill", "")
+
     record_task = async_record_attempt(
         session_id=request.session_id,
         question_id=question['id'],
@@ -2278,7 +2415,22 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
         asr_confidence=request.confidence,  # STT confidence if voice input
         input_mode="voice" if request.is_voice_input else "text",
         latency_ms=round(tutor_timer.elapsed_ms),
+        # Stage 1 enriched fields
+        error_type=eval_error_type,
+        target_skill=eval_target_skill,
     )
+
+    # Update student_skills tracking (Stage 1)
+    student_id = session.get('student_id', 1)
+    if eval_target_skill:
+        skill_task = async_update_student_skill(
+            student_id=student_id,
+            skill_id=eval_target_skill,
+            is_correct=is_correct,
+            error_type=eval_error_type,
+        )
+    else:
+        skill_task = None
 
     # Get current difficulty tracking values
     current_difficulty = session.get('current_difficulty') or 1
@@ -2298,8 +2450,8 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
             is_correct=True,
         )
 
-        # Run DB updates concurrently
-        await asyncio.gather(
+        # Run DB updates concurrently (include skill tracking if available)
+        gather_tasks = [
             record_task,
             async_update_session(
                 request.session_id,
@@ -2310,8 +2462,11 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
                 current_difficulty=new_diff,
                 consecutive_correct=new_consec_correct,
                 consecutive_wrong=new_consec_wrong,
-            )
-        )
+            ),
+        ]
+        if skill_task is not None:
+            gather_tasks.append(skill_task)
+        await asyncio.gather(*gather_tasks)
 
         # Check if difficulty changed
         difficulty_changed = new_diff != current_difficulty
@@ -2357,7 +2512,7 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
                 is_correct=False,
             )
 
-            await asyncio.gather(
+            gather_tasks2 = [
                 record_task,
                 async_update_session(
                     request.session_id,
@@ -2366,8 +2521,11 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
                     current_difficulty=new_diff,
                     consecutive_correct=new_consec_correct,
                     consecutive_wrong=new_consec_wrong,
-                )
-            )
+                ),
+            ]
+            if skill_task is not None:
+                gather_tasks2.append(skill_task)
+            await asyncio.gather(*gather_tasks2)
 
             # Check if difficulty changed
             difficulty_changed = new_diff != current_difficulty
@@ -2403,14 +2561,17 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
             return response
         else:
             # Attempt 1 or 2: Show hint (no difficulty adjustment yet)
-            await asyncio.gather(
+            gather_tasks3 = [
                 record_task,
                 async_update_session(
                     request.session_id,
                     attempt_count=attempt_count,
                     state=SessionState.SHOWING_HINT.value
-                )
-            )
+                ),
+            ]
+            if skill_task is not None:
+                gather_tasks3.append(skill_task)
+            await asyncio.gather(*gather_tasks3)
 
             response = {
                 "correct": False,
