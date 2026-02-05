@@ -9,3 +9,4 @@ google-cloud-texttospeech>=2.14.0
 # Database: Postgres for production, SQLite for dev
 psycopg2-binary>=2.9.9
 aiohttp>=3.9.0
+pytest>=8.0.0
