@@ -229,6 +229,35 @@ def test_teaching_phase_values():
     assert TeachingPhase.ADVANCE.value == "advance"
 
 
+# ============================================================
+# Test: Lesson intro ("Teach First" phase)
+# ============================================================
+
+from tutor_intent import generate_lesson_intro
+
+
+def test_lesson_intro_returns_for_new_skill():
+    """First encounter with a skill should return a lesson."""
+    result = generate_lesson_intro("rn_add_same_denom", set())
+    assert result is not None
+    assert "lesson" in result
+    assert "lesson_ssml" in result
+    assert len(result["lesson"]) > 0
+    assert "<speak>" in result["lesson_ssml"]
+
+
+def test_lesson_intro_skips_already_taught():
+    """Repeat skill should return None (already taught this session)."""
+    result = generate_lesson_intro("rn_add_same_denom", {"rn_add_same_denom"})
+    assert result is None
+
+
+def test_lesson_intro_unknown_skill_returns_none():
+    """Unknown skill with no lesson entry should return None gracefully."""
+    result = generate_lesson_intro("nonexistent_skill_xyz", set())
+    assert result is None
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])

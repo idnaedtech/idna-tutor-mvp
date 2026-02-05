@@ -141,6 +141,7 @@ from tutor_intent import (
     generate_tutor_response,
     generate_gpt_response,
     generate_step_explanation,
+    generate_lesson_intro,
     wrap_in_ssml,
     is_help_request,
     detect_off_topic,
@@ -2148,12 +2149,24 @@ async def get_next_question(request: ChapterRequest):
     # Lock released - build response
     intro_ssml = wrap_in_ssml(intro)
 
+    # "Teach First" — generate a brief lesson for the first encounter with this skill
+    target_skill = question.get("target_skill", "")
+    skills_already_taught = set()
+    for qid in asked[:-1]:  # exclude current question
+        for q in questions:
+            if q["id"] == qid:
+                skills_already_taught.add(q.get("target_skill", ""))
+                break
+    lesson_data = generate_lesson_intro(target_skill, skills_already_taught)
+
     return {
         "question_id": question['id'],
         "question_text": question['text'],
         "question_number": question_number,
         "intro": intro,
         "intro_ssml": intro_ssml,
+        "lesson": lesson_data["lesson"] if lesson_data else None,
+        "lesson_ssml": lesson_data["lesson_ssml"] if lesson_data else None,
         "type": question.get('type', 'text'),
         "options": question.get('options'),
         "state": SessionState.WAITING_ANSWER.value,

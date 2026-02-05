@@ -817,9 +817,19 @@
                     return;
                 }
 
-                // Show question, then speak, then auto-listen after audio ends
-                addMessage(data.question_text, 'tutor', 'question', false);
-                speak(data.intro, data.intro_ssml, { autoListen: true });
+                // "Teach First" — speak lesson before question (first encounter only)
+                if (data.lesson) {
+                    addMessage(data.lesson, 'tutor', '', false);
+                    speak(data.lesson, data.lesson_ssml, {
+                        onComplete: () => {
+                            addMessage(data.question_text, 'tutor', 'question', false);
+                            speak(data.intro, data.intro_ssml, { autoListen: true });
+                        }
+                    });
+                } else {
+                    addMessage(data.question_text, 'tutor', 'question', false);
+                    speak(data.intro, data.intro_ssml, { autoListen: true });
+                }
                 answerInput.focus();
             } catch (e) {
                 hideTyping();

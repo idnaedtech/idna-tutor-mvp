@@ -88,6 +88,52 @@ CHAPTER_NAMES = {
 }
 
 # ============================================================
+# SKILL LESSONS - Brief concept explanation per target_skill
+# Spoken aloud before the first question of each skill.
+# One lesson per skill per session (deterministic, no GPT).
+# ============================================================
+
+SKILL_LESSONS = {
+    # Rational Numbers
+    "rn_identify": "A rational number is any number you can write as p/q, where q is not zero.",
+    "rn_add_same_denom": "When adding fractions with the same denominator, keep the bottom number and just add the tops.",
+    "rn_add_diff_denom": "When denominators are different, first find the LCM to make them the same, then add.",
+    "rn_subtract": "Subtracting fractions works like adding, but you subtract the numerators instead.",
+    "rn_multiply": "To multiply fractions, multiply tops together and bottoms together. Then simplify.",
+    "rn_divide": "Dividing by a fraction means multiplying by its flip.",
+    "rn_multiplicative_inverse": "The multiplicative inverse is what you multiply a number by to get 1. Just flip the fraction.",
+    "rn_additive_inverse": "The additive inverse is what you add to a number to get zero. Just change the sign.",
+    "rn_simplify": "To simplify a fraction, divide top and bottom by their highest common factor.",
+    "rn_compare": "To compare fractions, convert them to the same denominator, then compare numerators.",
+    "rn_between": "To find a rational number between two fractions, you can take their average.",
+    "rn_word_problem": "Read carefully and figure out which operation the problem is asking for.",
+    # Linear Equations
+    "le_one_step": "To solve an equation, do the same thing to both sides to get x alone.",
+    "le_two_step": "Solve step by step: first move constants, then divide to isolate x.",
+    "le_variables_both_sides": "When x appears on both sides, move all x terms to one side first.",
+    "le_brackets": "First expand the brackets, then solve like a normal equation.",
+    "le_fractions": "Multiply both sides by the LCM of denominators to clear the fractions first.",
+    "le_word_problem": "Translate the words into an equation, then solve for the unknown.",
+    # Squares & Roots
+    "sq_perfect_squares": "A perfect square is a number you get by multiplying a whole number by itself.",
+    "sq_square_root": "Square root is the reverse of squaring. What number times itself gives this?",
+    "sq_estimate_root": "To estimate a square root, find which two perfect squares it falls between.",
+    # Algebraic Expressions
+    "ae_identify_terms": "Each part of an expression separated by plus or minus is called a term.",
+    "ae_add_subtract": "You can only add or subtract like terms, meaning same variable and same power.",
+    "ae_multiply_monomial": "When multiplying, multiply the numbers and add the powers of same variables.",
+    "ae_multiply_polynomial": "Multiply each term in the first bracket by each term in the second.",
+    "ae_identities": "Algebraic identities are shortcuts. Memorize them to expand or factor quickly.",
+    # Comparing Quantities
+    "cq_ratio": "A ratio compares two quantities. Write it as a fraction and simplify.",
+    "cq_percentage": "Percentage means per hundred. To find a percentage, divide and multiply by 100.",
+    "cq_profit_loss": "Profit is selling price minus cost price. Loss is the opposite.",
+    "cq_simple_interest": "Simple interest is Principal times Rate times Time, divided by 100.",
+    "cq_compound_interest": "Compound interest means you earn interest on the interest too.",
+    "cq_discount": "Discount is the reduction from marked price. Sale price = marked price minus discount.",
+}
+
+# ============================================================
 # MATHEMATICS QUESTION BANK
 # ============================================================
 

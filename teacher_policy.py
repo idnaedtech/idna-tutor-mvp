@@ -783,7 +783,7 @@ class TeacherPlanner:
             # Use solution_steps when available for richer explanation
             steps = solution_steps or []
             if steps and len(steps) >= 2:
-                explanation = f"{steps[0]} {steps[1]}"
+                explanation = ". ".join(steps[:3]) + "."
             else:
                 explanation = hint_2 or "Let me show you a simpler case first."
             return TeacherPlan(

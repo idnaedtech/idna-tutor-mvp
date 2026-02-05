@@ -163,6 +163,69 @@ def test_no_solution_steps_lenient():
     assert valid is True
 
 
+# ============================================================
+# Test: Banned YouTube/AI phrases (Bug 1 fix)
+# ============================================================
+
+def test_youtube_phrase_rejected():
+    """GPT hallucination like 'Thank you for watching!' should be rejected."""
+    valid, reason = validate_teaching_output(
+        text="Thank you for watching! See you next time!",
+        correct_answer="7",
+    )
+    assert valid is False
+    assert reason == "off_topic_content"
+
+
+def test_subscribe_phrase_rejected():
+    """YouTube-style 'subscribe' should be rejected."""
+    valid, reason = validate_teaching_output(
+        text="Don't forget to subscribe for more math tips?",
+        correct_answer="7",
+        teacher_move="probe",
+    )
+    assert valid is False
+    assert reason == "off_topic_content"
+
+
+def test_like_and_share_rejected():
+    valid, reason = validate_teaching_output(
+        text="Like and share this with your friends?",
+        correct_answer="7",
+        teacher_move="probe",
+    )
+    assert valid is False
+    assert reason == "off_topic_content"
+
+
+def test_normal_math_not_flagged():
+    """Normal math teaching should NOT be flagged as off-topic."""
+    valid, reason = validate_teaching_output(
+        text="What is 3 plus 4?",
+        correct_answer="7",
+        teacher_move="probe",
+    )
+    assert valid is True
+
+
+# ============================================================
+# Test: PROBE move not polished (Bug 3 fix)
+# ============================================================
+
+def test_probe_not_polished():
+    """PROBE moves should skip GPT polishing — verified micro_check preserved."""
+    from tutor_intent import _polish_teacher_response
+    base = "What does additive inverse mean?"
+    result = _polish_teacher_response(
+        base_response=base,
+        teacher_move="probe",
+        error_type="",
+        correct_answer="-1/7",
+        student_answer="5",
+    )
+    assert result == base, f"PROBE should return base_response unchanged, got: {result}"
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])

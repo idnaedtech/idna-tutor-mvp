@@ -810,6 +810,24 @@ def validate_teaching_output(
     if len(words) > 55:
         return False, "too_long"
 
+    # Rule 1b: Banned phrases — catch GPT hallucinations / off-topic content
+    BANNED_PHRASES = [
+        "thank you for watching",
+        "thanks for watching",
+        "subscribe",
+        "like and share",
+        "see you next time",
+        "hit the bell",
+        "leave a comment",
+        "check out my",
+        "link in the description",
+        "don't forget to like",
+    ]
+    text_lower = text.lower()
+    for phrase in BANNED_PHRASES:
+        if phrase in text_lower:
+            return False, "off_topic_content"
+
     # Rule 2: Check for hallucinated numbers
     # Build set of allowed numbers from verified content
     allowed_numbers = set()
@@ -1130,6 +1148,27 @@ def wrap_in_ssml(text: str) -> str:
     return _wrap_in_ssml_cached(text, seed)
 
 
+def generate_lesson_intro(
+    target_skill: str,
+    skills_already_taught: set,
+) -> Optional[Dict[str, str]]:
+    """Generate a brief concept lesson for a skill (first encounter only).
+
+    Returns {"lesson": ..., "lesson_ssml": ...} or None if already taught
+    or skill has no lesson.
+    """
+    if not target_skill or target_skill in skills_already_taught:
+        return None
+
+    from questions import SKILL_LESSONS
+    lesson = SKILL_LESSONS.get(target_skill)
+    if not lesson:
+        return None
+
+    ssml = wrap_in_ssml(lesson)
+    return {"lesson": lesson, "lesson_ssml": ssml}
+
+
 def generate_step_explanation(
     question: str,
     solution: str,
@@ -1282,7 +1321,15 @@ def generate_tutor_response(
         accept_also=None,
         teacher_move=teacher_plan.get("teacher_move", ""),
     )
-    if not is_valid and reason.startswith("hallucinated_number"):
+    if not is_valid and reason in ("no_question", "too_long", "empty_output", "off_topic_content"):
+        _log_gpt_call(
+            f"LLM output rejected: {reason}",
+            event="validation_rejected",
+            reason=reason,
+            teacher_move=teacher_plan.get("teacher_move"),
+        )
+        response = base_response  # Fall back to deterministic
+    elif not is_valid and reason.startswith("hallucinated_number"):
         _log_gpt_call(
             "LLM output rejected: hallucinated number",
             event="validation_rejected",
@@ -1331,7 +1378,7 @@ def _polish_teacher_response(
     Uses LLM client but with strict constraints from the teaching plan.
     """
     # For simple cases, the base response is already good
-    if teacher_move in [TeachingMove.REVEAL.value, TeachingMove.CONFIRM.value]:
+    if teacher_move in [TeachingMove.REVEAL.value, TeachingMove.CONFIRM.value, TeachingMove.PROBE.value]:
         return base_response
 
     # Try to make it warmer with LLM, but fall back to base if needed
