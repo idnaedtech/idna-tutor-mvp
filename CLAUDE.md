@@ -16,6 +16,7 @@
 
 ```
 Brain = FSM (flow control) + Evaluator (deterministic)
+Teach First = Deterministic concept lesson before first question per skill
 Teacher Policy = Error diagnosis + Teaching move selection (structured)
 LLM = Language layer ONLY (phrasing, not judging)
 TutorIntent = Teaching micro-behaviors
@@ -34,7 +35,7 @@ TutorIntent = Teaching micro-behaviors
 | `web_server.py` | Main FastAPI app - FSM, API endpoints, TTS/STT integration |
 | `tutor_intent.py` | Natural language generation, teaching intents, voice pacing |
 | `teacher_policy.py` | Error diagnosis, teaching moves, planner (ChatGPT architecture) |
-| `questions.py` | Question bank (ALL_CHAPTERS, CHAPTER_NAMES) |
+| `questions.py` | Question bank (ALL_CHAPTERS, CHAPTER_NAMES, SKILL_LESSONS) |
 | `evaluator.py` | Answer evaluation - handles fractions, words, units, spoken variants |
 | `demo_tutor.py` | Single-concept demo showing human-like teaching behavior |
 | `subject_pack.py` | Subject pack management |
@@ -340,12 +341,12 @@ Log events include:
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
 
-## Current State (February 4, 2026)
+## Current State (February 5, 2026)
 
 ### Deployment Status
 - **Railway**: Auto-deploys from GitHub `main` branch
 - **Database**: Postgres (production), SQLite (development)
-- **Latest Deploy**: Ultra-short messages fix - removed chatbot verbosity
+- **Latest Deploy**: "Teach First" phase - tutor explains concept before asking question
 
 ### Completed
 - Bug fixes (7 bugs fixed)
@@ -660,6 +661,33 @@ Created `DISASTER_RECOVERY.md` with:
 | P3 | Multi-subject evaluator scaffolding | Future feature | |
 | P3 | Tutor behavior test suite | Testing | |
 
+### "Teach First" Phase (February 5, 2026)
+
+**Problem Solved:** Tutor was a quiz bot — dumped a question, waited for answer, only taught after failure.
+
+**Solution:** Brief deterministic concept lesson before the first question of each skill.
+
+**Flow:**
+```
+Before: Question → Student answers → Wrong? → React with hints
+After:  Brief lesson → Question → Student answers → React
+```
+
+**Design:**
+- **Deterministic lessons** — `SKILL_LESSONS` dict in `questions.py` (31 entries), no GPT calls
+- **One lesson per skill per session** — derived from `questions_asked`, no DB schema changes
+- **1-2 sentences** — spoken aloud via TTS, must be brief
+- **Frontend chains** — lesson TTS `onComplete` → question TTS with `autoListen`
+
+**Files:**
+| File | Change |
+|------|--------|
+| `questions.py` | `SKILL_LESSONS` dict (31 skill → lesson mappings) |
+| `tutor_intent.py` | `generate_lesson_intro()` — returns lesson + SSML or None |
+| `web_server.py` | `get_next_question()` builds `skills_already_taught`, adds lesson to response |
+| `web/index.html` | `getNextQuestion()` chains lesson → question TTS |
+| `tests/test_teacher_policy.py` | 3 tests: new skill, repeat skill, unknown skill |
+
 ### Teacher Policy Architecture (January 31, 2026)
 
 **Problem Solved:** Tutor felt like a quiz master (chatbot), not a real teacher.
@@ -753,9 +781,12 @@ After:  "Not quite. What do you find?"
 - `tutor_intent.py` - Updated to use teacher policy (2-pass approach)
 - `web_server.py` - Passes session_id for move tracking
 
-### Completed Items (February 4, 2026)
+### Completed Items (February 5, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| **Teach First Phase** | **Architecture** | **Tutor explains concept before first question of each skill. Deterministic lessons (no GPT) from `SKILL_LESSONS` dict (31 entries). One lesson per skill per session. Frontend chains lesson TTS → question TTS.** |
+| **Banned Phrase Detection** | **Validation** | **Rejects YouTube/AI hallucinations ("subscribe", "thank you for watching") in GPT output** |
+| **PROBE Skip-Polish** | **Bug** | **PROBE moves now skip GPT polishing — preserves micro_check questions verbatim** |
 | **Ultra-Short Messages** | **UX** | **Removed chatbot verbosity - welcome, chapter intros, and transitions now 3-8 words max** |
 | **Demo Tutor Script** | **Demo** | **`demo_tutor.py` - single concept demo showing human-like teaching (explain → check → feedback → retry)** |
 | **Claude Auto-Review Hooks** | **Tooling** | **PostToolUse logs modified files, Stop hook triggers adversarial code review** |
