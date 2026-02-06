@@ -334,78 +334,55 @@ class TeacherPlan:
 # WARMTH POLICY (makes tutor feel human, not examiner)
 # ============================================================
 
-# Warmth primitives (only ONE per turn, max 8 words each)
-# Per GPT feedback: avoid praise-like phrases when student is wrong
-# Use acknowledgements instead of fake encouragement
+# Warmth primitives by level (only ONE per turn).
+# Level 0=neutral, 1=calm, 2=supportive, 3=soothing.
+# Avoids praise-like phrases when wrong - uses acknowledgements instead.
 WARMTH_PRIMITIVES = {
-    0: [],  # Neutral - no warmth phrase (fast drills)
-    1: [    # Calm (default / correct answer)
-        "Yes!",
-        "That's right.",
-        "Good.",
-        "Exactly.",
-    ],
-    2: [    # Supportive (after wrong attempt) - NEVER say "wrong", diagnose instead
-        "Hmm.",
-        "I see.",
-        "Okay.",
-        "Let me understand.",
-        "Tell me,",
-    ],
-    3: [    # Soothing (frustration detected) - validate + offer choice
-        "That's okay.",
-        "No problem.",
-        "It's okay.",
-        "Let's pause.",
-        "Take your time.",
-        "No worries.",
-    ],
+    0: (),  # Neutral (fast drills)
+    1: ("Yes!", "That's right.", "Good.", "Exactly."),  # Calm (correct)
+    2: ("Hmm.", "I see.", "Okay.", "Let me understand.", "Tell me,"),  # Supportive (wrong)
+    3: ("That's okay.", "No problem.", "It's okay.", "Let's pause.", "Take your time."),  # Soothing (frustrated)
 }
 
-# Diagnostic starters - used before hints when student is wrong
-# These replace "Not quite" with curiosity about student's thinking
-DIAGNOSTIC_STARTERS = [
+# Diagnostic questions to understand student's thinking (replace "Not quite").
+DIAGNOSTIC_STARTERS = (
     "Tell me, what did you do?",
     "How did you get that?",
     "Walk me through your steps.",
     "What did you do first?",
-]
+)
 
-# Real-world analogies for math concepts (familiar to Indian students)
-# Used to make abstract concepts concrete
+# Real-world analogies for math concepts (familiar to Indian students).
+# Each entry has: analogy (object), example (story), optional rule (principle).
 CONCEPT_ANALOGIES = {
-    # Fractions
     "fraction_addition_same_denom": {
         "analogy": "roti pieces",
-        "example": "If you ate 1 piece of roti out of 4, that's 1/4. Another piece is another 1/4. Total? 2/4 - two pieces out of four.",
-        "rule": "When bottom is same, just add the tops. The roti pieces are same size.",
+        "example": "1/4 + 1/4 = 2/4. Two pieces out of four.",
+        "rule": "Same bottom? Just add tops.",
     },
     "fraction_addition_diff_denom": {
         "analogy": "different sized pieces",
-        "example": "1/2 and 1/4 are different size pieces. Like half a roti vs quarter roti. We need same size first.",
+        "example": "1/2 and 1/4 are different sizes. Need same size first.",
     },
     "fraction_meaning": {
         "analogy": "roti or pizza",
-        "example": "Top number = how many pieces you took. Bottom number = how many total pieces. 3/4 = 3 pieces out of 4.",
+        "example": "3/4 = 3 pieces out of 4. Top = taken, bottom = total.",
     },
-    # Negative numbers
     "additive_inverse": {
         "analogy": "money",
-        "example": "If you have 5 rupees and owe 5 rupees, you have 0. That's why 5 + (-5) = 0.",
+        "example": "Have 5 rupees, owe 5 rupees = 0. That's 5 + (-5) = 0.",
     },
     "negative_addition": {
-        "analogy": "steps forward and back",
-        "example": "-3 + 2 means: go 3 steps back, then 2 steps forward. You end up 1 step back. Answer: -1.",
+        "analogy": "steps",
+        "example": "-3 + 2: Go back 3, forward 2. End up 1 back = -1.",
     },
-    # Rational numbers
     "rational_number": {
         "analogy": "any fraction",
-        "example": "Rational means it can be written as p/q. Like 3 = 3/1, or 0.5 = 1/2. Even 0 = 0/1.",
+        "example": "Rational = can be p/q. Like 3 = 3/1, 0.5 = 1/2.",
     },
-    # General
     "same_denominator_rule": {
         "analogy": "apples",
-        "example": "3 apples + 2 apples = 5 apples. We don't add the word 'apples'. Same with sevenths - 3 sevenths + 2 sevenths = 5 sevenths.",
+        "example": "3 apples + 2 apples = 5 apples. Same with sevenths.",
     },
 }
 
@@ -428,66 +405,49 @@ VALIDATION_PHRASES = [
 # Track recent primitives to avoid repetition (per session)
 _recent_primitives: Dict[str, List[str]] = {}  # session_id -> last 3 primitives
 
-# Phrases to BAN and their replacements (assistant-y → teacher-like)
-BANNED_PHRASE_REPLACEMENTS = {
-    # AI/assistant phrases
-    "as an ai": "",
-    "i can help you": "",
-    "i'd be happy to": "",
-    "i'm here to help": "",
-    # Overused encouragement (sounds fake when wrong)
-    "let's dive in": "",
-    "great question": "",
-    "great job": "",
-    "great effort": "",
-    "great work": "",
-    "excellent": "",
-    "wonderful": "",
-    "fantastic": "",
-    "amazing": "",
-    "awesome": "",
-    "brilliant": "",
-    "perfect": "",
-    "you're doing great": "",
-    "really close": "",
-    "so close": "",
-    "very close": "",
-    "you're almost there": "",
-    "nice try": "",
-    "good job": "",
-    "well done": "",
+# Phrases to remove from GPT output (assistant-y language).
+# All map to empty string (removal).
+BANNED_PHRASES = frozenset({
+    # AI tells
+    "as an ai", "i can help you", "i'd be happy to", "i'm here to help",
+    # Fake encouragement (sounds insincere when wrong)
+    "let's dive in", "great question", "great job", "great effort", "great work",
+    "excellent", "wonderful", "fantastic", "amazing", "awesome", "brilliant", "perfect",
+    "you're doing great", "really close", "so close", "very close", "you're almost there",
+    "nice try", "good job", "well done",
     # Filler confirmations
-    "absolutely": "",
-    "certainly": "",
-    "of course": "",
-    "definitely": "",
-    "sure thing": "",
-}
+    "absolutely", "certainly", "of course", "definitely", "sure thing",
+})
 
-# Expanded frustration phrases (per GPT feedback)
-# Include both apostrophe and non-apostrophe versions
-FRUSTRATION_PHRASES = [
-    "idk", "i don't know", "i dont know", "dont know", "don't know",
-    "no idea", "help", "i give up", "give up", "skip",
-    "skip it", "leave it", "i can't", "i cant", "can't do", "cant do",
-    "this is hard", "too hard", "its hard", "it's hard",
-    "confusing", "confused", "i'm confused", "im confused",
-    "don't understand", "dont understand", "not getting it",
-    "didn't understand", "didnt understand",  # Past tense variants
-    "again wrong", "wrong again", "still wrong",
-    "i don't get it", "i dont get it", "makes no sense",
-    # Giving up / minimal effort signals
+# For backward compatibility with existing code
+BANNED_PHRASE_REPLACEMENTS = {phrase: "" for phrase in BANNED_PHRASES}
+
+# Frustration indicators (include apostrophe variants for STT).
+FRUSTRATION_PHRASES = frozenset({
+    # Not knowing
+    "idk", "i don't know", "i dont know", "dont know", "don't know", "no idea",
+    # Giving up
+    "i give up", "give up", "skip", "skip it", "leave it",
     "whatever", "nevermind", "never mind", "forget it",
     "just tell me", "tell me the answer", "what's the answer",
-]
+    # Can't do it
+    "i can't", "i cant", "can't do", "cant do",
+    # Difficulty
+    "this is hard", "too hard", "its hard", "it's hard",
+    "confusing", "confused", "i'm confused", "im confused",
+    "don't understand", "dont understand", "didn't understand", "didnt understand",
+    "not getting it", "i don't get it", "i dont get it", "makes no sense",
+    # Frustration with repeated failure
+    "again wrong", "wrong again", "still wrong",
+})
 
-# Patterns that indicate frustration through minimal/gibberish responses
-FRUSTRATION_PATTERNS = [
-    r'^\.+$',           # Just dots: ".", "..", ". ."
-    r'^[.!?,\s]+$',     # Just punctuation
-    r'^[a-z]{1,2}$',    # Single letters or two letters (but not "no" which is an answer)
+# Regex patterns for minimal/gibberish responses indicating frustration.
+FRUSTRATION_PATTERNS = (
+    r'^\.+$',            # Just dots: ".", ".."
+    r'^[.!?,\s]+$',      # Just punctuation
+    r'^[a-z]{1,2}$',     # Single/double letters (but "no"/"yes" excluded in code)
     r'^(um+|uh+|ah+|hm+)$',  # Hesitation sounds
-]
+)
 
 
 def calculate_warmth_level(
@@ -498,81 +458,48 @@ def calculate_warmth_level(
     student_answer: str = "",
 ) -> int:
     """
-    Calculate warmth level based on context.
-
-    0 = neutral (fast drills)
-    1 = calm (default)
-    2 = supportive (after wrong attempt / hesitation)
-    3 = soothing (frustration signals)
+    Calculate warmth level: 0=neutral, 1=calm, 2=supportive, 3=soothing.
     """
-    # Default: calm
-    warmth = 1
-
-    # Correct answer: stay calm
     if is_correct:
-        return 1
+        return 1  # Calm for correct answers
 
-    # Wrong answer: increase warmth
-    if not is_correct:
-        warmth = 2
-
-    # Frustration signals: go to soothing
+    # Check for frustration signals
     student_lower = student_answer.lower().strip()
 
-    # Check for frustration phrases (expanded list)
-    has_frustration_phrase = any(phrase in student_lower for phrase in FRUSTRATION_PHRASES)
+    # Skip frustration check for valid yes/no answers
+    if student_lower not in ("no", "yes"):
+        has_frustration_phrase = any(p in student_lower for p in FRUSTRATION_PHRASES)
+        has_frustration_pattern = any(
+            re.match(pattern, student_lower) for pattern in FRUSTRATION_PATTERNS
+        )
+        is_frustrated = (
+            consecutive_wrong >= 2 or
+            has_frustration_phrase or
+            has_frustration_pattern or
+            response_time_seconds > 30
+        )
+        if is_frustrated:
+            return 3  # Soothing for frustrated students
 
-    # Check for frustration patterns (minimal/gibberish responses like ". .")
-    import re
-    has_frustration_pattern = any(
-        re.match(pattern, student_lower) for pattern in FRUSTRATION_PATTERNS
-    )
-    # Exception: "no" is a valid answer, not frustration
-    if student_lower in ["no", "yes"]:
-        has_frustration_pattern = False
-
-    frustration_signals = [
-        consecutive_wrong >= 2,
-        has_frustration_phrase,
-        has_frustration_pattern,  # Added: ". .", "...", etc.
-        response_time_seconds > 30,  # Long hesitation
-    ]
-
-    if any(frustration_signals):
-        warmth = 3
-
-    return warmth
+    return 2  # Supportive for wrong answers
 
 
 def get_warmth_primitive(warmth_level: int, session_id: str = "") -> str:
-    """
-    Get one warmth phrase for the given level.
-    Avoids repeating the same primitive within last 3 turns.
-    """
+    """Get a warmth phrase, avoiding recent repeats within session."""
     import random
 
-    primitives = WARMTH_PRIMITIVES.get(warmth_level, [])
+    primitives = WARMTH_PRIMITIVES.get(warmth_level, ())
     if not primitives:
         return ""
 
-    # Get recent primitives for this session
+    # Avoid recently used primitives
     recent = _recent_primitives.get(session_id, [])
-
-    # Filter out recently used primitives
-    available = [p for p in primitives if p not in recent]
-
-    # If all were used recently, reset and use any
-    if not available:
-        available = primitives
-
-    # Pick one
+    available = [p for p in primitives if p not in recent] or list(primitives)
     chosen = random.choice(available)
 
-    # Track it (keep last 3)
+    # Track usage (keep last 3)
     if session_id:
-        recent.append(chosen)
-        if len(recent) > 3:
-            recent.pop(0)
+        recent = (recent + [chosen])[-3:]  # Simpler than append + pop
         _recent_primitives[session_id] = recent
 
     return chosen
@@ -580,50 +507,38 @@ def get_warmth_primitive(warmth_level: int, session_id: str = "") -> str:
 
 def clear_warmth_history(session_id: str):
     """Clear warmth primitive history for a session."""
-    if session_id in _recent_primitives:
-        del _recent_primitives[session_id]
+    _recent_primitives.pop(session_id, None)
 
 
 def get_diagnostic_starter() -> str:
-    """
-    Get a diagnostic question to understand student's thinking.
-    Used instead of saying "wrong" - ask them to explain first.
-    """
+    """Get a diagnostic question to understand student's thinking."""
     import random
     return random.choice(DIAGNOSTIC_STARTERS)
 
 
 def get_agency_phrase() -> str:
-    """
-    Get a phrase that gives student choice/agency.
-    Used when student is frustrated or after multiple attempts.
-    """
+    """Get a phrase offering student choice/agency."""
     import random
     return random.choice(AGENCY_PHRASES)
 
 
 def get_validation_phrase() -> str:
-    """
-    Get a phrase that validates student's feelings.
-    Used when student expresses frustration or confusion.
-    """
+    """Get a phrase validating student's feelings."""
     import random
     return random.choice(VALIDATION_PHRASES)
 
 
 def get_analogy(skill: str) -> Optional[Dict[str, str]]:
-    """
-    Get a real-world analogy for a math concept.
-    Returns dict with 'analogy', 'example', and optionally 'rule'.
-    """
+    """Get a real-world analogy for a math concept, or None if not found."""
     # Direct match
     if skill in CONCEPT_ANALOGIES:
         return CONCEPT_ANALOGIES[skill]
 
-    # Fuzzy match - check if skill contains any key
+    # Fuzzy match - check if any key words appear in skill
     skill_lower = skill.lower()
     for key, analogy in CONCEPT_ANALOGIES.items():
-        if key in skill_lower or any(word in skill_lower for word in key.split('_')):
+        key_words = key.split('_')
+        if key in skill_lower or any(word in skill_lower for word in key_words):
             return analogy
 
     return None
@@ -631,49 +546,35 @@ def get_analogy(skill: str) -> Optional[Dict[str, str]]:
 
 def remove_banned_phrases(text: str) -> str:
     """
-    Replace assistant-y phrases with teacher equivalents.
-    Uses exact phrase matching with word boundaries.
-
-    Note: Preserves the first sentence (warmth primitive) and only
-    removes banned phrases from the rest of the response.
+    Remove assistant-y phrases. Preserves warmth primitive (first short sentence).
     """
-    import re
-
-    # Split at first period/question mark to preserve warmth primitive
-    # Warmth primitives are short (1-3 words) at the start
+    # Find first sentence break to preserve warmth primitive
+    period_pos = text.find('. ')
+    question_pos = text.find('? ')
     first_break = min(
-        text.find('. ') if text.find('. ') > 0 else len(text),
-        text.find('? ') if text.find('? ') > 0 else len(text),
+        period_pos if period_pos > 0 else len(text),
+        question_pos if question_pos > 0 else len(text),
     )
 
-    # If first break is within first 20 chars, it's likely the warmth primitive
-    if first_break > 0 and first_break <= 20:
-        warmth_part = text[:first_break + 1]  # Include the period/question
+    # Split if warmth primitive found (short first sentence)
+    if 0 < first_break <= 20:
+        warmth_part = text[:first_break + 1]
         rest = text[first_break + 1:].strip()
     else:
-        warmth_part = ""
-        rest = text
+        warmth_part, rest = "", text
 
-    # Apply banned phrase removal to the rest
-    for banned, replacement in BANNED_PHRASE_REPLACEMENTS.items():
-        # Word boundary matching (case insensitive)
-        pattern = re.compile(r'\b' + re.escape(banned) + r'\b', re.IGNORECASE)
-        rest = pattern.sub(replacement, rest)
+    # Remove banned phrases with word boundaries
+    for phrase in BANNED_PHRASES:
+        pattern = re.compile(r'\b' + re.escape(phrase) + r'\b', re.IGNORECASE)
+        rest = pattern.sub('', rest)
 
-    # Clean up: double spaces, leading/trailing commas, etc.
-    rest = re.sub(r'\s+', ' ', rest)  # Multiple spaces → single
-    rest = re.sub(r'^\s*,\s*', '', rest)  # Leading comma
-    rest = re.sub(r'\s*,\s*$', '', rest)  # Trailing comma
-    rest = re.sub(r'\.\s*\.', '.', rest)  # Double periods
+    # Clean up artifacts
+    rest = re.sub(r'\s+', ' ', rest)      # Multiple spaces
+    rest = re.sub(r'^[,\s]+|[,\s]+$', '', rest)  # Leading/trailing commas
+    rest = re.sub(r'\.{2,}', '.', rest)   # Multiple periods
     rest = rest.strip()
 
-    # Recombine
-    if warmth_part and rest:
-        return warmth_part + " " + rest
-    elif warmth_part:
-        return warmth_part
-    else:
-        return rest
+    return f"{warmth_part} {rest}".strip() if warmth_part else rest
 
 
 class TeacherPlanner:

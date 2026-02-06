@@ -144,42 +144,26 @@ def set_cached_gpt_response(cache_key: str, response: str):
     _gpt_response_cache[cache_key] = (response, time.time())
 
 
-# System prompt for the tutor persona
-# Based on real tutoring script - conversational, warm, never says "wrong"
-TUTOR_PERSONA = """You are a warm, patient math tutor for Class 8 students in India.
+# System prompt for the tutor persona.
+# Key principles: warm tone, never say "wrong", diagnose before correcting.
+TUTOR_PERSONA = """You are a warm math tutor for Class 8 students in India.
 
-YOUR STYLE:
-- Talk like a kind older brother/sister, not a teacher
-- NEVER say "wrong", "incorrect", or "no" - instead say "Hmm, tell me what you did"
-- When student makes a mistake, ASK them to explain their thinking first
-- Use simple real-world examples (roti pieces, apples, money)
-- Validate feelings: "That's okay", "I understand", "No problem"
+STYLE:
+- Like a kind older sibling, not a formal teacher
+- NEVER say "wrong" or "incorrect" - say "Hmm" or "I see"
+- When wrong, ASK first: "Tell me, what did you do?"
+- Use real-world examples: roti pieces, apples, money
+- Validate feelings: "That's okay", "No problem"
 
-WHEN STUDENT IS CORRECT:
-- Brief praise + why it works
-- "Yes! You kept the bottom same and added the tops. That's exactly right."
-
-WHEN STUDENT IS WRONG:
-- NEVER say "wrong" - say "Hmm" or "I see"
-- First ASK: "Tell me, what did you do?" or "How did you get that?"
-- Then guide: Connect to something they already know
-- Example: "Hmm. Remember the roti example? The bottom stayed 4, right?"
-
-WHEN STUDENT IS FRUSTRATED:
-- Stop and acknowledge: "Let's pause for a second."
-- Validate: "This is your first time. Making mistakes is how we learn."
-- Offer choice: "Do you want to try one more, or stop here?"
-
-WHEN EXPLAINING:
-- Use familiar examples: roti pieces, apples, money
-- One step at a time, check understanding after each
-- "3 apples + 2 apples = 5 apples. We don't add the word 'apples'. Same with fractions."
+RESPONSES:
+- Correct: Brief praise + why. "Yes! Same denominator, just add tops."
+- Wrong: Ask thinking first, then guide. "Hmm. What did you do first?"
+- Frustrated: Pause, validate, offer choice. "Let's slow down. Try again or stop?"
 
 RULES:
-- MAX 2 sentences (this is spoken aloud)
-- NO Hindi words
-- NO textbook language
-- Sound like a real person, not a robot
+- MAX 2 sentences (spoken aloud)
+- NO Hindi words, NO textbook language
+- Sound like a real person
 """
 
 
@@ -200,38 +184,35 @@ class TutorIntent(Enum):
     SESSION_END = "session_end"          # Closing message
 
 
-# Phrases that indicate student wants help, not submitting an answer
-HELP_REQUEST_PHRASES = [
-    # "I don't know" - most common help signal
-    "i don't know", "i dont know", "don't know", "dont know",
-    "i do not know", "do not know",
-    # Understanding issues (all tenses)
+# Phrases indicating student wants help, not submitting an answer.
+# Organized by category for maintainability. Includes apostrophe variants
+# since speech-to-text may produce either form.
+HELP_REQUEST_PHRASES = (
+    # "I don't know" variants
+    "i don't know", "i dont know", "don't know", "dont know", "do not know",
+    # Understanding issues (present and past tense)
     "explain", "help", "don't understand", "dont understand",
     "didn't understand", "didnt understand", "not understand",
     "don't get", "dont get", "didn't get", "didnt get",
+    "i don't get it", "i dont get it",
     # Questions about content
     "how do i", "how do you", "show me", "what do you mean",
-    "what is", "what does", "what's a", "whats a",
+    "what is", "what does", "what's a", "whats a", "what does that mean",
     "i'm confused", "im confused", "can you explain",
     "step by step", "simple terms", "break it down",
-    "i don't get it", "i dont get it", "what does that mean",
     "how does", "why does", "tell me how", "teach me",
-    # Method/process questions - "how did you get this answer"
-    "how did you", "how did he", "how did she", "how did it",
-    "how do you get", "how did you get", "how did you reach",
-    "how do you come", "how did you come", "how to get",
-    "how to reach", "how to solve", "how to find",
-    # Requests for repetition
+    # Process questions
+    "how did you", "how do you get", "how to get", "how to solve", "how to find",
+    # Repetition requests
     "one more time", "again please", "explain again", "say again",
-    "repeat", "more explanation", "explain more",
+    "repeat", "explain more",
     # Struggle signals
     "hint", "clue", "stuck", "lost", "confused",
-    # Giving up signals (should trigger help, not count as wrong)
+    # Giving up signals
     "i give up", "give up", "no idea", "skip",
-    # Meta questions (not actual answers)
-    "are you understanding", "do you understand", "you understand",
+    # Meta questions
     "am i right", "is that right", "is this right",
-]
+)
 
 
 def is_help_request(text: str) -> bool:
