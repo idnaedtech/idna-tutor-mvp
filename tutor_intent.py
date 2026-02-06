@@ -196,6 +196,9 @@ class TutorIntent(Enum):
 
 # Phrases that indicate student wants help, not submitting an answer
 HELP_REQUEST_PHRASES = [
+    # "I don't know" - most common help signal
+    "i don't know", "i dont know", "don't know", "dont know",
+    "i do not know", "do not know",
     # Understanding issues (all tenses)
     "explain", "help", "don't understand", "dont understand",
     "didn't understand", "didnt understand", "not understand",
@@ -207,6 +210,11 @@ HELP_REQUEST_PHRASES = [
     "step by step", "simple terms", "break it down",
     "i don't get it", "i dont get it", "what does that mean",
     "how does", "why does", "tell me how", "teach me",
+    # Method/process questions - "how did you get this answer"
+    "how did you", "how did he", "how did she", "how did it",
+    "how do you get", "how did you get", "how did you reach",
+    "how do you come", "how did you come", "how to get",
+    "how to reach", "how to solve", "how to find",
     # Requests for repetition
     "one more time", "again please", "explain again", "say again",
     "repeat", "more explanation", "explain more",
@@ -214,6 +222,9 @@ HELP_REQUEST_PHRASES = [
     "hint", "clue", "stuck", "lost", "confused",
     # Giving up signals (should trigger help, not count as wrong)
     "i give up", "give up", "no idea", "skip",
+    # Meta questions (not actual answers)
+    "are you understanding", "do you understand", "you understand",
+    "am i right", "is that right", "is this right",
 ]
 
 
@@ -266,9 +277,11 @@ OFF_TOPIC_PATTERNS = {
     # Session end requests (handled specially - not redirected)
     "stop_session": [
         "let's stop", "lets stop", "let stop", "stop now", "stop please",
-        "end session", "end the session", "i'm done", "i am done",
+        "stop here", "we'll stop", "well stop", "we will stop",
+        "end session", "end the session", "i'm done", "i am done", "im done",
         "that's enough", "thats enough", "finish now", "quit",
         "bye", "goodbye", "see you later", "gotta go", "have to go",
+        "enough for today", "done for today", "that's all", "thats all",
     ],
     # Complaints and refusals
     "complaints": [
