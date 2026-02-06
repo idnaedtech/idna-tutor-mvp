@@ -1830,6 +1830,200 @@ def apply_p0_enforcement(response: str, teacher_move: str) -> str:
     return response
 
 
+# ============================================================
+# FULL CONVERSATIONAL MODE
+# GPT drives the conversation with minimal guardrails
+# Based on user's tutoring script (February 2026)
+# ============================================================
+
+CONVERSATIONAL_TUTOR_PROMPT = """You are a warm math tutor for a Class 8 student in India. You are NOT a chatbot - you are a real teacher having a conversation.
+
+## HOW YOU BEHAVE
+
+When student gets it RIGHT:
+- Brief acknowledgment: "Yes!", "Right.", "Exactly."
+- Optionally explain WHY it's right in 1 sentence
+- Move on naturally
+
+When student gets it WRONG:
+- NEVER say "wrong", "incorrect", "not quite", "almost"
+- Say "Hmm." or "I see." or "Okay."
+- ASK what they did: "Tell me, what did you do?" or "How did you get that?"
+- Then guide with a small hint, not the answer
+- Use real examples: roti pieces, apples, money
+
+When student is FRUSTRATED or says "I don't know":
+- Pause. Validate: "That's okay." or "No problem."
+- Offer choice: "Try one more, or should we stop?"
+- If they continue, give a simpler hint
+
+When student says GIBBERISH or OFF-TOPIC:
+- Just say "Hmm?" or "Sorry, what?"
+- Then repeat the question simply
+
+When student wants to STOP:
+- "Okay, good practice today. See you next time!"
+
+## YOUR RULES
+
+1. MAX 2 sentences. This is spoken aloud.
+2. Sound like a real person, not a robot or textbook.
+3. NO Hindi words (TTS sounds weird with Hindi).
+4. NO fake praise: "Great job!", "Excellent!", "Amazing!", "You're so close!"
+5. When teaching, always end with a question to check understanding.
+6. One thing at a time - don't overwhelm.
+
+## EXAMPLES OF GOOD RESPONSES
+
+Student answered wrong (3/10 instead of 3/5):
+"Hmm. Tell me, what did you do with the denominators?"
+
+Student answered right:
+"Yes! Same denominator, just add the tops."
+
+Student frustrated:
+"That's okay. Want to try once more, or stop here?"
+
+Student asks "how do you get that":
+"The bottoms are the same, so we only add the tops. 2 plus 1 is?"
+
+Student says random stuff:
+"Hmm? What's your answer to the question?"
+"""
+
+
+def generate_conversational_response(
+    question: str,
+    correct_answer: str,
+    student_answer: str,
+    is_correct: bool,
+    attempt_number: int,
+    is_frustrated: bool = False,
+    is_help_request: bool = False,
+    is_off_topic: bool = False,
+    is_stop_request: bool = False,
+    hint: str = "",
+    solution: str = "",
+    session_history: list = None,
+) -> Dict[str, Any]:
+    """
+    Generate a fully conversational tutor response.
+
+    GPT drives the conversation based on context - no predetermined moves.
+    Only guardrails: max length, banned phrases.
+
+    Args:
+        question: The math question being asked
+        correct_answer: The correct answer
+        student_answer: What the student said
+        is_correct: Whether the answer was correct (from evaluator)
+        attempt_number: Which attempt this is (1, 2, 3, etc.)
+        is_frustrated: Whether student shows frustration signals
+        is_help_request: Whether student is asking for help
+        is_off_topic: Whether student said something off-topic
+        is_stop_request: Whether student wants to stop
+        hint: Optional hint text from question bank
+        solution: Optional solution explanation from question bank
+        session_history: Optional list of recent exchanges for context
+
+    Returns:
+        Dict with: response, ssml, move_to_next, show_answer
+    """
+    # Build context for GPT
+    context_parts = []
+
+    context_parts.append(f"QUESTION: {question}")
+    context_parts.append(f"CORRECT ANSWER: {correct_answer}")
+    context_parts.append(f"STUDENT SAID: \"{student_answer}\"")
+
+    # Situation
+    if is_stop_request:
+        context_parts.append("SITUATION: Student wants to stop the session.")
+    elif is_off_topic:
+        context_parts.append("SITUATION: Student said something off-topic or gibberish.")
+    elif is_help_request:
+        context_parts.append(f"SITUATION: Student is asking for help (attempt {attempt_number}).")
+        if hint:
+            context_parts.append(f"HINT YOU CAN USE: {hint}")
+        if solution:
+            context_parts.append(f"SOLUTION: {solution}")
+    elif is_correct:
+        context_parts.append("SITUATION: Student got it RIGHT!")
+    else:
+        context_parts.append(f"SITUATION: Student got it WRONG (attempt {attempt_number} of 3).")
+        if is_frustrated:
+            context_parts.append("NOTE: Student seems frustrated.")
+        if hint and attempt_number >= 2:
+            context_parts.append(f"HINT YOU CAN USE: {hint}")
+        if attempt_number >= 3 and solution:
+            context_parts.append(f"REVEAL THE ANSWER - they've tried 3 times: {solution}")
+
+    context = "\n".join(context_parts)
+
+    # Call GPT
+    try:
+        client = get_openai_client()
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CONVERSATIONAL_TUTOR_PROMPT},
+                {"role": "user", "content": context}
+            ],
+            max_tokens=60,  # Keep it short
+            temperature=0.8,  # More natural variation
+        )
+
+        text = response.choices[0].message.content.strip()
+
+        # Minimal guardrails
+        text = remove_banned_phrases(text)
+        text = _enforce_word_limit(text, max_words=30)
+
+        # Log the call
+        _log_gpt_call(
+            "Conversational response generated",
+            event="conversational_response",
+            is_correct=is_correct,
+            attempt_number=attempt_number,
+            is_frustrated=is_frustrated,
+            response_length=len(text.split()),
+        )
+
+    except Exception as e:
+        # Fallback to simple responses
+        _log_gpt_call(
+            f"Conversational response failed: {e}",
+            event="conversational_error",
+        )
+        if is_stop_request:
+            text = "Okay, good practice today!"
+        elif is_off_topic:
+            text = "Hmm? What's your answer?"
+        elif is_correct:
+            text = "Yes! That's right."
+        elif attempt_number >= 3:
+            text = f"The answer is {correct_answer}. Let's move on."
+        else:
+            text = "Hmm. Tell me, what did you do?"
+
+    # Generate SSML
+    ssml = wrap_in_ssml(text)
+
+    # Determine if we should move to next question
+    move_to_next = is_correct or attempt_number >= 3 or is_stop_request
+    show_answer = attempt_number >= 3 and not is_correct
+
+    return {
+        "response": text,
+        "ssml": ssml,
+        "move_to_next": move_to_next,
+        "show_answer": show_answer,
+        "intent": "conversational",
+        "attempt_number": attempt_number,
+    }
+
+
 # For testing
 if __name__ == "__main__":
     print("=== TutorIntent Layer Test ===\n")

@@ -139,6 +139,7 @@ from questions import ALL_CHAPTERS, CHAPTER_NAMES, CHAPTER_INTROS
 from evaluator import check_answer, normalize_spoken_input, evaluate_answer
 from tutor_intent import (
     generate_tutor_response,
+    generate_conversational_response,  # Full conversational mode
     generate_gpt_response,
     generate_step_explanation,
     generate_lesson_intro,
@@ -148,6 +149,7 @@ from tutor_intent import (
     TutorIntent,
     TutorVoice
 )
+from teacher_policy import detect_warmth_level, FRUSTRATION_PHRASES
 
 
 # ============================================================
@@ -2377,26 +2379,23 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
     print(f"[DEBUG EVAL] Correct answer: {repr(question['answer'])} bytes: {question['answer'].encode('utf-8')}")
     print(f"[DEBUG EVAL] Result: {is_correct}, tag: {eval_result.get('feedback_tag')}")
 
-    # Generate natural tutor response using Teacher Policy + TutorIntent layer
-    # Teacher Policy diagnoses errors and chooses teaching moves
-    # Pass enriched data when available for better scaffolding
+    # Detect if student is frustrated (2+ wrong, frustration phrases, etc.)
+    is_frustrated = (
+        attempt_count >= 2 or
+        any(p in request.answer.lower() for p in FRUSTRATION_PHRASES)
+    )
+
+    # Generate conversational tutor response (GPT-driven, not templated)
     with Timer() as tutor_timer:
-        tutor_result = generate_tutor_response(
-            is_correct=is_correct,
-            attempt_number=attempt_count,
+        tutor_result = generate_conversational_response(
             question=question.get('text', ''),
-            hint_1=question.get('hint_1', question.get('hint', 'Think about the concept carefully.')),
-            hint_2=question.get('hint_2', question.get('hint', 'Think step by step.')),
-            solution=question.get('solution', f"The answer is {question['answer']}."),
             correct_answer=question['answer'],
             student_answer=request.answer,
-            session_id=request.session_id,
-            # Enriched data from evaluate_answer (Stage 1)
-            eval_result=eval_result,
-            common_mistakes=question.get('common_mistakes', []),
-            micro_checks=question.get('micro_checks', []),
-            solution_steps=question.get('solution_steps', []),
-            target_skill=question.get('target_skill', ''),
+            is_correct=is_correct,
+            attempt_number=attempt_count,
+            is_frustrated=is_frustrated,
+            hint=question.get('hint', question.get('hint_1', '')),
+            solution=question.get('solution', f"The answer is {question['answer']}."),
         )
 
     # Log answer evaluation
