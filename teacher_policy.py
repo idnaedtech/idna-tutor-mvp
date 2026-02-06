@@ -411,8 +411,20 @@ FRUSTRATION_PHRASES = [
     "this is hard", "too hard", "its hard", "it's hard",
     "confusing", "confused", "i'm confused", "im confused",
     "don't understand", "dont understand", "not getting it",
+    "didn't understand", "didnt understand",  # Past tense variants
     "again wrong", "wrong again", "still wrong",
     "i don't get it", "i dont get it", "makes no sense",
+    # Giving up / minimal effort signals
+    "whatever", "nevermind", "never mind", "forget it",
+    "just tell me", "tell me the answer", "what's the answer",
+]
+
+# Patterns that indicate frustration through minimal/gibberish responses
+FRUSTRATION_PATTERNS = [
+    r'^\.+$',           # Just dots: ".", "..", ". ."
+    r'^[.!?,\s]+$',     # Just punctuation
+    r'^[a-z]{1,2}$',    # Single letters or two letters (but not "no" which is an answer)
+    r'^(um+|uh+|ah+|hm+)$',  # Hesitation sounds
 ]
 
 
@@ -448,9 +460,19 @@ def calculate_warmth_level(
     # Check for frustration phrases (expanded list)
     has_frustration_phrase = any(phrase in student_lower for phrase in FRUSTRATION_PHRASES)
 
+    # Check for frustration patterns (minimal/gibberish responses like ". .")
+    import re
+    has_frustration_pattern = any(
+        re.match(pattern, student_lower) for pattern in FRUSTRATION_PATTERNS
+    )
+    # Exception: "no" is a valid answer, not frustration
+    if student_lower in ["no", "yes"]:
+        has_frustration_pattern = False
+
     frustration_signals = [
         consecutive_wrong >= 2,
         has_frustration_phrase,
+        has_frustration_pattern,  # Added: ". .", "...", etc.
         response_time_seconds > 30,  # Long hesitation
     ]
 

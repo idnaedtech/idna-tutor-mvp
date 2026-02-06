@@ -196,13 +196,24 @@ class TutorIntent(Enum):
 
 # Phrases that indicate student wants help, not submitting an answer
 HELP_REQUEST_PHRASES = [
+    # Understanding issues (all tenses)
     "explain", "help", "don't understand", "dont understand",
+    "didn't understand", "didnt understand", "not understand",
+    "don't get", "dont get", "didn't get", "didnt get",
+    # Questions about content
     "how do i", "how do you", "show me", "what do you mean",
+    "what is", "what does", "what's a", "whats a",
     "i'm confused", "im confused", "can you explain",
     "step by step", "simple terms", "break it down",
     "i don't get it", "i dont get it", "what does that mean",
     "how does", "why does", "tell me how", "teach me",
-    "hint", "clue", "stuck", "lost", "confused"
+    # Requests for repetition
+    "one more time", "again please", "explain again", "say again",
+    "repeat", "more explanation", "explain more",
+    # Struggle signals
+    "hint", "clue", "stuck", "lost", "confused",
+    # Giving up signals (should trigger help, not count as wrong)
+    "i give up", "give up", "no idea", "skip",
 ]
 
 
