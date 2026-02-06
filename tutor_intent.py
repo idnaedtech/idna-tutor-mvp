@@ -269,6 +269,14 @@ OFF_TOPIC_PATTERNS = {
         "that's enough", "thats enough", "finish now", "quit",
         "bye", "goodbye", "see you later", "gotta go", "have to go",
         "enough for today", "done for today", "that's all", "thats all",
+        "the end", "thats it", "that's it", "i want to stop", "can we stop now",
+    ],
+    # Spam/chatbot phrases (redirect back to question)
+    "spam": [
+        "like and subscribe", "don't forget to subscribe", "hit the bell",
+        "thank you for watching", "thanks for watching", "thanks for listening",
+        "smash that like", "drop a comment", "follow me on", "check out my",
+        "leave a like", "subscribe to my channel", "ring the bell",
     ],
     # Complaints and refusals
     "complaints": [
@@ -313,6 +321,14 @@ CATEGORY_REDIRECTS = {
         "Okay, great practice today! See you next time.",
         "Good work! Let's stop here. See you soon!",
         "Alright, we'll end here. You did well today!",
+    ],
+    "spam": [
+        "Let's focus on the math question. What's your answer?",
+        "Back to the question! What do you think?",
+    ],
+    "gibberish": [
+        "I didn't catch that. What's your answer to the question?",
+        "Let's get back to the problem. What's your answer?",
     ],
 }
 
@@ -368,6 +384,55 @@ def _contains_math_answer(text: str) -> bool:
     return False
 
 
+def _is_gibberish(text: str) -> bool:
+    """
+    Detect if text is likely gibberish, spam, or random nonsense.
+
+    Triggers for:
+    - Very long responses (>50 words) with no math content
+    - Multiple sentences without any numbers or math terms
+    - Text that looks like song lyrics, stories, or random typing
+
+    Does NOT trigger for:
+    - Text with numbers or math words
+    - Short responses (even if confused)
+    - Help requests or stop requests
+    """
+    import re
+    text_lower = text.lower().strip()
+
+    # Short responses are never gibberish (might be confused but not spam)
+    word_count = len(text_lower.split())
+    if word_count < 15:
+        return False
+
+    # If it has numbers or math content, not gibberish
+    if re.search(r'\d', text_lower):
+        return False
+
+    # Math words that indicate a real answer attempt
+    math_words = (
+        "plus", "minus", "times", "divided", "equals", "fraction", "half",
+        "third", "fourth", "fifth", "numerator", "denominator", "answer",
+        "add", "subtract", "multiply", "divide", "negative", "positive",
+    )
+    for word in math_words:
+        if word in text_lower:
+            return False
+
+    # Help/stop words that indicate real student intent
+    intent_words = (
+        "don't know", "dont know", "help", "explain", "understand",
+        "stop", "done", "quit", "bye", "confused", "hint",
+    )
+    for phrase in intent_words:
+        if phrase in text_lower:
+            return False
+
+    # Long response (15+ words) with no math content = likely gibberish
+    return True
+
+
 def detect_off_topic(text: str) -> dict:
     """
     Detect if student's response is off-topic (not an answer attempt).
@@ -391,17 +456,29 @@ def detect_off_topic(text: str) -> dict:
         - redirect_message: Message to redirect student back to question
     """
     text_lower = text.lower().strip()
+    import re
+    word_count = len(text_lower.split())
 
-    # CRITICAL FIX: Check for valid math answer FIRST
+    # For VERY long text (30+ words), check gibberish FIRST
+    # This catches song lyrics, stories, spam even if they contain "one", "two" etc.
+    if word_count >= 30 and _is_gibberish(text_lower):
+        redirect = random.choice(CATEGORY_REDIRECTS["gibberish"])
+        return {"is_off_topic": True, "category": "gibberish", "redirect_message": redirect}
+
+    # CRITICAL FIX: Check for valid math answer
     # If text contains any math answer, it's NOT off-topic
     # This handles cases like "hi, it's 11 by 12"
     if _contains_math_answer(text_lower):
         return {"is_off_topic": False, "category": None, "redirect_message": None}
 
     # Legacy checks (kept for backwards compatibility but _contains_math_answer should catch these)
-    import re
     if re.match(r'^[\d\s\.\-\+\/\*xX=]+$', text_lower):
         return {"is_off_topic": False, "category": None, "redirect_message": None}
+
+    # Check for gibberish (medium-length nonsense 15-29 words)
+    if _is_gibberish(text_lower):
+        redirect = random.choice(CATEGORY_REDIRECTS["gibberish"])
+        return {"is_off_topic": True, "category": "gibberish", "redirect_message": redirect}
 
     # Check each category of off-topic patterns
     for category, patterns in OFF_TOPIC_PATTERNS.items():

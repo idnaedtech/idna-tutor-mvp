@@ -161,9 +161,7 @@ from tutor_intent import (
 _idempotency_cache: Dict[str, tuple] = {}
 _IDEMPOTENCY_TTL_SECONDS = 300  # 5 minutes
 
-# Help request count per question - tracks how many times student asked for help
-# Used to vary explanations and avoid repetition (PRD: no repeating same explanation)
-# Key: "{session_id}:{question_id}", Value: int count
+# Tracks help requests per question to vary explanations. Key: "session:question".
 _help_counts: Dict[str, int] = {}
 
 
@@ -2132,9 +2130,8 @@ async def get_next_question(request: ChapterRequest):
         question_number = (session['total'] or 0) + 1
         question_difficulty = question.get('difficulty', 1)
 
-        # Reset help count for new question (prevents stale counts)
-        help_key = f"{request.session_id}:{question['id']}"
-        _help_counts.pop(help_key, None)
+        # Reset help count for new question
+        _help_counts.pop(f"{request.session_id}:{question['id']}", None)
 
         # Run DB update and GPT call concurrently
         update_task = async_update_session(
@@ -2293,20 +2290,18 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
     if session.get('low_confidence_streak', 0) > 0:
         await async_update_session(request.session_id, low_confidence_streak=0)
 
-    # Check if student is asking for help (not submitting an answer)
+    # Handle help requests (don't count as answer attempts)
     if is_help_request(request.answer):
-        # Track help count per question to vary explanations (avoid repetition)
         help_key = f"{request.session_id}:{question['id']}"
         _help_counts[help_key] = _help_counts.get(help_key, 0) + 1
         help_attempt = _help_counts[help_key]
 
-        # Generate step-by-step explanation (varies based on help_attempt)
         help_result = generate_step_explanation(
             question=question.get('text', ''),
             solution=question.get('solution', f"The answer is {question['answer']}"),
             correct_answer=question['answer'],
             help_attempt=help_attempt,
-            student_question=request.answer,  # Pass what student asked
+            student_question=request.answer,
         )
 
         return {
@@ -2318,9 +2313,9 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
             "intent": help_result["intent"],
             "score": session['score'],
             "total": session['total'],
-            "attempt_count": session['attempt_count'] or 0,  # Don't increment for help
+            "attempt_count": session['attempt_count'] or 0,
             "move_to_next": False,
-            "state": current_state.value
+            "state": current_state.value,
         }
 
     # PRD: Check for off-topic responses (greetings, personal questions, etc.)
