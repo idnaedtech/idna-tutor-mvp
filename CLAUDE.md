@@ -17,14 +17,19 @@
 ```
 Brain = FSM (flow control) + Evaluator (deterministic)
 Teach First = Deterministic concept lesson before first question per skill
-Teacher Policy = Error diagnosis + Teaching move selection (structured)
-LLM = Language layer ONLY (phrasing, not judging)
-TutorIntent = Teaching micro-behaviors
+Conversational Mode = GPT drives tutoring with full context (Feb 2026)
+TutorIntent = Teaching micro-behaviors, off-topic detection
 ```
 
-**2-Pass Approach (per ChatGPT analysis):**
-1. **Pass 1 (Planner):** Teacher Policy decides WHAT teaching move to use
-2. **Pass 2 (Speaker):** GPT renders it in natural teacher voice
+**Conversational Mode (Current - February 2026):**
+- GPT gets full context: question, answer, correctness, attempt count, frustration signals
+- GPT generates natural responses like a real teacher
+- Minimal guardrails: max 30 words, banned phrases removed
+- Evaluator stays deterministic (math correctness)
+
+**Previous 2-Pass Approach (Deprecated):**
+1. ~~Pass 1 (Planner): Teacher Policy decides teaching move~~
+2. ~~Pass 2 (Speaker): GPT polishes predetermined response~~
 
 **Single Entry Point:** `web_server.py` is the only server file. No gRPC, no orchestrator.
 
@@ -341,12 +346,12 @@ Log events include:
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
 
-## Current State (February 5, 2026)
+## Current State (February 6, 2026)
 
 ### Deployment Status
 - **Railway**: Auto-deploys from GitHub `main` branch
 - **Database**: Postgres (production), SQLite (development)
-- **Latest Deploy**: "Teach First" phase - tutor explains concept before asking question
+- **Latest Deploy**: Full Conversational Mode - GPT drives tutoring naturally
 
 ### Completed
 - Bug fixes (7 bugs fixed)
@@ -429,6 +434,44 @@ startCommand = "uvicorn web_server:app --host 0.0.0.0 --port $PORT"
 ```
 
 **Status**: ✅ FIXED - Server now starts immediately, tests run in CI.
+
+### Full Conversational Mode (February 6, 2026)
+
+**Problem Solved:** Tutor felt scripted/robotic - responses were templated even with GPT polishing.
+
+**Solution:** GPT now drives the conversation with full context, not predetermined moves.
+
+**Old Approach (Deprecated):**
+```
+Teacher Policy → decides "PROBE" move → GPT polishes template
+Result: "Tell me, what steps did you follow to solve this problem?"
+```
+
+**New Approach:**
+```
+GPT gets full context → generates naturally
+Result: "Hmm. What did you do?"
+```
+
+**System Prompt Principles (from user's tutoring script):**
+- Never say "wrong" or "incorrect" - say "Hmm." or "I see."
+- When wrong, ask what they did first: "Tell me, what did you do?"
+- When frustrated, validate: "That's okay." then offer choice
+- Max 2 sentences (spoken aloud)
+- No fake praise: "Great job!", "Excellent!", "Amazing!"
+
+**What stays deterministic:**
+- Answer evaluation (math correctness via `evaluator.py`)
+- Off-topic/stop detection
+- Session state tracking
+
+**New function:** `generate_conversational_response()` in `tutor_intent.py`
+
+**Off-topic Detection Improvements:**
+- Added "the end", "that's it" to stop_session phrases
+- Added spam detection: "like and subscribe", "thank you for watching"
+- Added gibberish detection: long text (30+ words) without math content
+- Shorter, natural redirects: "Hmm?" instead of "I didn't catch that. What's your answer to the question?"
 
 ### Deployment Fixes (January 30, 2026)
 Several fixes were needed for Railway deployment:
@@ -769,9 +812,12 @@ After:  "Not quite. What do you find?"
 - `tutor_intent.py` - Updated to use teacher policy (2-pass approach)
 - `web_server.py` - Passes session_id for move tracking
 
-### Completed Items (February 5, 2026)
+### Completed Items (February 6, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
+| **Full Conversational Mode** | **Architecture** | **GPT drives tutoring with full context. No predetermined moves. System prompt from user's tutoring script. `generate_conversational_response()` in tutor_intent.py.** |
+| **Spam/Gibberish Detection** | **Feature** | **Detects YouTube phrases ("like and subscribe"), song lyrics, random nonsense. Short natural redirects: "Hmm?" instead of templated messages.** |
+| **Stop Phrase Expansion** | **Feature** | **Added "the end", "that's it", "can we stop now" to stop_session detection.** |
 | **Teach First Phase** | **Architecture** | **Tutor explains concept before first question of each skill. Deterministic lessons (no GPT) from `SKILL_LESSONS` dict (31 entries). One lesson per skill per session. Frontend chains lesson TTS → question TTS.** |
 | **Banned Phrase Detection** | **Validation** | **Rejects YouTube/AI hallucinations ("subscribe", "thank you for watching") in GPT output** |
 | **PROBE Skip-Polish** | **Bug** | **PROBE moves now skip GPT polishing — preserves micro_check questions verbatim** |
@@ -842,6 +888,37 @@ Based on real conversation showing tutor issues:
 4. **Terminology questions:**
    - "what is p/q" → explains p/q notation specifically
    - Built-in dictionary for: p/q, rational, numerator, denominator, etc.
+
+### Full Conversational Mode - IMPLEMENTED
+
+**User feedback:** Tutor still felt scripted even with GPT polishing predetermined moves.
+
+**Solution:** Option 2 - GPT drives the conversation with minimal guardrails.
+
+**New function:** `generate_conversational_response()` in `tutor_intent.py`
+
+**System prompt principles:**
+- Never say "wrong" - say "Hmm." or "I see."
+- Ask what they did first: "Tell me, what did you do?"
+- Validate feelings: "That's okay."
+- Offer choices: "Try again or stop?"
+- Max 2 sentences (spoken aloud)
+- No fake praise
+
+**What stays deterministic:**
+- Answer evaluation (math correctness)
+- Off-topic/stop detection
+- Session state tracking
+
+**Off-topic improvements:**
+- Stop phrases: "the end", "that's it", "can we stop now"
+- Spam detection: "like and subscribe", "thank you for watching"
+- Gibberish detection: 30+ word text without math content
+- Natural redirects: "Hmm?" instead of "I didn't catch that. What's your answer to the question?"
+
+**Files changed:**
+- `tutor_intent.py`: Added `generate_conversational_response()`, `CONVERSATIONAL_TUTOR_PROMPT`, `_is_gibberish()`, spam patterns
+- `web_server.py`: Switched from `generate_tutor_response` to `generate_conversational_response`
 
 ---
 
