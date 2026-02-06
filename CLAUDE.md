@@ -802,6 +802,46 @@ After:  "Not quite. What do you find?"
 | Disaster recovery guide | Docs | DISASTER_RECOVERY.md with full backup/restore steps |
 | NCERT alignment | Questions | Updated questions.py with full chapter list |
 | Sequential speech | UI | Greeting + chapter intro speak separately (faster first response) |
+| **Railway Startup Fix** | **Infrastructure** | **Removed tests from startup command - server starts in 2s not 30s** |
+| **GitHub Actions CI** | **Infrastructure** | **Tests run on push/PR via `.github/workflows/test.yml`** |
+| **Help Request Detection** | **Feature** | **Added "didn't understand", "what is X", "explain again", ". ." detection** |
+| **Frustration Patterns** | **Feature** | **Regex detection for ". .", "...", punctuation-only, hesitation sounds** |
+| **Repetition Prevention** | **Feature** | **Help explanations vary: 1st=steps, 2nd=reframe, 3rd=simple, 4th=reveal** |
+| **Terminology Explanations** | **Feature** | **"what is p/q" → explains specific term, not whole solution** |
+
+---
+
+## Session Summary (February 6, 2026)
+
+### Railway Container Shutdown - FIXED
+
+**Root Cause:** Startup command ran 74 tests before starting server. Health check timed out.
+
+**Fix:** Removed tests from `Procfile` and `railway.toml`, added GitHub Actions CI instead.
+
+### Help Request Improvements - FIXED
+
+Based on real conversation showing tutor issues:
+
+1. **Added missing help phrases:**
+   - "didn't understand" (past tense was missing)
+   - "what is", "what does" (terminology questions)
+   - "one more time", "explain again" (repetition requests)
+
+2. **Frustration pattern detection:**
+   - `. .`, `...`, punctuation-only responses
+   - Hesitation sounds (um, uh, ah)
+
+3. **Repetition prevention:**
+   - Track `help_count` per (session_id, question_id)
+   - 1st help: Standard step-by-step
+   - 2nd help: Reframed with analogy
+   - 3rd help: Simplest terms
+   - 4th+: Reveal answer, move on
+
+4. **Terminology questions:**
+   - "what is p/q" → explains p/q notation specifically
+   - Built-in dictionary for: p/q, rational, numerator, denominator, etc.
 
 ---
 
