@@ -340,28 +340,90 @@ class TeacherPlan:
 WARMTH_PRIMITIVES = {
     0: [],  # Neutral - no warmth phrase (fast drills)
     1: [    # Calm (default / correct answer)
-        "Okay.",
-        "Right.",
+        "Yes!",
+        "That's right.",
         "Good.",
-        "Yes.",
+        "Exactly.",
     ],
-    2: [    # Supportive (after wrong attempt) - acknowledgement, NOT praise
-        "Okay.",
+    2: [    # Supportive (after wrong attempt) - NEVER say "wrong", diagnose instead
         "Hmm.",
-        "Almost.",
-        "Close.",
-        "Not quite.",
-        "Let's see.",
+        "I see.",
+        "Okay.",
+        "Let me understand.",
+        "Tell me,",
     ],
-    3: [    # Soothing (frustration detected) - permission + calm
-        "No worries.",
-        "It's okay.",
-        "Take a moment.",
-        "Let's slow down.",
+    3: [    # Soothing (frustration detected) - validate + offer choice
+        "That's okay.",
         "No problem.",
-        "That's fine.",
+        "It's okay.",
+        "Let's pause.",
+        "Take your time.",
+        "No worries.",
     ],
 }
+
+# Diagnostic starters - used before hints when student is wrong
+# These replace "Not quite" with curiosity about student's thinking
+DIAGNOSTIC_STARTERS = [
+    "Tell me, what did you do?",
+    "How did you get that?",
+    "Walk me through your steps.",
+    "What did you do first?",
+]
+
+# Real-world analogies for math concepts (familiar to Indian students)
+# Used to make abstract concepts concrete
+CONCEPT_ANALOGIES = {
+    # Fractions
+    "fraction_addition_same_denom": {
+        "analogy": "roti pieces",
+        "example": "If you ate 1 piece of roti out of 4, that's 1/4. Another piece is another 1/4. Total? 2/4 - two pieces out of four.",
+        "rule": "When bottom is same, just add the tops. The roti pieces are same size.",
+    },
+    "fraction_addition_diff_denom": {
+        "analogy": "different sized pieces",
+        "example": "1/2 and 1/4 are different size pieces. Like half a roti vs quarter roti. We need same size first.",
+    },
+    "fraction_meaning": {
+        "analogy": "roti or pizza",
+        "example": "Top number = how many pieces you took. Bottom number = how many total pieces. 3/4 = 3 pieces out of 4.",
+    },
+    # Negative numbers
+    "additive_inverse": {
+        "analogy": "money",
+        "example": "If you have 5 rupees and owe 5 rupees, you have 0. That's why 5 + (-5) = 0.",
+    },
+    "negative_addition": {
+        "analogy": "steps forward and back",
+        "example": "-3 + 2 means: go 3 steps back, then 2 steps forward. You end up 1 step back. Answer: -1.",
+    },
+    # Rational numbers
+    "rational_number": {
+        "analogy": "any fraction",
+        "example": "Rational means it can be written as p/q. Like 3 = 3/1, or 0.5 = 1/2. Even 0 = 0/1.",
+    },
+    # General
+    "same_denominator_rule": {
+        "analogy": "apples",
+        "example": "3 apples + 2 apples = 5 apples. We don't add the word 'apples'. Same with sevenths - 3 sevenths + 2 sevenths = 5 sevenths.",
+    },
+}
+
+# Phrases for offering student choice/agency
+AGENCY_PHRASES = [
+    "Do you want to try one more, or take a break?",
+    "Should we continue, or stop here for today?",
+    "Want to try again, or should I explain more?",
+    "Ready for the next one, or need more time?",
+]
+
+# Phrases for validating student feelings
+VALIDATION_PHRASES = [
+    "That's okay, this is new for you.",
+    "Making mistakes is how we learn.",
+    "First time you saw this - it's okay to be confused.",
+    "Everyone finds this tricky at first.",
+]
 
 # Track recent primitives to avoid repetition (per session)
 _recent_primitives: Dict[str, List[str]] = {}  # session_id -> last 3 primitives
@@ -520,6 +582,51 @@ def clear_warmth_history(session_id: str):
     """Clear warmth primitive history for a session."""
     if session_id in _recent_primitives:
         del _recent_primitives[session_id]
+
+
+def get_diagnostic_starter() -> str:
+    """
+    Get a diagnostic question to understand student's thinking.
+    Used instead of saying "wrong" - ask them to explain first.
+    """
+    import random
+    return random.choice(DIAGNOSTIC_STARTERS)
+
+
+def get_agency_phrase() -> str:
+    """
+    Get a phrase that gives student choice/agency.
+    Used when student is frustrated or after multiple attempts.
+    """
+    import random
+    return random.choice(AGENCY_PHRASES)
+
+
+def get_validation_phrase() -> str:
+    """
+    Get a phrase that validates student's feelings.
+    Used when student expresses frustration or confusion.
+    """
+    import random
+    return random.choice(VALIDATION_PHRASES)
+
+
+def get_analogy(skill: str) -> Optional[Dict[str, str]]:
+    """
+    Get a real-world analogy for a math concept.
+    Returns dict with 'analogy', 'example', and optionally 'rule'.
+    """
+    # Direct match
+    if skill in CONCEPT_ANALOGIES:
+        return CONCEPT_ANALOGIES[skill]
+
+    # Fuzzy match - check if skill contains any key
+    skill_lower = skill.lower()
+    for key, analogy in CONCEPT_ANALOGIES.items():
+        if key in skill_lower or any(word in skill_lower for word in key.split('_')):
+            return analogy
+
+    return None
 
 
 def remove_banned_phrases(text: str) -> str:
