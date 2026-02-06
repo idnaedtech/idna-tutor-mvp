@@ -292,43 +292,41 @@ OFF_TOPIC_PATTERNS = {
     ],
 }
 
-# Redirect messages (PRD: Acknowledge briefly, redirect immediately)
+# Redirect messages - SHORT and human (like a real teacher)
 OFF_TOPIC_REDIRECTS = [
-    "Let's focus on the question. What's your answer?",
-    "We can chat later! Right now, tell me your answer.",
-    "Let's get back to math. What do you think the answer is?",
-    "Good question, but let's solve this first. Your answer?",
-    "I'd love to chat, but let's finish this question first!",
-    "Let's stay focused. What's your answer to this one?",
+    "Okay. Your answer?",
+    "Hmm. What's your answer?",
+    "Right. So what do you think?",
 ]
 
-# Specific redirects for certain categories
+# Category-specific redirects - keep them SHORT and natural
 CATEGORY_REDIRECTS = {
     "greetings": [
-        "Hi! Let's get back to the question. What's your answer?",
-        "Hello! Now, what do you think the answer is?",
+        "Hi! Your answer?",
+        "Hello! So, what do you think?",
     ],
     "complaints": [
-        "I know it's tough, but you can do this! Try answering.",
-        "Don't give up! Take a guess - what do you think?",
-        "It's okay to find it hard. Just try your best!",
+        "It's okay. Just try.",
+        "Take a guess.",
+        "No problem. What do you think?",
     ],
     "breaks": [
-        "Almost done! Just answer this one, then we can take a break.",
-        "Let's finish this question first, then you can rest.",
+        "Almost done. Answer this one first.",
+        "One more, then break.",
     ],
     "stop_session": [
-        "Okay, great practice today! See you next time.",
-        "Good work! Let's stop here. See you soon!",
-        "Alright, we'll end here. You did well today!",
+        "Okay. Good practice today!",
+        "Alright. See you next time!",
+        "Good work. Bye!",
     ],
     "spam": [
-        "Let's focus on the math question. What's your answer?",
-        "Back to the question! What do you think?",
+        "Hmm. Your answer?",
+        "Okay. What do you think?",
     ],
     "gibberish": [
-        "I didn't catch that. What's your answer to the question?",
-        "Let's get back to the problem. What's your answer?",
+        "Sorry, what?",
+        "Hmm?",
+        "I didn't catch that.",
     ],
 }
 
