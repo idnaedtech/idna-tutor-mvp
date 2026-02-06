@@ -161,6 +161,11 @@ from tutor_intent import (
 _idempotency_cache: Dict[str, tuple] = {}
 _IDEMPOTENCY_TTL_SECONDS = 300  # 5 minutes
 
+# Help request count per question - tracks how many times student asked for help
+# Used to vary explanations and avoid repetition (PRD: no repeating same explanation)
+# Key: "{session_id}:{question_id}", Value: int count
+_help_counts: Dict[str, int] = {}
+
 
 def _get_idempotency_key(session_id: str, question_id: str, client_key: str) -> str:
     """Generate cache key for idempotency check."""
@@ -2127,6 +2132,10 @@ async def get_next_question(request: ChapterRequest):
         question_number = (session['total'] or 0) + 1
         question_difficulty = question.get('difficulty', 1)
 
+        # Reset help count for new question (prevents stale counts)
+        help_key = f"{request.session_id}:{question['id']}"
+        _help_counts.pop(help_key, None)
+
         # Run DB update and GPT call concurrently
         update_task = async_update_session(
             request.session_id,
@@ -2286,16 +2295,24 @@ async def _process_answer(request: AnswerRequest, session: dict, question: dict)
 
     # Check if student is asking for help (not submitting an answer)
     if is_help_request(request.answer):
-        # Generate step-by-step explanation
+        # Track help count per question to vary explanations (avoid repetition)
+        help_key = f"{request.session_id}:{question['id']}"
+        _help_counts[help_key] = _help_counts.get(help_key, 0) + 1
+        help_attempt = _help_counts[help_key]
+
+        # Generate step-by-step explanation (varies based on help_attempt)
         help_result = generate_step_explanation(
             question=question.get('text', ''),
             solution=question.get('solution', f"The answer is {question['answer']}"),
             correct_answer=question['answer'],
+            help_attempt=help_attempt,
+            student_question=request.answer,  # Pass what student asked
         )
 
         return {
             "correct": False,
             "is_help": True,
+            "help_attempt": help_attempt,
             "message": help_result["response"],
             "ssml": help_result.get("ssml"),
             "intent": help_result["intent"],

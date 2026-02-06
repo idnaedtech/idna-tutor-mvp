@@ -1184,17 +1184,48 @@ def generate_step_explanation(
     question: str,
     solution: str,
     correct_answer: str,
+    help_attempt: int = 1,
+    student_question: str = "",
 ) -> Dict[str, Any]:
     """
     Generate a step-by-step explanation when student asks for help.
     Uses GPT to explain in simple, conversational terms.
+
+    Varies explanation based on help_attempt to avoid repetition:
+    - 1st: Standard step-by-step explanation
+    - 2nd: Reframe with analogy or different approach
+    - 3rd: Simplest possible terms
+    - 4th+: Just reveal the answer and suggest moving on
+
+    Also handles terminology questions (e.g., "what is p/q")
     """
-    response = generate_gpt_response(
-        intent=TutorIntent.EXPLAIN_STEPS,
-        question=question,
-        solution=solution,
-        correct_answer=correct_answer,
-    )
+    # Check if student is asking about specific terminology
+    terminology_question = _extract_terminology_question(student_question)
+
+    if terminology_question:
+        # Handle terminology question specifically
+        response = _generate_terminology_explanation(
+            terminology_question,
+            question,
+            correct_answer
+        )
+    elif help_attempt >= 4:
+        # After 3 explanations, just give the answer
+        response = f"The answer is {correct_answer}. Let's try the next one."
+    elif help_attempt == 1:
+        # First help: standard step-by-step
+        response = generate_gpt_response(
+            intent=TutorIntent.EXPLAIN_STEPS,
+            question=question,
+            solution=solution,
+            correct_answer=correct_answer,
+        )
+    elif help_attempt == 2:
+        # Second help: reframe with different approach
+        response = _generate_reframed_explanation(question, solution, correct_answer)
+    else:
+        # Third help: simplest possible
+        response = _generate_simple_explanation(question, correct_answer)
 
     ssml = wrap_in_ssml(response)
 
@@ -1203,7 +1234,98 @@ def generate_step_explanation(
         "response": response,
         "ssml": ssml,
         "is_help_response": True,
+        "help_attempt": help_attempt,
     }
+
+
+def _extract_terminology_question(text: str) -> Optional[str]:
+    """Extract what term the student is asking about, if any."""
+    if not text:
+        return None
+
+    text_lower = text.lower()
+
+    # Patterns for terminology questions
+    import re
+    patterns = [
+        r"what (?:is|does|are) (?:a |an |the )?([a-z/]+)",  # "what is p/q"
+        r"what(?:'s| is) ([a-z/]+)",  # "what's p/q"
+        r"(?:don't|dont|didn't|didnt) (?:understand|get) (?:what )?([a-z/]+)",  # "didn't understand p/q"
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text_lower)
+        if match:
+            term = match.group(1).strip()
+            # Filter out common words that aren't terminology
+            if term not in ["it", "this", "that", "the", "a", "an", "i", "you"]:
+                return term
+
+    return None
+
+
+def _generate_terminology_explanation(term: str, question: str, correct_answer: str) -> str:
+    """Generate explanation for a specific term the student asked about."""
+    # Common math terminology explanations
+    term_explanations = {
+        "p/q": "p/q means any number written as a fraction. p is the top (numerator), q is the bottom (denominator). For example, 3/4 or -2/5.",
+        "pq": "p/q means any number written as a fraction. p is the top (numerator), q is the bottom (denominator). For example, 3/4 or -2/5.",
+        "rational": "A rational number can be written as p/q where q is not zero. Like 1/2, 3, or -4/5.",
+        "numerator": "The numerator is the top number in a fraction. In 3/4, the numerator is 3.",
+        "denominator": "The denominator is the bottom number in a fraction. In 3/4, the denominator is 4.",
+        "additive inverse": "The additive inverse is what you add to get zero. The inverse of 5 is -5.",
+        "reciprocal": "The reciprocal is when you flip a fraction. The reciprocal of 2/3 is 3/2.",
+    }
+
+    # Check for known terms
+    term_lower = term.lower().replace(" ", "")
+    for key, explanation in term_explanations.items():
+        if key.replace(" ", "") in term_lower or term_lower in key.replace(" ", ""):
+            return explanation
+
+    # Unknown term - give generic helpful response
+    return f"Let me explain: {term} relates to this question. The answer is {correct_answer}."
+
+
+def _generate_reframed_explanation(question: str, solution: str, correct_answer: str) -> str:
+    """Generate explanation using a different approach (analogy, visual, etc.)."""
+    from llm_client import generate as llm_generate
+
+    prompt = f"""Question: {question}
+Answer: {correct_answer}
+
+The student asked for help AGAIN. They didn't understand the first explanation.
+Give a DIFFERENT explanation using:
+- A simple analogy or real-world example
+- Or break it into even smaller steps
+
+MAX 2 sentences. Be conversational."""
+
+    try:
+        response = llm_generate(prompt, max_tokens=50, temperature=0.8)
+        return response.strip()
+    except Exception:
+        # Fallback
+        return f"Think of it this way: {solution.split('.')[0] if solution else f'The answer is {correct_answer}'}."
+
+
+def _generate_simple_explanation(question: str, correct_answer: str) -> str:
+    """Generate the simplest possible explanation."""
+    from llm_client import generate as llm_generate
+
+    prompt = f"""Question: {question}
+Answer: {correct_answer}
+
+Student still confused after 2 explanations.
+Give the SIMPLEST possible explanation in ONE short sentence.
+Use very basic words a child would understand."""
+
+    try:
+        response = llm_generate(prompt, max_tokens=30, temperature=0.5)
+        return response.strip()
+    except Exception:
+        # Fallback
+        return f"The answer is {correct_answer}."
 
 
 # Convenience function for API integration
