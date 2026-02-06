@@ -407,40 +407,28 @@ Log events include:
     - After 2 failures, suggests text input instead of voice
     - `suggest_text_input` flag in response
 
-### Railway Container Shutdown Issue (January 31, 2026) - FIXED
+### Railway Container Shutdown Issue - FIXED (February 6, 2026)
 
 **Problem**: Railway stops container ~5 seconds after startup despite `/health` returning 200 OK.
 
-**Root Cause**: Railway's "Scale to Zero" feature puts container to sleep when no traffic.
-
-**Fix Applied**: Keep-alive background task (`web_server.py`):
-```python
-async def keep_alive_loop():
-    """Ping health endpoint every 30 seconds to prevent Railway auto-sleep"""
-    while True:
-        await session.get(f"http://localhost:{port}/health")
-        await asyncio.sleep(30)
+**Root Cause**: Startup command ran 74 tests before starting the server:
+```bash
+# OLD (broken):
+python -m pytest tests/ -v && uvicorn web_server:app ...
 ```
+Health check timed out while tests were running.
 
-- Only runs in production (when `PORT` env var is set)
-- Pings `/health` every 30 seconds
-- Prevents Railway from detecting "no traffic" and sleeping
+**Fix Applied**:
+1. Removed tests from `Procfile` and `railway.toml` startup command
+2. Added GitHub Actions workflow (`.github/workflows/test.yml`) for CI
+3. Keep-alive task still runs as backup (pings `/health` every 30s)
 
-**Also configured** (`railway.toml`):
 ```toml
-[deploy]
-numReplicas = 1
+# railway.toml (fixed)
+startCommand = "uvicorn web_server:app --host 0.0.0.0 --port $PORT"
 ```
 
-**Dashboard settings** (if keep-alive not enough):
-| Setting | Required Value |
-|---------|----------------|
-| Service Type | Web Service (not Worker/Job) |
-| Min Replicas | 1 (not 0) |
-| Auto-sleep | Disabled |
-| Public Domain | Enabled |
-
-**Status**: Pending - requires Railway dashboard configuration change.
+**Status**: ✅ FIXED - Server now starts immediately, tests run in CI.
 
 ### Deployment Fixes (January 30, 2026)
 Several fixes were needed for Railway deployment:
@@ -651,7 +639,7 @@ Created `DISASTER_RECOVERY.md` with:
 ### Remaining Items
 | Priority | Item | Type | Notes |
 |----------|------|------|-------|
-| P0 | Railway container shutdown | Infrastructure | Container stops 5s after health check - fix in Railway dashboard |
+| ~~P0~~ | ~~Railway container shutdown~~ | ~~Infrastructure~~ | ✅ FIXED - Tests moved to CI, server starts immediately |
 | P1 | Cost controls | Infrastructure | STT/TTS caps, max session length, max questions/session |
 | P1 | Hindi language support | Feature | Needs: Hindi TTS voice, Whisper hints, evaluator variants |
 | P2 | OpenAPI spec / JSON schemas | Documentation | |
