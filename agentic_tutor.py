@@ -99,6 +99,7 @@ class AgenticTutor:
             "duration_minutes": 0,
             "start_time": time.time(),
             "last_eval": None,
+            "last_tool": None,  # Track last tool for acknowledgment detection
             "session_ended": False
         }
 
@@ -200,12 +201,29 @@ If you need to give a hint:
         is_stop = self._is_stop_request(student_input)
         is_idk = self._is_idk(student_input)
         is_offtopic = self._is_offtopic(student_input)
+        is_ack = self._is_acknowledgment(student_input)
 
         if is_stop:
             return await self._end_session("student_requested")
+
+        # If student acknowledges after explanation/hint, move to next question
+        last_tool = self.session.get("last_tool")
+        if is_ack and last_tool in ("explain_solution", "give_hint"):
+            self.session["questions_completed"] += 1
+            self._advance_question()
+            if self.session["session_ended"]:
+                return await self._end_session("completed_all_questions")
+            # Move to next question
+            nq = self.session["current_question"]
+            next_q_text = nq.get("text", nq.get("question_text", ""))
+            self.session["last_tool"] = "praise_and_continue"
+            return self._generate_speech(
+                f"Good, you got the idea. Let's move on. Next question: {next_q_text}"
+            )
+
         if is_idk:
             self.session["idk_count"] += 1
-        if not is_idk and not is_offtopic:
+        if not is_idk and not is_offtopic and not is_ack:
             self.session["attempt_count"] += 1
 
         # Build what the LLM sees
@@ -319,6 +337,9 @@ If you need to give a hint:
             "tool": tool_name,
             "correct": is_correct
         })
+
+        # Track last tool for acknowledgment detection
+        self.session["last_tool"] = tool_name
 
         return speech
 
@@ -436,6 +457,22 @@ If you need to give a hint:
                "can you speak english", "talk in english", "use english",
                "can you speak in english"]
         return any(p in text.lower() for p in eng)
+
+    def _is_acknowledgment(self, text: str) -> bool:
+        """Detect if student is acknowledging they understood (after explanation)."""
+        text_lower = text.lower().strip()
+        # Short acknowledgments
+        acks = ["yeah", "yes", "okay", "ok", "got it", "i got it", "makes sense",
+                "i understand", "understood", "right", "alright", "fine", "sure",
+                "haan", "theek hai", "theek", "samajh gaya", "samajh gayi",
+                "accha", "oh okay", "oh ok", "yep", "yup", "hmm okay", "okay okay",
+                "i see", "ah okay", "ah ok", "clear", "that's clear", "kind of"]
+        # Must be short (just acknowledgment, not a real answer)
+        if len(text_lower.split()) <= 5:
+            return any(text_lower == ack or text_lower.startswith(ack + " ") or
+                      text_lower.endswith(" " + ack) or ack == text_lower.rstrip(".")
+                      for ack in acks)
+        return False
 
     def get_session_state(self) -> dict:
         return {
