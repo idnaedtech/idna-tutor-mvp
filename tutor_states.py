@@ -146,17 +146,15 @@ def _waiting_answer_transition(category: str, session: dict) -> dict:
         }
 
     elif category == "IDK":
-        # How many times have they said IDK?
-        total_idk = idk_count + 1  # This one hasn't been counted yet
-
-        if total_idk >= 3:
+        # idk_count already incremented in agentic_tutor.py before this runs
+        if idk_count >= 3:
             # Circuit breaker: explain and move on
             return {
                 "action": Action.EXPLAIN_SOLUTION,
                 "next_state": State.EXPLAINING,
                 "meta": {"reason": "stuck_3_idks", "force": True}
             }
-        elif total_idk >= 2 or hint_count >= 1:
+        elif idk_count >= 2 or hint_count >= 1:
             # Give a hint
             return {
                 "action": Action.GIVE_HINT,
@@ -246,8 +244,8 @@ def _hinting_transition(category: str, session: dict) -> dict:
             }
 
     elif category == "IDK":
-        total_idk = idk_count + 1
-        if total_idk >= 3 or hint_count >= 2:
+        # idk_count already incremented before this runs
+        if idk_count >= 3 or hint_count >= 2:
             return {
                 "action": Action.EXPLAIN_SOLUTION,
                 "next_state": State.EXPLAINING,
