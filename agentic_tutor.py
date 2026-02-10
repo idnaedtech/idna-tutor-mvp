@@ -1,10 +1,13 @@
 """
-IDNA Agentic Tutor - The Teacher Brain (v2.2)
+IDNA Agentic Tutor - The Teacher Brain (v2.3)
 ===============================================
-The core insight: stop telling the LLM how to be natural.
-Instead, give it a character and get out of the way.
-
-v2.2: Conversational rewrite. Didi is a person, not a framework.
+Fixes from real student testing transcript:
+1. "Yeah/Okay" after explanation → move to next question (not re-explain)
+2. Off-topic/trolling ("subscribe", "thanks for watching") → redirect once, then move on
+3. Explain solution → always include next question in same response
+4. Telugu/regional language requests → warm acknowledgment
+5. last_tool tracking expanded to catch all ack scenarios
+6. Stuck-on-question circuit breaker (3+ IDKs → explain and move on)
 """
 
 import json
@@ -31,9 +34,6 @@ SPEECH_MAX_TOKENS = 400
 # ============================================================
 # DIDI'S IDENTITY
 # ============================================================
-# The key insight: don't give rules. Give a character.
-# Don't say "never say X." Just make the character someone
-# who would never say X in the first place.
 
 DIDI_SYSTEM_PROMPT = """You are Didi. You teach math to kids in India. Right now you're sitting with {student_name}, a Class 8 student, helping them with math. This is a private tutor session, face to face. Everything you say is spoken out loud — it goes through a speaker.
 
@@ -48,6 +48,12 @@ When they get it wrong, you're curious. You want to know what they were thinking
 When they say "I don't know" — you shrink the problem. You don't repeat the same question louder. You find a smaller piece they CAN answer and start there. If they're genuinely confused about the basics, you stop and teach the basics. You don't robotically push them through micro-questions when they need a real explanation.
 
 When they ask you to explain something — you explain it. Simply. Like a human. You don't deflect with "what do you think?" when they've already told you they don't know.
+
+CRITICAL RULE — NEVER RE-EXPLAIN: If you've already explained a concept and {student_name} says "yeah", "okay", "got it", "makes sense", or any acknowledgment — STOP explaining. Move to the next question immediately. Do NOT repeat the explanation. Do NOT rephrase it. They understood. Move on.
+
+CRITICAL RULE — ALWAYS TRANSITION: When you explain a solution or give an answer, ALWAYS end by reading the next question. Never leave {student_name} hanging after an explanation. The flow is: explain → "Chalo, next question" → read next question.
+
+When {student_name} goes off-topic, jokes around, or says random things like "subscribe" or "thanks for watching" — smile it off in ONE short sentence and redirect. Don't re-explain the math. Just say "Arre yaar, focus karo" or "Haha, chalo wapas aate hain" and ask the question again briefly.
 
 You keep it short because this is spoken, not written. 2-4 sentences usually. But if a student genuinely needs a concept explained, you take the time. You don't artificially cut yourself off.
 
@@ -94,12 +100,14 @@ class AgenticTutor:
             "hint_count": 0,
             "attempt_count": 0,
             "idk_count": 0,
+            "offtopic_streak": 0,      # Track consecutive off-topic inputs
             "language": "hinglish",
             "history": [],
             "duration_minutes": 0,
             "start_time": time.time(),
             "last_eval": None,
-            "last_tool": None,  # Track last tool for acknowledgment detection
+            "last_tool": None,
+            "explained_current": False,  # Did we already explain this question?
             "session_ended": False
         }
 
@@ -153,6 +161,14 @@ If you need to give a hint:
   Small nudge: {q.get('hint_1', q.get('hint', ''))}
   Bigger help: {q.get('hint_2', '')}"""
 
+    def _get_next_question_text(self) -> str:
+        """Get the next question's text for transitions."""
+        next_idx = self.session["current_question_index"]
+        if next_idx < len(self.session["questions"]):
+            nq = self.session["questions"][next_idx]
+            return nq.get("text", nq.get("question_text", ""))
+        return ""
+
     async def start_session(self) -> str:
         q = self.session["current_question"]
         name = self.session["student_name"]
@@ -195,57 +211,174 @@ If you need to give a hint:
         )
         student_input = student_input.strip()
 
+        # Language switch
         if self._wants_english(student_input):
             self.session["language"] = "english"
 
+        # Language request for unsupported language
+        lang_request = self._wants_other_language(student_input)
+        if lang_request:
+            q = self.session["current_question"]
+            q_text = q.get("text", q.get("question_text", ""))
+            speech = self._generate_speech(
+                f'{self.session["student_name"]} asked to speak in {lang_request}. '
+                f"You can't speak {lang_request} yet. Be warm about it — say something like "
+                f"\"Sorry yaar, {lang_request} mein abhi nahi bol sakti. But jaldi seekh loongi! "
+                f"For now let's continue in English or Hindi.\" Then re-read the current question: {q_text}"
+            )
+            self.session["history"].append({
+                "student": student_input, "teacher": speech,
+                "tool": "language_redirect", "correct": False
+            })
+            return speech
+
+        # Detect categories
         is_stop = self._is_stop_request(student_input)
         is_idk = self._is_idk(student_input)
         is_offtopic = self._is_offtopic(student_input)
         is_ack = self._is_acknowledgment(student_input)
+        is_troll = self._is_trolling(student_input)
 
         if is_stop:
             return await self._end_session("student_requested")
 
-        # If student acknowledges after explanation/hint, move to next question
+        # ============================================================
+        # FAST PATH: Acknowledgment after explanation → MOVE ON
+        # ============================================================
         last_tool = self.session.get("last_tool")
-        if is_ack and last_tool in ("explain_solution", "give_hint"):
+        if is_ack and last_tool in ("explain_solution", "give_hint", "encourage_attempt", "praise_and_continue"):
+            # They understood. Move to next question. No re-explanation.
+            if not self.session.get("explained_current"):
+                # Ack after a hint — they might be acknowledging the hint, not answering
+                # Only auto-advance if we already explained or they've had 2+ hints
+                if last_tool == "give_hint" and self.session["hint_count"] < 2:
+                    # Don't auto-advance after first hint — ask them to try
+                    q_text = self.session["current_question"].get("text", "")
+                    speech = self._generate_speech(
+                        f"{self.session['student_name']} said \"{student_input}\" after getting a hint. "
+                        f"They seem to understand the hint. Now ask them to try answering: {q_text}"
+                    )
+                    self.session["history"].append({
+                        "student": student_input, "teacher": speech,
+                        "tool": "re_ask", "correct": False
+                    })
+                    self.session["last_tool"] = "re_ask"
+                    return speech
+
+            # Auto-advance to next question
             self.session["questions_completed"] += 1
             self._advance_question()
             if self.session["session_ended"]:
                 return await self._end_session("completed_all_questions")
-            # Move to next question
-            nq = self.session["current_question"]
-            next_q_text = nq.get("text", nq.get("question_text", ""))
-            self.session["last_tool"] = "praise_and_continue"
-            return self._generate_speech(
-                f"Good, you got the idea. Let's move on. Next question: {next_q_text}"
+
+            nq_text = self._get_next_question_text()
+            speech = self._generate_speech(
+                f"{self.session['student_name']} understood. Move to next question immediately. "
+                f"Say something brief like 'Accha, chalo next one' or 'Good, moving on' — "
+                f"ONE short sentence max — then read: {nq_text}"
             )
+            self.session["history"].append({
+                "student": student_input, "teacher": speech,
+                "tool": "praise_and_continue", "correct": False
+            })
+            self.session["last_tool"] = "praise_and_continue"
+            self.session["explained_current"] = False
+            return speech
+
+        # ============================================================
+        # FAST PATH: Trolling / random nonsense → redirect briefly
+        # ============================================================
+        if is_troll or (is_offtopic and self.session["offtopic_streak"] >= 1):
+            self.session["offtopic_streak"] += 1
+            q_text = self.session["current_question"].get("text", "")
+
+            if self.session["offtopic_streak"] >= 3:
+                # They're not engaging. Give them a gentle out.
+                speech = self._generate_speech(
+                    f"{self.session['student_name']} keeps going off-topic (said: \"{student_input}\"). "
+                    f"They might be bored or not interested right now. Say something like: "
+                    f"'Lagta hai aaj mood nahi hai. Koi baat nahi, hum baad mein continue kar sakte hain. "
+                    f"Ya phir ek aur try karte hain?' Keep it warm, no guilt."
+                )
+            else:
+                speech = self._generate_speech(
+                    f"{self.session['student_name']} said something random: \"{student_input}\". "
+                    f"Smile it off in ONE short sentence — like 'Haha, focus yaar' or 'Arre chalo wapas' — "
+                    f"then briefly re-read the question: {q_text}. Do NOT re-explain anything."
+                )
+
+            self.session["history"].append({
+                "student": student_input, "teacher": speech,
+                "tool": "redirect", "correct": False
+            })
+            self.session["last_tool"] = "redirect"
+            return speech
+
+        if is_offtopic:
+            self.session["offtopic_streak"] += 1
+        else:
+            self.session["offtopic_streak"] = 0  # Reset on real input
 
         if is_idk:
             self.session["idk_count"] += 1
         if not is_idk and not is_offtopic and not is_ack:
             self.session["attempt_count"] += 1
 
-        # Build what the LLM sees
+        # ============================================================
+        # CIRCUIT BREAKER: Too many IDKs → explain and move on
+        # ============================================================
+        if self.session["idk_count"] >= 3 and not self.session.get("explained_current"):
+            # Student is stuck. Explain the answer and move to next question.
+            q = self.session["current_question"]
+            solution = q.get("solution", q.get("answer", ""))
+            self.session["questions_completed"] += 1
+            self.session["explained_current"] = True
+            self._advance_question()
+
+            if self.session["session_ended"]:
+                speech = self._generate_speech(
+                    f"{self.session['student_name']} was stuck. Explain simply: {solution}. "
+                    f"Then wrap up the session warmly."
+                )
+            else:
+                nq_text = self._get_next_question_text()
+                speech = self._generate_speech(
+                    f"{self.session['student_name']} has said 'I don't know' 3 times. "
+                    f"They're stuck. Don't push anymore. Explain the answer kindly and simply: {solution}. "
+                    f"Then say 'Koi baat nahi, chalo next one try karte hain' and read: {nq_text}"
+                )
+
+            self.session["history"].append({
+                "student": student_input, "teacher": speech,
+                "tool": "explain_solution", "correct": False
+            })
+            self.session["last_tool"] = "explain_solution"
+            self.session["explained_current"] = False
+            return speech
+
+        # ============================================================
+        # NORMAL PATH: LLM picks tool
+        # ============================================================
         question_context = self._build_question_context()
         history_context = self._build_history_context()
 
-        # Frame what just happened
         if is_idk:
             situation = (
                 f'{self.session["student_name"]} said: "{student_input}"\n'
-                f"They don't know the answer or want help. This is the {self.session['idk_count']}th time on this question.\n"
-                f"If they've asked for an explanation, give them one. Don't keep pushing micro-questions if they need the concept explained first."
+                f"They don't know the answer or want help. IDK count: {self.session['idk_count']}.\n"
+                f"If they've asked for an explanation, give them one. "
+                f"Don't keep pushing micro-questions if they need the concept explained."
             )
         elif is_offtopic:
             situation = (
                 f'{self.session["student_name"]} said: "{student_input}"\n'
-                f"This is off-topic. Bring them back gently."
+                f"Off-topic. Redirect briefly in ONE sentence, then re-read the question."
             )
         else:
             situation = (
                 f'{self.session["student_name"]} answered: "{student_input}"\n'
-                f"Check if this matches the answer key. It might be said differently (spoken math — '2 by 3' means 2/3, 'minus 5' means -5)."
+                f"Check against answer key. Spoken math: '2 by 3' = 2/3, 'minus 5' = -5, "
+                f"'seven' = 7, 'negative one over seven' = -1/7."
             )
 
         full_context = question_context + "\n\n" + situation
@@ -309,18 +442,23 @@ If you need to give a hint:
             self._advance_question()
         elif tool_name == "explain_solution":
             self.session["questions_completed"] += 1
+            self.session["explained_current"] = True
             self._advance_question()
         elif tool_name == "end_session":
             self.session["session_ended"] = True
 
-        # Build speech instruction
+        # Build speech — ALWAYS include next question after explain/praise
         next_q_info = ""
         if tool_name in ("praise_and_continue", "explain_solution"):
+            self.session["explained_current"] = False  # Reset for next question
             if not self.session["session_ended"]:
-                nq = self.session["current_question"]
-                next_q_info = f'\n\nAfter you finish, move to the next question: {nq.get("text", nq.get("question_text", ""))}'
+                nq_text = self._get_next_question_text()
+                next_q_info = (
+                    f'\n\nAFTER your response, transition to the next question. '
+                    f'Say "Chalo, next one" or similar, then read: {nq_text}'
+                )
             else:
-                next_q_info = "\n\nThat was the last question. Wrap up the session."
+                next_q_info = "\n\nThat was the last question. Wrap up warmly."
 
         speech_instruction = (
             f"The system decided: {tool_name} ({json.dumps(tool_args)})\n\n"
@@ -337,8 +475,6 @@ If you need to give a hint:
             "tool": tool_name,
             "correct": is_correct
         })
-
-        # Track last tool for acknowledgment detection
         self.session["last_tool"] = tool_name
 
         return speech
@@ -348,6 +484,8 @@ If you need to give a hint:
         self.session["hint_count"] = 0
         self.session["attempt_count"] = 0
         self.session["idk_count"] = 0
+        self.session["offtopic_streak"] = 0
+        self.session["explained_current"] = False
         if self.session["current_question_index"] < len(self.session["questions"]):
             self.session["current_question"] = self.session["questions"][
                 self.session["current_question_index"]
@@ -375,7 +513,6 @@ If you need to give a hint:
             )
             text = self._clean_speech(response.choices[0].message.content)
 
-            # Ensure sentences are complete
             if text and text[-1] not in '.?!।':
                 for i in range(len(text) - 1, -1, -1):
                     if text[i] in '.?!।':
@@ -390,26 +527,20 @@ If you need to give a hint:
 
     def _clean_speech(self, text: str) -> str:
         text = text.strip()
-        # Remove markdown
         for char in ['**', '*', '##', '#', '`', '•']:
             text = text.replace(char, '')
         text = text.replace('- ', '')
 
-        # Remove LaTeX notation
         text = re.sub(r'\\\(.*?\\\)', '', text)
         text = re.sub(r'\\\[.*?\\\]', '', text)
 
-        # Make fractions TTS-friendly
-        # -3/7 → "minus 3 over 7"
         text = re.sub(r'-(\d+)/(\d+)', r'minus \1 over \2', text)
         text = re.sub(r'(\d+)/(\d+)', r'\1 over \2', text)
 
-        # Wrapping quotes
         if len(text) > 2 and text[0] == '"' and text[-1] == '"':
             text = text[1:-1]
         if len(text) > 2 and text[0] == "'" and text[-1] == "'":
             text = text[1:-1]
-        # Remove "Didi:" prefix
         for prefix in ["Didi:", "didi:", "DIDI:", "Teacher:", "Didi -", "Didi —"]:
             if text.startswith(prefix):
                 text = text[len(prefix):].strip()
@@ -421,14 +552,20 @@ If you need to give a hint:
             f"Session's over. {self.session['student_name']} "
             f"got {self.session['score']} out of {self.session['questions_completed']}. "
             f"Took {self.session['duration_minutes']} minutes. "
-            f"Reason: {reason}. Say bye naturally."
+            f"Reason: {reason}. Say bye naturally. 2 sentences max."
         )
         return self._generate_speech(prompt)
+
+    # ============================================================
+    # DETECTION METHODS
+    # ============================================================
 
     def _is_stop_request(self, text: str) -> bool:
         stop = ["stop", "bye", "quit", "end", "done", "that's it", "the end",
                 "i want to stop", "can we stop", "let's stop", "enough",
-                "bas", "band karo", "ruko"]
+                "bas", "band karo", "ruko", "stop for today",
+                "can we stop for today", "that's all for today",
+                "let's stop for today"]
         return any(p in text.lower() for p in stop)
 
     def _is_offtopic(self, text: str) -> bool:
@@ -438,8 +575,26 @@ If you need to give a hint:
             return False
         offtopic = ["who are you", "what is your name", "tell me a joke",
                     "play a game", "sing a song", "what can you do",
-                    "how are you", "what's up"]
+                    "how are you", "what's up", "give me a daily",
+                    "day to day", "daily life", "real life example"]
         return any(p in text.lower() for p in offtopic)
+
+    def _is_trolling(self, text: str) -> bool:
+        """Detect nonsense / trolling / not-engaged input."""
+        troll = ["subscribe", "like and subscribe", "thanks for watching",
+                 "thank you for watching", "hit the bell", "smash the like",
+                 "comment below", "share this video", "background chatter",
+                 "hello youtube", "hey guys", "what's up guys",
+                 "lol", "lmao", "hahaha", "hehe",
+                 "blah blah", "asdf", "test test", "testing",
+                 "aaa", "bbb", "zzz"]
+        text_lower = text.lower().strip()
+        if any(p in text_lower for p in troll):
+            return True
+        # Very short random text (1-2 chars) that's not a number
+        if len(text_lower) <= 2 and not any(c.isdigit() for c in text_lower):
+            return True
+        return False
 
     def _is_idk(self, text: str) -> bool:
         idk = ["i don't know", "i dont know", "idk", "no idea",
@@ -449,40 +604,70 @@ If you need to give a hint:
                "please explain", "explain to me", "please start",
                "mujhe nahi aata", "samajh nahi aa raha",
                "can you explain", "explain the chapter", "teach me",
-               "what is fraction", "what are fractions", "what is a fraction"]
+               "what is fraction", "what are fractions", "what is a fraction",
+               "can you teach me", "i'm confused", "i am confused",
+               "help me", "no clue", "not sure"]
         return any(p in text.lower() for p in idk)
+
+    def _is_acknowledgment(self, text: str) -> bool:
+        """Detect student acknowledging they understood."""
+        text_lower = text.lower().strip().rstrip('.!,')
+        acks = ["yeah", "yes", "okay", "ok", "got it", "i got it", "makes sense",
+                "i understand", "understood", "right", "alright", "fine", "sure",
+                "haan", "theek hai", "theek", "samajh gaya", "samajh gayi",
+                "accha", "oh okay", "oh ok", "yep", "yup", "hmm okay",
+                "okay okay", "i see", "ah okay", "ah ok", "clear",
+                "that's clear", "kind of", "sort of", "hmm", "mm",
+                "yeah yeah", "yes yes", "ok ok", "ji", "ji haan",
+                "samajh aa gaya", "samajh aa gayi", "haan samjha",
+                "that makes sense", "oh i see", "ohh", "acha",
+                "yeah i got it", "yes i understand", "hmm okay got it"]
+        if len(text_lower.split()) <= 6:
+            return any(text_lower == ack or text_lower.startswith(ack)
+                      for ack in acks)
+        return False
 
     def _wants_english(self, text: str) -> bool:
         eng = ["speak in english", "english please", "in english",
                "can you speak english", "talk in english", "use english",
-               "can you speak in english"]
+               "can you speak in english", "explain in english"]
         return any(p in text.lower() for p in eng)
 
-    def _is_acknowledgment(self, text: str) -> bool:
-        """Detect if student is acknowledging they understood (after explanation)."""
-        text_lower = text.lower().strip()
-        # Short acknowledgments
-        acks = ["yeah", "yes", "okay", "ok", "got it", "i got it", "makes sense",
-                "i understand", "understood", "right", "alright", "fine", "sure",
-                "haan", "theek hai", "theek", "samajh gaya", "samajh gayi",
-                "accha", "oh okay", "oh ok", "yep", "yup", "hmm okay", "okay okay",
-                "i see", "ah okay", "ah ok", "clear", "that's clear", "kind of"]
-        # Must be short (just acknowledgment, not a real answer)
-        if len(text_lower.split()) <= 5:
-            return any(text_lower == ack or text_lower.startswith(ack + " ") or
-                      text_lower.endswith(" " + ack) or ack == text_lower.rstrip(".")
-                      for ack in acks)
-        return False
+    def _wants_other_language(self, text: str) -> str:
+        """Detect request for unsupported language. Returns language name or empty."""
+        languages = {
+            "telugu": "Telugu", "tamil": "Tamil", "kannada": "Kannada",
+            "malayalam": "Malayalam", "bengali": "Bengali", "bangla": "Bengali",
+            "marathi": "Marathi", "gujarati": "Gujarati", "punjabi": "Punjabi",
+            "odia": "Odia", "assamese": "Assamese", "urdu": "Urdu",
+            "spanish": "Spanish", "french": "French", "german": "German",
+            "chinese": "Chinese", "japanese": "Japanese", "korean": "Korean",
+            "arabic": "Arabic"
+        }
+        text_lower = text.lower()
+        if "speak" in text_lower or "talk" in text_lower or "language" in text_lower or "can you" in text_lower:
+            for key, name in languages.items():
+                if key in text_lower:
+                    return name
+        return ""
 
     def get_session_state(self) -> dict:
+        q = self.session.get("current_question", {})
         return {
             "student_name": self.session["student_name"],
             "chapter": self.session["chapter"],
+            "chapter_name": self.session.get("chapter_name", ""),
             "questions_completed": self.session["questions_completed"],
             "total_questions": self.session["total_questions"],
             "score": self.session["score"],
             "hint_count": self.session["hint_count"],
             "attempt_count": self.session["attempt_count"],
             "duration_minutes": self.session["duration_minutes"],
-            "session_ended": self.session["session_ended"]
+            "session_ended": self.session["session_ended"],
+            "current_question_text": q.get("text", q.get("question_text", "")),
+            "current_question_meta": {
+                "topic": q.get("subtopic", q.get("topic", "")),
+                "difficulty": q.get("difficulty", 1),
+                "image_url": q.get("image_url", None),
+            }
         }
