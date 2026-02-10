@@ -379,8 +379,10 @@ async def speech_to_text(audio: UploadFile = File(...)):
 # ============================================================
 
 # Serve static files
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 if os.path.exists("web"):
-    app.mount("/static", StaticFiles(directory="web"), name="static")
+    app.mount("/web", StaticFiles(directory="web"), name="web")
 
 
 @app.get("/")
