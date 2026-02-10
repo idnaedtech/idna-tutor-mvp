@@ -141,6 +141,7 @@ class AgenticTutor:
             meta["language"] = result["detail"]
 
         # 5. Execute action (brain-enriched)
+        self.session["last_tool"] = None  # Reset before execute
         speech = self._execute_action(action, student_input, meta, category)
 
         # 6. Brain observes what happened
@@ -156,11 +157,12 @@ class AgenticTutor:
         if next_state == State.ENDED:
             self.session["session_ended"] = True
 
-        # 8. History
+        # 8. History - use actual LLM tool if available, otherwise state machine action
+        actual_action = self.session.get("last_tool") or action.value
         self.session["history"].append({
             "student": student_input,
             "teacher": speech,
-            "action": action.value,
+            "action": actual_action,
             "category": category
         })
 
@@ -222,6 +224,7 @@ class AgenticTutor:
             result = voice.judge_answer(judge_input, q_ctx, name, lang, history)
             tool = result["tool"]
             args = result["args"]
+            self.session["last_tool"] = tool  # Track actual LLM tool for history
 
             if tool == "praise_and_continue":
                 self.session["score"] += 1
@@ -394,6 +397,7 @@ class AgenticTutor:
         self.session["attempt_count"] = 0
         self.session["idk_count"] = 0
         self.session["offtopic_streak"] = 0
+        self.session["last_tool"] = None
         if self.session["current_question_index"] < len(self.session["questions"]):
             self.session["current_question"] = self.session["questions"][
                 self.session["current_question_index"]
