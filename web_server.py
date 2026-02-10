@@ -149,7 +149,7 @@ from tutor_intent import (
     TutorIntent,
     TutorVoice
 )
-from teacher_policy import detect_warmth_level, FRUSTRATION_PHRASES
+from teacher_policy import FRUSTRATION_PHRASES
 
 
 # ============================================================
