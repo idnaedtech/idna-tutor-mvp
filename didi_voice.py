@@ -79,25 +79,39 @@ def generate_greeting(student_name: str, chapter_name: str,
     return _speak(system, prompt)
 
 
+JUDGE_PROMPT = """You are judging a student's math answer. Your ONLY job is to pick the right tool.
+
+STEP 1: Look at the CORRECT ANSWER in the context.
+STEP 2: Look at what the STUDENT ANSWERED.
+STEP 3: Compare them. Remember spoken forms:
+  - "minus 1 by 7" = -1/7
+  - "two thirds" = 2/3
+  - "negative one seventh" = -1/7
+  - "minus 5 over 8" = -5/8
+
+STEP 4: Pick tool:
+  - IF student answer MATCHES correct answer → praise_and_continue
+  - IF student answer is WRONG → ask_what_they_did (to understand their thinking)
+  - IF student already explained and is still wrong → give_hint"""
+
+
 def judge_answer(student_input: str, question_context: str,
                  student_name: str, lang: str, history: str) -> dict:
     """
     LLM judges the student's answer using tool calling.
     Returns: {"tool": str, "args": dict}
     """
-    system = _build_system(student_name, lang, history)
-
     try:
         response = _get_client().chat.completions.create(
             model=TOOL_MODEL,
             messages=[
-                {"role": "system", "content": system},
+                {"role": "system", "content": JUDGE_PROMPT},
                 {"role": "user", "content": question_context}
             ],
             tools=TUTOR_TOOLS,
             tool_choice="required",
             max_tokens=200,
-            temperature=0.4
+            temperature=0.2
         )
         tc = response.choices[0].message.tool_calls[0]
         return {
