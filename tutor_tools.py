@@ -9,7 +9,7 @@ TUTOR_TOOLS = [
         "type": "function",
         "function": {
             "name": "give_hint",
-            "description": "Give a hint when student answered wrong. Reference their specific mistake. NEVER reveal the answer.",
+            "description": "USE THIS when student's answer is WRONG and you've already asked what they did. Give a hint. NEVER reveal the answer.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -31,7 +31,7 @@ TUTOR_TOOLS = [
         "type": "function",
         "function": {
             "name": "praise_and_continue",
-            "description": "Praise correct answer with specificity, then move to next question.",
+            "description": "USE THIS when student's answer is CORRECT. Praise with specificity, then move to next question. Match spoken forms: 'minus 1 by 7' = -1/7, 'two thirds' = 2/3.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -83,7 +83,7 @@ TUTOR_TOOLS = [
         "type": "function",
         "function": {
             "name": "ask_what_they_did",
-            "description": "Before correcting, ask the student to explain their thinking. Real teachers do this.",
+            "description": "USE THIS when student's answer is WRONG. Before correcting, ask what they did. Do NOT use for correct answers.",
             "parameters": {
                 "type": "object",
                 "properties": {
