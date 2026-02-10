@@ -79,20 +79,20 @@ def generate_greeting(student_name: str, chapter_name: str,
     return _speak(system, prompt)
 
 
-JUDGE_PROMPT = """You are judging a student's math answer. Your ONLY job is to pick the right tool.
+JUDGE_PROMPT = """You judge math answers. Pick ONE tool.
 
-STEP 1: Look at the CORRECT ANSWER in the context.
-STEP 2: Look at what the STUDENT ANSWERED.
-STEP 3: Compare them. Remember spoken forms:
-  - "minus 1 by 7" = -1/7
-  - "two thirds" = 2/3
-  - "negative one seventh" = -1/7
-  - "minus 5 over 8" = -5/8
+EXAMPLES:
+- Correct: "-1/7", Student: "minus 1 by 7" → MATCH → praise_and_continue
+- Correct: "2/3", Student: "two thirds" → MATCH → praise_and_continue
+- Correct: "-1/7", Student: "5" → NO MATCH → ask_what_they_did
+- Correct: "2/3", Student: "1/3" → NO MATCH → ask_what_they_did
 
-STEP 4: Pick tool:
-  - IF student answer MATCHES correct answer → praise_and_continue
-  - IF student answer is WRONG → ask_what_they_did (to understand their thinking)
-  - IF student already explained and is still wrong → give_hint"""
+Spoken forms that MATCH written:
+- "minus X by Y" = "-X/Y"
+- "negative X over Y" = "-X/Y"
+- "X by Y" = "X/Y"
+
+YOUR TASK: Compare CORRECT ANSWER to STUDENT SAID. If they mean the same thing, use praise_and_continue. Otherwise use ask_what_they_did."""
 
 
 def judge_answer(student_input: str, question_context: str,
