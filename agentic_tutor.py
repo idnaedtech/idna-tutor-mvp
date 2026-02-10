@@ -162,23 +162,21 @@ class AgenticTutor:
         lang = self.session["language"]
 
         if action == Action.JUDGE_AND_RESPOND:
-            correct = self.session["current_question"].get("answer", "")
-            judge_ctx = f'''CORRECT ANSWER: {correct}
-STUDENT SAID: "{student_input}"
-
-Spoken equivalents:
-- "minus 1 by 7" = "-1/7"
-- "two thirds" = "2/3"
-- "negative five over eight" = "-5/8"
-
-DECISION: Does student answer match correct answer?
-- YES, it matches → call praise_and_continue
-- NO, it's wrong → call ask_what_they_did
-
-{q_ctx}'''
-            result = voice.judge_answer(judge_ctx, q_ctx, name, lang, history)
-            tool = result["tool"]
-            args = result["args"]
+            # PYTHON CHECK FIRST - if correct, skip LLM tool calling
+            if self._is_correct_answer(student_input):
+                tool = "praise_and_continue"
+                args = {}
+            else:
+                # Only call LLM for wrong answers
+                result = voice.judge_answer(
+                    f'Student answered: "{student_input}". Pick ask_what_they_did or give_hint.',
+                    q_ctx, name, lang, history
+                )
+                tool = result["tool"]
+                args = result["args"]
+                # Force to ask_what_they_did if LLM picks praise
+                if tool == "praise_and_continue":
+                    tool = "ask_what_they_did"
 
             if tool == "praise_and_continue":
                 self.session["score"] += 1
@@ -273,6 +271,40 @@ DECISION: Does student answer match correct answer?
     # ============================================================
     # HELPERS
     # ============================================================
+
+    def _is_correct_answer(self, student_input: str) -> bool:
+        """Python check for correct answer - handles spoken forms."""
+        q = self.session["current_question"]
+        correct = q.get("answer", "").lower().strip()
+        accept_also = [a.lower().strip() for a in q.get("accept_also", [])]
+
+        # Normalize student input
+        s = student_input.lower().strip()
+
+        # Direct match
+        if s == correct or s in accept_also:
+            return True
+
+        # Spoken fraction conversions
+        # "minus 1 by 7" → "-1/7"
+        import re
+        s_normalized = s
+        s_normalized = re.sub(r"minus\s*(\d+)\s*(?:by|over)\s*(\d+)", r"-\1/\2", s_normalized)
+        s_normalized = re.sub(r"negative\s*(\d+)\s*(?:by|over)\s*(\d+)", r"-\1/\2", s_normalized)
+        s_normalized = re.sub(r"(\d+)\s*(?:by|over)\s*(\d+)", r"\1/\2", s_normalized)
+        s_normalized = s_normalized.replace(" ", "")
+
+        # Check normalized
+        correct_normalized = correct.replace(" ", "")
+        if s_normalized == correct_normalized:
+            return True
+
+        # Check against accept_also normalized
+        for a in accept_also:
+            if s_normalized == a.replace(" ", ""):
+                return True
+
+        return False
 
     def _advance_question(self):
         self.session["current_question_index"] += 1
