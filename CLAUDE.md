@@ -1,5 +1,48 @@
 # CLAUDE.md - Project Guide for Claude Code
 
+## CRITICAL ARCHITECTURE RULES (v2 — DO NOT MODIFY)
+
+### The LLM is the Teacher
+- The LLM judges answer correctness. There is NO Python evaluator.
+- The LLM receives the full answer key, common_mistakes, solution_steps in context.
+- The LLM picks the teaching tool AND generates the spoken response.
+- Python only manages session state, pre-checks (stop/idk/offtopic), and guardrails.
+
+### File Roles
+- `server.py` → Entry point. Procfile and railway.toml both run `server:app`
+- `agentic_tutor.py` → THE tutor brain. All teaching logic lives here.
+- `tutor_tools.py` → Tool definitions for function calling
+- `guardrails.py` → Python guardrail overrides
+- `questions.py` → Question bank with answer keys
+- `context_builder.py` → NO LONGER USED. Context is built inside agentic_tutor.py
+- `evaluator.py` → NO LONGER USED. LLM judges answers.
+- `tutor_prompts.py` → NO LONGER USED. Prompts are in agentic_tutor.py
+- `web_server.py` → DEAD CODE. Never import from it.
+- `tutor_intent.py` → DEAD CODE. Never import from it.
+
+### Speech Generation Rules
+- `_generate_speech()` always uses `DIDI_SYSTEM_PROMPT` with full identity
+- `max_tokens` is 300 (not 100). Didi needs room to teach.
+- Responses should be 3-5 sentences when teaching, 1-2 for quick transitions
+- `_clean_speech()` strips all markdown formatting for TTS
+
+### Import Chain
+server.py imports: agentic_tutor (AgenticTutor), questions (CHAPTER_NAMES)
+agentic_tutor.py imports: tutor_tools, guardrails, questions
+That's it. No other imports needed.
+
+### What NOT to Do
+- Do NOT add a Python evaluator back. The LLM judges answers.
+- Do NOT reduce max_tokens below 200. Didi needs room to speak.
+- Do NOT strip Didi's identity from _generate_speech().
+- Do NOT import from web_server.py, tutor_intent.py, tutor_prompts.py, or context_builder.py.
+- Do NOT add generic chatbot phrases to any prompt.
+
+### Deployment
+After ANY change: `git add . && git status` → verify agentic_tutor.py is included → push to main.
+
+---
+
 ## Project Overview
 
 **IDNA EdTech** is a voice-first AI math tutor for CBSE Class 8 students in India. It uses OpenAI (GPT-4o-mini, Whisper STT) and Google Cloud TTS to provide an interactive, spoken tutoring experience.
