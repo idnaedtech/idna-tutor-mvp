@@ -1,15 +1,10 @@
 """
-IDNA Agentic Tutor - The Teacher Brain (v2.1)
+IDNA Agentic Tutor - The Teacher Brain (v2.2)
 ===============================================
-LLM is the teacher. LLM judges answers. LLM teaches.
-Python manages session state, enforces guardrails, routes tools.
+The core insight: stop telling the LLM how to be natural.
+Instead, give it a character and get out of the way.
 
-v2.1 changes:
-- gpt-4o for speech generation (holds character, natural voice)
-- gpt-4o-mini for tool picking (fast, cheap)
-- Few-shot examples in system prompt to kill chatbot voice
-- Truncation fix: sentences always complete
-- Stronger anti-chatbot constraints
+v2.2: Conversational rewrite. Didi is a person, not a framework.
 """
 
 import json
@@ -26,88 +21,48 @@ from questions import ALL_CHAPTERS, CHAPTER_NAMES
 # ============================================================
 # MODEL CONFIGURATION
 # ============================================================
-TOOL_MODEL = "gpt-4o-mini"       # Fast, cheap — picks the right tool
-SPEECH_MODEL = "gpt-4o"          # Rich, natural — generates what student hears
+TOOL_MODEL = "gpt-4o-mini"
+SPEECH_MODEL = "gpt-4o"
 TOOL_MAX_TOKENS = 200
-SPEECH_MAX_TOKENS = 350
+SPEECH_MAX_TOKENS = 400
 
 
 # ============================================================
-# DIDI'S CORE IDENTITY + FEW-SHOT EXAMPLES
+# DIDI'S IDENTITY
 # ============================================================
+# The key insight: don't give rules. Give a character.
+# Don't say "never say X." Just make the character someone
+# who would never say X in the first place.
 
-DIDI_SYSTEM_PROMPT = """You are Didi — a real Indian math teacher. Not an AI. Not a chatbot. Not an assistant. A teacher.
+DIDI_SYSTEM_PROMPT = """You are Didi. You teach math to kids in India. Right now you're sitting with {student_name}, a Class 8 student, helping them with math. This is a private tutor session, face to face. Everything you say is spoken out loud — it goes through a speaker.
 
-You're tutoring {student_name}, Class 8, one-on-one. This is a voice session — everything you say will be spoken aloud through a speaker. Write ONLY the words that come out of Didi's mouth.
+You grew up in a middle-class Indian family. You've taught for 12 years. You've seen every kind of student — the scared ones, the lazy ones, the bright ones who just need a push. You genuinely like kids. You're not performing warmth, you actually care whether {student_name} understands.
 
-{lang_instruction}
+You talk the way you'd talk to your own younger sibling or cousin. {lang_instruction}
 
-## HOW DIDI ACTUALLY SOUNDS (follow these exactly)
+When {student_name} gets something right, you react the way a real person would — a quick "haan sahi hai" or "that's it" and you move on. You don't throw a party for every correct answer.
 
-Here are real examples of how Didi speaks. Match this tone, length, and feel:
+When they get it wrong, you're curious. You want to know what they were thinking. You don't lecture. You ask. And when you do explain, you explain like you're sitting next to them — pointing at an invisible notebook, using examples from everyday life.
 
-WHEN STUDENT GETS IT RIGHT:
-- "Haan, -1/7. Sahi hai. You kept the denominator same and added the numerators. Chalo, next one."
-- "5/8, correct. You remembered additive inverse means just flip the sign. Good. Agle question pe chalte hain."
-- "Yes, 49. You knew 7 times 7. Simple and clean. Okay next question: find the square root of 144."
+When they say "I don't know" — you shrink the problem. You don't repeat the same question louder. You find a smaller piece they CAN answer and start there. If they're genuinely confused about the basics, you stop and teach the basics. You don't robotically push them through micro-questions when they need a real explanation.
 
-WHEN STUDENT GETS IT WRONG (first attempt):
-- "Hmm, you said 1/7. Accha tell me one thing — when you added -3 and 2, what did you get?"
-- "You're saying -1/14. I think I see what happened. Denominators same the na? Toh kya unhe add karte hain?"
-- "2/3 nahi hai. But you're on the right track. Go back to the numerators — what's -3 plus 2?"
+When they ask you to explain something — you explain it. Simply. Like a human. You don't deflect with "what do you think?" when they've already told you they don't know.
 
-WHEN GIVING A HINT:
-- "Dekho, dono fractions mein denominator same hai — 7. Toh denominator ko chhodho. Sirf numerators pe focus karo. -3 aur 2, add karo."
-- "Think about it like money. You owe 3 rupees and someone gives you 2. Kitne owe karte ho ab?"
+You keep it short because this is spoken, not written. 2-4 sentences usually. But if a student genuinely needs a concept explained, you take the time. You don't artificially cut yourself off.
 
-WHEN STUDENT SAYS IDK:
-- "Koi baat nahi. Chhodo poora question. Sirf ye batao — dono fractions mein denominator kya hai? Bas itna."
-- "It's okay. Don't try to solve the whole thing. Just tell me the first step — what would you do first?"
+IMPORTANT: You complete every sentence. You never stop mid-thought.
 
-WHEN EXPLAINING AFTER STUDENT IS STUCK:
-- "Accha sun. -3/7 plus 2/7. Dono mein denominator 7 hai, same hai. Toh hum sirf numerators add karenge: -3 plus 2, that gives -1. Denominator same rehta hai, 7. So answer is -1/7. Samjhe?"
-
-## THINGS DIDI NEVER SAYS (if you write any of these, you've failed)
-
-These are chatbot phrases. Didi is a teacher, not a chatbot:
-- "That's a great question!" / "Great job!" / "Excellent!" / "Amazing!" / "Wonderful!"
-- "Let's take a moment to think about..." / "Can you tell me how you would approach..."
-- "I understand you want..." / "I can help you with..." / "Let me assist..."
-- "Sure!" / "Of course!" / "Absolutely!" / "No problem!"
-- "That's perfectly fine." / "That's a valid point."
-- "Let me explain..." (just explain, don't announce it)
-- "How would you approach this?" (too formal — say "kaise karoge?" or "what would you do first?")
-- Any sentence starting with "I understand" or "I appreciate"
-
-## RULES
-
-1. Complete your sentences. Never stop mid-thought. If you're reading a question, finish reading it.
-2. Every response must reference the student's ACTUAL answer or the ACTUAL question. No generic responses.
-3. When transitioning to next question, just read it. Don't say "here's your next question" — just say "Chalo. What is 5/8 minus 3/8?"
-4. Keep it 2-4 sentences. Not 1, not 6. When explaining a concept, you can go up to 5.
-5. No formatting. No bullets. No bold. No markdown. No asterisks. Just spoken words.
-6. Use the student's name sometimes. Not every turn. Maybe every 3rd or 4th response.
+A few things you'd never do because they're not who you are:
+- You don't say "Great job!" or "Excellent!" because that's what YouTube teachers say, not real ones.
+- You don't say "Let me help you with that" because you're already helping — you don't narrate it.
+- You don't say "That's a great question" because no real teacher says that to a 13-year-old.
+- You don't start sentences with "I understand" because that's customer service, not teaching.
+- You don't say "Can you tell me how you would approach this?" because that sounds like an exam, not a conversation. You'd say "kaise kiya?" or "what did you do?"
 
 {history_context}"""
 
 
-SPEECH_GENERATION_PROMPT = """The teaching system chose: {tool_name}
-Arguments: {tool_args}
-
-Context:
-{context}
-
-Generate ONLY Didi's spoken words. Match the examples in your instructions exactly. Complete every sentence. No chatbot phrases. No formatting."""
-
-
 class AgenticTutor:
-    """
-    The agentic tutor brain (v2.1).
-
-    Tool picking: gpt-4o-mini (fast, cheap)
-    Speech generation: gpt-4o (natural, holds character)
-    Answer judging: gpt-4o-mini (has answer key in context)
-    """
 
     def __init__(self, student_name: str, chapter: str):
         self.client = OpenAI(
@@ -118,9 +73,7 @@ class AgenticTutor:
         self.session = self._init_session(student_name, chapter)
 
     def _init_session(self, student_name: str, chapter: str) -> dict:
-        """Initialize session state."""
         questions = ALL_CHAPTERS.get(chapter, [])[:10]
-
         if not questions:
             questions = ALL_CHAPTERS.get("rational_numbers", [])[:10]
             chapter = "rational_numbers"
@@ -148,23 +101,20 @@ class AgenticTutor:
 
     def _get_lang_instruction(self) -> str:
         if self.session.get("language") == "english":
-            return "LANGUAGE: English only. No Hindi words at all. But keep the warm, natural teacher tone."
-        return "LANGUAGE: Natural Hindi-English mix. Use Hindi naturally: 'Haan', 'Accha', 'Dekho', 'Chalo', 'Sochke batao', 'Koi baat nahi', 'Bahut accha', 'Sahi hai'."
+            return "You speak in English only right now because the student asked for it. No Hindi at all. But you're still you — warm, direct, real."
+        return "You naturally mix Hindi and English the way educated Indians do. 'Haan', 'Accha', 'Dekho', 'Chalo', 'Koi baat nahi' — these come out naturally, not forced."
 
     def _build_history_context(self) -> str:
-        recent = self.session.get("history", [])[-4:]
+        recent = self.session.get("history", [])[-5:]
         if not recent:
             return ""
-
-        lines = ["Recent conversation:"]
+        lines = ["\nWhat's happened so far in this session:"]
         for h in recent:
             lines.append(f"  {self.session['student_name']}: {h['student']}")
-            lines.append(f"  Didi: {h['teacher']}")
-
+            lines.append(f"  You said: {h['teacher']}")
         return "\n".join(lines)
 
     def _build_question_context(self) -> str:
-        """Build full question context with answer key for LLM."""
         q = self.session["current_question"]
         s = self.session
 
@@ -175,38 +125,31 @@ class AgenticTutor:
         mistakes_text = ""
         for m in q.get("common_mistakes", []):
             mistakes_text += (
-                f'  If student says "{m["wrong_answer"]}": '
-                f'{m.get("diagnosis", "?")} '
-                f'(micro-hint: "{m.get("micro_hint", "")}")\n'
+                f'  "{m["wrong_answer"]}" means: {m.get("diagnosis", "?")} '
+                f'(you could say: "{m.get("micro_hint", "")}")\n'
             )
 
-        micro_checks = q.get("micro_checks", [])
-        micro_text = " / ".join(micro_checks) if micro_checks else "None"
+        return f"""You're on question {s['current_question_index'] + 1} of {s['total_questions']}.
+{s['student_name']} has scored {s['score']}/{s['questions_completed']} so far. Session: {s['duration_minutes']} min.
+Hints given on this question: {s['hint_count']}. Attempts: {s['attempt_count']}. Times they said idk: {s['idk_count']}.
 
-        return f"""SESSION: {s['student_name']}, Class 8 | {s['chapter_name']}
-Question {s['current_question_index'] + 1}/{s['total_questions']} | Score: {s['score']}/{s['questions_completed']} | Time: {s['duration_minutes']}min
-Hints used: {s['hint_count']}/2 | Attempts: {s['attempt_count']} | IDK count: {s['idk_count']}
+The question: {q.get('text', q.get('question_text', ''))}
+Subject: {q.get('topic', '')} / {q.get('subtopic', '')}
 
-QUESTION: {q.get('text', q.get('question_text', ''))}
-Topic: {q.get('topic', '')} / {q.get('subtopic', '')} | Difficulty: {q.get('difficulty', '?')}/3
+--- Your teacher's answer key (don't show this directly) ---
+Answer: {q.get('answer', '')}
+Also correct: {q.get('accept_also', [])}
+How to solve it: {solution_steps}
+Full explanation: {q.get('solution', '')}
 
-ANSWER KEY (never reveal directly unless explaining after 2 hints):
-Correct: {q.get('answer', '')}
-Also accept: {q.get('accept_also', [])}
-Solution: {q.get('solution', '')}
-Steps: {solution_steps}
+If they make these common mistakes:
+{mistakes_text if mistakes_text else '(none listed)'}
 
-COMMON MISTAKES:
-{mistakes_text if mistakes_text else 'None listed'}
-
-MICRO-CHECKS: {micro_text}
-
-HINTS:
-Level 1: {q.get('hint_1', q.get('hint', 'Think about the concept'))}
-Level 2: {q.get('hint_2', 'Try the first step')}"""
+If you need to give a hint:
+  Small nudge: {q.get('hint_1', q.get('hint', ''))}
+  Bigger help: {q.get('hint_2', '')}"""
 
     async def start_session(self) -> str:
-        """Didi greets and asks first question."""
         q = self.session["current_question"]
         name = self.session["student_name"]
         chapter = self.session["chapter_name"]
@@ -219,13 +162,9 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
         )
 
         prompt = (
-            f"Start the session. Greet {name} — short, warm, real. "
-            f"Then read the first question clearly.\n"
-            f"Chapter: {chapter}\n"
-            f"Question: {question_text}\n\n"
-            f"Example of good greeting: \"Hi {name}! Chalo, aaj rational numbers practice karte hain. "
-            f"Pehla sawaal: {question_text}\"\n"
-            f"Keep it that natural. 2 sentences max for greeting + question."
+            f"{name} just sat down for today's session. "
+            f"You're doing {chapter} today. "
+            f"Say hi and ask the first question: {question_text}"
         )
 
         try:
@@ -236,58 +175,61 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=SPEECH_MAX_TOKENS,
-                temperature=0.7
+                temperature=0.8
             )
             return self._clean_speech(response.choices[0].message.content)
-
         except Exception as e:
             print(f"[Start Error] {e}")
-            return f"Hi {name}! Chalo, let's start. {question_text}"
+            return f"Hi {name}! Chalo, aaj {chapter} karte hain. {question_text}"
 
     async def process_input(self, student_input: str) -> str:
-        """Student says something → Didi responds."""
         if self.session["session_ended"]:
-            return "Session khatam ho gaya. New session start karo practice ke liye."
+            return "Session khatam ho gaya. New session start karo."
 
         self.session["duration_minutes"] = int(
             (time.time() - self.session["start_time"]) / 60
         )
-
         student_input = student_input.strip()
 
-        # Language switch
         if self._wants_english(student_input):
             self.session["language"] = "english"
 
-        # Pre-checks
         is_stop = self._is_stop_request(student_input)
         is_idk = self._is_idk(student_input)
         is_offtopic = self._is_offtopic(student_input)
 
         if is_stop:
             return await self._end_session("student_requested")
-
         if is_idk:
             self.session["idk_count"] += 1
-
         if not is_idk and not is_offtopic:
             self.session["attempt_count"] += 1
 
-        # Build context
+        # Build what the LLM sees
         question_context = self._build_question_context()
-
-        input_line = ""
-        if is_idk:
-            input_line = f'STUDENT SAID: "{student_input}" → IDK detected. They don\'t know. IDK count: {self.session["idk_count"]}'
-        elif is_offtopic:
-            input_line = f'STUDENT SAID: "{student_input}" → OFF-TOPIC. Redirect to the question.'
-        else:
-            input_line = f'STUDENT SAID: "{student_input}" → Judge this against the answer key. Correct or wrong?'
-
-        full_context = question_context + "\n\n" + input_line
-
-        # LLM picks tool (gpt-4o-mini — fast)
         history_context = self._build_history_context()
+
+        # Frame what just happened
+        if is_idk:
+            situation = (
+                f'{self.session["student_name"]} said: "{student_input}"\n'
+                f"They don't know the answer or want help. This is the {self.session['idk_count']}th time on this question.\n"
+                f"If they've asked for an explanation, give them one. Don't keep pushing micro-questions if they need the concept explained first."
+            )
+        elif is_offtopic:
+            situation = (
+                f'{self.session["student_name"]} said: "{student_input}"\n'
+                f"This is off-topic. Bring them back gently."
+            )
+        else:
+            situation = (
+                f'{self.session["student_name"]} answered: "{student_input}"\n'
+                f"Check if this matches the answer key. It might be said differently (spoken math — '2 by 3' means 2/3, 'minus 5' means -5)."
+            )
+
+        full_context = question_context + "\n\n" + situation
+
+        # Tool selection (gpt-4o-mini)
         system = DIDI_SYSTEM_PROMPT.format(
             student_name=self.session["student_name"],
             lang_instruction=self._get_lang_instruction(),
@@ -306,20 +248,18 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
                 max_tokens=TOOL_MAX_TOKENS,
                 temperature=0.4
             )
-
             tool_call = tool_response.choices[0].message.tool_calls[0]
             tool_name = tool_call.function.name
             tool_args = json.loads(tool_call.function.arguments)
-
         except Exception as e:
             print(f"[Tool Error] {e}")
             if is_idk:
                 tool_name = "encourage_attempt"
-                tool_args = {"approach": "reduce_pressure"}
+                tool_args = {"approach": "break_down"}
             else:
                 tool_name = "give_hint"
                 tool_args = {"hint_level": min(self.session["hint_count"] + 1, 2),
-                             "student_mistake": "needs guidance"}
+                             "student_mistake": "unclear"}
 
         is_correct = (tool_name == "praise_and_continue")
 
@@ -338,42 +278,38 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
             tool_args = guardrail["override_args"]
             is_correct = (tool_name == "praise_and_continue")
 
-        # Update state
+        # State updates
         if tool_name == "give_hint":
-            level = tool_args.get("hint_level", 1)
-            self.session["hint_count"] = max(self.session["hint_count"], level)
-
+            self.session["hint_count"] = max(self.session["hint_count"],
+                                              tool_args.get("hint_level", 1))
         elif tool_name == "praise_and_continue":
             self.session["score"] += 1
             self.session["questions_completed"] += 1
             self._advance_question()
-
         elif tool_name == "explain_solution":
             self.session["questions_completed"] += 1
             self._advance_question()
-
         elif tool_name == "end_session":
             self.session["session_ended"] = True
 
-        # Next question context
-        next_q_text = ""
+        # Build speech instruction
+        next_q_info = ""
         if tool_name in ("praise_and_continue", "explain_solution"):
             if not self.session["session_ended"]:
                 nq = self.session["current_question"]
-                next_q_text = f'\n\nNEXT QUESTION (read it aloud at the end): {nq.get("text", nq.get("question_text", ""))}'
+                next_q_info = f'\n\nAfter you finish, move to the next question: {nq.get("text", nq.get("question_text", ""))}'
             else:
-                next_q_text = "\n\nNo more questions. Wrap up the session warmly."
+                next_q_info = "\n\nThat was the last question. Wrap up the session."
 
-        # Generate speech (gpt-4o — natural voice)
-        speech_prompt = SPEECH_GENERATION_PROMPT.format(
-            tool_name=tool_name,
-            tool_args=json.dumps(tool_args),
-            context=full_context + next_q_text
+        speech_instruction = (
+            f"The system decided: {tool_name} ({json.dumps(tool_args)})\n\n"
+            f"{full_context}"
+            f"{next_q_info}\n\n"
+            f"Now respond as Didi. Speak naturally. Complete your sentences."
         )
 
-        speech = self._generate_speech(speech_prompt)
+        speech = self._generate_speech(speech_instruction)
 
-        # Store history
         self.session["history"].append({
             "student": student_input,
             "teacher": speech,
@@ -384,12 +320,10 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
         return speech
 
     def _advance_question(self):
-        """Move to next question, reset counters."""
         self.session["current_question_index"] += 1
         self.session["hint_count"] = 0
         self.session["attempt_count"] = 0
         self.session["idk_count"] = 0
-
         if self.session["current_question_index"] < len(self.session["questions"]):
             self.session["current_question"] = self.session["questions"][
                 self.session["current_question_index"]
@@ -398,14 +332,7 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
             self.session["session_ended"] = True
 
     def _generate_speech(self, prompt: str) -> str:
-        """
-        Generate Didi's spoken words using gpt-4o.
-
-        gpt-4o holds character much better than mini.
-        The few-shot examples in DIDI_SYSTEM_PROMPT anchor the voice.
-        """
         history_context = self._build_history_context()
-
         system = DIDI_SYSTEM_PROMPT.format(
             student_name=self.session["student_name"],
             lang_instruction=self._get_lang_instruction(),
@@ -420,12 +347,11 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=SPEECH_MAX_TOKENS,
-                temperature=0.7,
-                stop=["\n\n"]  # Prevent rambling — stop at paragraph break
+                temperature=0.8
             )
             text = self._clean_speech(response.choices[0].message.content)
 
-            # Truncation safety: if text doesn't end with sentence-ender, trim to last complete sentence
+            # Ensure sentences are complete
             if text and text[-1] not in '.?!।':
                 for i in range(len(text) - 1, -1, -1):
                     if text[i] in '.?!।':
@@ -436,87 +362,64 @@ Level 2: {q.get('hint_2', 'Try the first step')}"""
 
         except Exception as e:
             print(f"[Speech Error] {e}")
-            return "Chalo, is question ko phir se dekhte hain."
+            return "Ek second. Chalo phir se dekhte hain."
 
     def _clean_speech(self, text: str) -> str:
-        """Clean LLM output for TTS."""
         text = text.strip()
-        text = text.replace("**", "").replace("*", "")
-        text = text.replace("##", "").replace("#", "")
-        text = text.replace("- ", "").replace("• ", "")
-        text = text.replace("`", "")
-        # Remove wrapping quotes
+        for char in ['**', '*', '##', '#', '`', '•']:
+            text = text.replace(char, '')
+        text = text.replace('- ', '')
         if len(text) > 2 and text[0] == '"' and text[-1] == '"':
             text = text[1:-1]
         if len(text) > 2 and text[0] == "'" and text[-1] == "'":
             text = text[1:-1]
-        # Remove "Didi:" prefix
-        for prefix in ["Didi:", "didi:", "DIDI:", "Didi :", "Teacher:"]:
+        for prefix in ["Didi:", "didi:", "DIDI:", "Teacher:", "Didi -", "Didi —"]:
             if text.startswith(prefix):
                 text = text[len(prefix):].strip()
         return text
 
     async def _end_session(self, reason: str) -> str:
-        """End session with warm wrap-up."""
         self.session["session_ended"] = True
-
-        # Build a specific summary
-        history = self.session.get("history", [])
-        correct_count = sum(1 for h in history if h.get("correct"))
-
         prompt = (
-            f"End the session. {self.session['student_name']} is done.\n"
-            f"Score: {self.session['score']}/{self.session['questions_completed']}\n"
-            f"Time: {self.session['duration_minutes']} minutes\n"
-            f"Reason: {reason}\n\n"
-            f"Say bye like a real teacher. 2-3 sentences. Mention something specific from the session if possible.\n"
-            f"Example: \"Accha {self.session['student_name']}, aaj ka session accha raha. "
-            f"Rational numbers mein tumhe fractions add karna ab acche se aata hai. Keep practicing, see you next time!\""
+            f"Session's over. {self.session['student_name']} "
+            f"got {self.session['score']} out of {self.session['questions_completed']}. "
+            f"Took {self.session['duration_minutes']} minutes. "
+            f"Reason: {reason}. Say bye naturally."
         )
-
         return self._generate_speech(prompt)
 
-    # ============================================================
-    # Pre-checks (Python, not LLM)
-    # ============================================================
-
     def _is_stop_request(self, text: str) -> bool:
-        stop_phrases = [
-            "stop", "bye", "quit", "end", "done", "that's it", "the end",
-            "i want to stop", "can we stop", "let's stop", "enough",
-            "bas", "band karo", "ruko"
-        ]
-        return any(p in text.lower() for p in stop_phrases)
+        stop = ["stop", "bye", "quit", "end", "done", "that's it", "the end",
+                "i want to stop", "can we stop", "let's stop", "enough",
+                "bas", "band karo", "ruko"]
+        return any(p in text.lower() for p in stop)
 
     def _is_offtopic(self, text: str) -> bool:
         if any(c.isdigit() for c in text):
             return False
         if "/" in text or "by" in text.lower():
             return False
-        offtopic = [
-            "who are you", "what is your name", "tell me a joke",
-            "play a game", "sing a song", "what can you do",
-            "how are you", "what's up"
-        ]
+        offtopic = ["who are you", "what is your name", "tell me a joke",
+                    "play a game", "sing a song", "what can you do",
+                    "how are you", "what's up"]
         return any(p in text.lower() for p in offtopic)
 
     def _is_idk(self, text: str) -> bool:
-        idk_phrases = [
-            "i don't know", "i dont know", "idk", "no idea",
-            "tell me the answer", "just tell me", "skip",
-            "i can't", "i cant", "nahi pata", "pata nahi",
-            "what is the answer", "give me the answer",
-            "please explain", "explain to me", "please start",
-            "mujhe nahi aata", "samajh nahi aa raha"
-        ]
-        return any(p in text.lower() for p in idk_phrases)
+        idk = ["i don't know", "i dont know", "idk", "no idea",
+               "tell me the answer", "just tell me", "skip",
+               "i can't", "i cant", "nahi pata", "pata nahi",
+               "what is the answer", "give me the answer",
+               "please explain", "explain to me", "please start",
+               "mujhe nahi aata", "samajh nahi aa raha",
+               "can you explain", "explain the chapter", "teach me",
+               "what is fraction", "what are fractions", "what is a fraction"]
+        return any(p in text.lower() for p in idk)
 
     def _wants_english(self, text: str) -> bool:
-        english_phrases = [
-            "speak in english", "english please", "in english",
-            "can you speak english", "talk in english", "use english"
-        ]
-        return any(p in text.lower() for p in english_phrases)
+        eng = ["speak in english", "english please", "in english",
+               "can you speak english", "talk in english", "use english",
+               "can you speak in english"]
+        return any(p in text.lower() for p in eng)
 
     def get_session_state(self) -> dict:
         return {
