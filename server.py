@@ -393,6 +393,14 @@ async def root():
     return {"message": "IDNA Tutor API. Frontend not found."}
 
 
+@app.get("/student")
+async def student_page():
+    """Student learning page - legacy route."""
+    if os.path.exists("web/index.html"):
+        return FileResponse("web/index.html")
+    return {"message": "Frontend not found."}
+
+
 # ============================================================
 # Cleanup old sessions (simple)
 # ============================================================
