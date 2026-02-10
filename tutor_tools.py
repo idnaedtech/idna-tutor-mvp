@@ -1,81 +1,19 @@
 """
 IDNA Tutor Tools - OpenAI Function Calling Definitions
 ======================================================
-6 focused tools for teacher behavior. No generic "speak" tool.
+Tools for judging answers. Order matters - correct answer tool is FIRST.
 """
 
 TUTOR_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "give_hint",
-            "description": "USE THIS when student's answer is WRONG and you've already asked what they did. Give a hint. NEVER reveal the answer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "hint_level": {
-                        "type": "integer",
-                        "enum": [1, 2],
-                        "description": "1 = conceptual nudge, 2 = show first step"
-                    },
-                    "student_mistake": {
-                        "type": "string",
-                        "description": "What specifically the student got wrong, referencing their actual answer"
-                    }
-                },
-                "required": ["hint_level", "student_mistake"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "praise_and_continue",
-            "description": "USE THIS when student's answer is CORRECT. Praise with specificity, then move to next question. Match spoken forms: 'minus 1 by 7' = -1/7, 'two thirds' = 2/3.",
+            "description": "CORRECT ANSWER. Student got it right. Use this.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "what_they_did_well": {
-                        "type": "string",
-                        "description": "Specific thing they did right (e.g., 'found LCM quickly', 'remembered the sign')"
-                    }
-                },
-                "required": ["what_they_did_well"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "explain_solution",
-            "description": "Walk through full solution. ONLY use after 2 hints have been given.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "acknowledge_struggle": {
-                        "type": "string",
-                        "description": "Brief acknowledgment like 'This one's tricky' or 'Let me show you'"
-                    }
-                },
-                "required": ["acknowledge_struggle"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "encourage_attempt",
-            "description": "Student said 'I don't know' or is stuck. Push them to try. NEVER give answer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "approach": {
-                        "type": "string",
-                        "enum": ["break_down", "first_step", "reduce_pressure"],
-                        "description": "How to encourage: break into smaller piece, ask for first step, or reduce anxiety"
-                    }
-                },
-                "required": ["approach"]
+                "properties": {},
+                "required": []
             }
         }
     },
@@ -83,17 +21,53 @@ TUTOR_TOOLS = [
         "type": "function",
         "function": {
             "name": "ask_what_they_did",
-            "description": "USE THIS when student's answer is WRONG. Before correcting, ask what they did. Do NOT use for correct answers.",
+            "description": "WRONG ANSWER. Ask what they did before correcting.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "give_hint",
+            "description": "WRONG ANSWER + already asked. Give a hint.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "question_type": {
-                        "type": "string",
-                        "enum": ["what_did_you_do", "walk_me_through", "how_did_you_get_that"],
-                        "description": "Type of diagnostic question"
+                    "hint_level": {
+                        "type": "integer",
+                        "enum": [1, 2],
+                        "description": "1 = nudge, 2 = first step"
                     }
                 },
-                "required": ["question_type"]
+                "required": ["hint_level"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "explain_solution",
+            "description": "STUCK. Show full solution after 2 hints.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "encourage_attempt",
+            "description": "IDK. Student doesn't know, encourage them.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         }
     },
@@ -101,16 +75,11 @@ TUTOR_TOOLS = [
         "type": "function",
         "function": {
             "name": "end_session",
-            "description": "Wrap up the tutoring session with a warm summary.",
+            "description": "END. Student wants to stop.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "reason": {
-                        "type": "string",
-                        "enum": ["completed", "student_requested", "time_limit"]
-                    }
-                },
-                "required": ["reason"]
+                "properties": {},
+                "required": []
             }
         }
     }
