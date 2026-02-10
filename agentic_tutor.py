@@ -58,6 +58,8 @@ class AgenticTutor:
             "score": 0,
             "hint_count": 0,
             "attempt_count": 0,
+            "idk_count": 0,
+            "language": "hinglish",
             "history": [],
             "duration_minutes": 0,
             "start_time": time.time(),
@@ -99,6 +101,11 @@ class AgenticTutor:
 
         student_input = student_input.strip()
 
+        # Step 0: Check language preference
+        if self._wants_english(student_input):
+            self.session["language"] = "english"
+            return "Okay, I'll speak in English. Let me repeat: " + self.session["current_question"].get("text", "")
+
         # Step 1: Pre-checks (Python, not LLM)
         is_stop = self._is_stop_request(student_input)
         is_idk = self._is_idk(student_input)
@@ -117,12 +124,14 @@ class AgenticTutor:
                 "normalized_answer": student_input
             }
         elif is_idk:
+            self.session["idk_count"] += 1
             eval_result = {
                 "is_correct": False,
                 "is_idk": True,
                 "is_offtopic": False,
                 "is_stop": False,
-                "normalized_answer": student_input
+                "normalized_answer": student_input,
+                "idk_count": self.session["idk_count"]
             }
         elif is_offtopic:
             eval_result = {
@@ -282,6 +291,7 @@ class AgenticTutor:
         self.session["current_question_index"] += 1
         self.session["hint_count"] = 0
         self.session["attempt_count"] = 0
+        self.session["idk_count"] = 0
 
         if self.session["current_question_index"] < len(self.session["questions"]):
             next_q = self.session["questions"][self.session["current_question_index"]]
@@ -324,11 +334,16 @@ class AgenticTutor:
         self.session["current_question_index"] += 1
         self.session["hint_count"] = 0
         self.session["attempt_count"] = 0
+        self.session["idk_count"] = 0
 
         if self.session["current_question_index"] < len(self.session["questions"]):
             next_q = self.session["questions"][self.session["current_question_index"]]
             self.session["current_question"] = next_q
-            speech += f" Chalo, next question: {next_q.get('text', next_q.get('question_text', ''))}"
+            # Respect language preference
+            if self.session.get("language") == "english":
+                speech += f" Next question: {next_q.get('text', next_q.get('question_text', ''))}"
+            else:
+                speech += f" Chalo, next question: {next_q.get('text', next_q.get('question_text', ''))}"
         else:
             speech += " That was our last question."
             return speech + " " + await self._end_session("completed")
@@ -380,13 +395,19 @@ class AgenticTutor:
 
     def _generate_speech(self, instruction: str) -> str:
         """Generate spoken words via LLM."""
+        language = self.session.get("language", "hinglish")
+        if language == "english":
+            lang_instruction = "Speak in English only. No Hindi words."
+        else:
+            lang_instruction = "Hindi-English mix is okay."
+
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
-                        "content": "Generate natural spoken teacher speech. Hindi-English mix is okay. "
+                        "content": f"Generate natural spoken teacher speech. {lang_instruction} "
                                    "No formatting. Short sentences. Max 3 sentences total."
                     },
                     {"role": "user", "content": instruction}
@@ -438,10 +459,20 @@ class AgenticTutor:
             "i don't know", "i dont know", "idk", "no idea",
             "tell me the answer", "just tell me", "skip",
             "i can't", "i cant", "nahi pata", "pata nahi",
-            "what is the answer", "give me the answer"
+            "what is the answer", "give me the answer",
+            "please explain", "explain to me", "please start"
         ]
         text_lower = text.lower()
         return any(p in text_lower for p in idk_phrases)
+
+    def _wants_english(self, text: str) -> bool:
+        """Check if student wants English."""
+        english_phrases = [
+            "speak in english", "english please", "in english",
+            "can you speak english", "talk in english", "use english"
+        ]
+        text_lower = text.lower()
+        return any(p in text_lower for p in english_phrases)
 
     def get_session_state(self) -> dict:
         """Get current session state for API response."""

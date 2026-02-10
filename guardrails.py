@@ -26,7 +26,9 @@ def check_guardrails(tool_name: str, args: dict, session: dict) -> dict:
 
     hint_count = session.get("hint_count", 0)
     attempt_count = session.get("attempt_count", 0)
+    idk_count = session.get("idk_count", 0)
     duration = session.get("duration_minutes", 0)
+    language = session.get("language", "hinglish")
 
     # GUARDRAIL 1: Can't explain_solution before giving 2 hints
     if tool_name == "explain_solution" and hint_count < 2:
@@ -69,5 +71,23 @@ def check_guardrails(tool_name: str, args: dict, session: dict) -> dict:
                 "student_mistake": "Answer was not correct"
             }
             result["reason"] = "Blocked praise: answer was wrong"
+
+    # GUARDRAIL 6: Escalate after multiple IDKs - don't loop forever
+    if tool_name == "encourage_attempt":
+        if idk_count >= 3:
+            result["blocked"] = True
+            result["override_tool"] = "explain_solution"
+            result["override_args"] = {
+                "acknowledge_struggle": "Let me explain this one."
+            }
+            result["reason"] = f"IDK count {idk_count} - explaining solution"
+        elif idk_count >= 2:
+            result["blocked"] = True
+            result["override_tool"] = "give_hint"
+            result["override_args"] = {
+                "hint_level": 1,
+                "student_mistake": "Student needs a hint"
+            }
+            result["reason"] = f"IDK count {idk_count} - giving hint"
 
     return result
