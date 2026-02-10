@@ -46,6 +46,7 @@ class AgenticTutor:
             "hint_count": 0,
             "attempt_count": 0,
             "idk_count": 0,
+            "ask_count": 0,  # Track how many times we asked "what did you do"
             "offtopic_streak": 0,
             "language": "hinglish",
             "history": [],
@@ -167,16 +168,15 @@ class AgenticTutor:
                 tool = "praise_and_continue"
                 args = {}
             else:
-                # Only call LLM for wrong answers
-                result = voice.judge_answer(
-                    f'Student answered: "{student_input}". Pick ask_what_they_did or give_hint.',
-                    q_ctx, name, lang, history
-                )
-                tool = result["tool"]
-                args = result["args"]
-                # Force to ask_what_they_did if LLM picks praise
-                if tool == "praise_and_continue":
+                # After 2 asks, force hint instead of more questions
+                if self.session["ask_count"] >= 2:
+                    tool = "give_hint"
+                    args = {"hint_level": min(self.session["hint_count"] + 1, 2)}
+                else:
+                    # First wrong answer - ask what they did
                     tool = "ask_what_they_did"
+                    args = {}
+                    self.session["ask_count"] += 1
 
             if tool == "praise_and_continue":
                 self.session["score"] += 1
@@ -311,6 +311,7 @@ class AgenticTutor:
         self.session["hint_count"] = 0
         self.session["attempt_count"] = 0
         self.session["idk_count"] = 0
+        self.session["ask_count"] = 0
         self.session["offtopic_streak"] = 0
         if self.session["current_question_index"] < len(self.session["questions"]):
             self.session["current_question"] = self.session["questions"][

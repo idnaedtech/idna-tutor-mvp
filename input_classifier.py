@@ -160,7 +160,10 @@ def _is_idk(t: str) -> bool:
         "can you teach me", "i'm confused", "i am confused",
         "help me", "no clue", "not sure", "i need help",
         "explain this", "explain it", "what does this mean",
-        "don't understand", "dont understand", "please help"
+        "don't understand", "dont understand", "please help",
+        "explain me", "can you teach", "just explain",
+        "how to solve", "how do i", "what should i do",
+        "simple format", "in simple", "easy way"
     ]
     return any(p in t for p in phrases)
 
