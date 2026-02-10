@@ -1,0 +1,304 @@
+"""
+IDNA Didi Voice — LLM Speech Generation
+=========================================
+This module handles ALL interaction with the LLM.
+Two responsibilities:
+1. Judge student answers (tool calling with gpt-4o-mini)
+2. Generate Didi's spoken response (gpt-4o)
+
+Nothing else in the system talks to the LLM.
+"""
+
+import json
+import re
+import os
+from openai import OpenAI
+from tutor_tools import TUTOR_TOOLS
+
+
+# ============================================================
+# CONFIG
+# ============================================================
+TOOL_MODEL = "gpt-4o-mini"
+SPEECH_MODEL = "gpt-4o"
+
+_client = None
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=30.0,
+            max_retries=2
+        )
+    return _client
+
+
+# ============================================================
+# DIDI'S IDENTITY
+# ============================================================
+
+DIDI_PROMPT = """You are Didi. You teach math to kids in India. Right now you're sitting with {student_name}, a Class 8 student. This is a private tutor session, face to face. Everything you say is spoken aloud through a speaker.
+
+You grew up in a middle-class Indian family. You've taught for 12 years. You genuinely like kids. You're not performing warmth, you actually care.
+
+You talk like you'd talk to your own younger sibling. {lang_instruction}
+
+When they get it right — quick "haan sahi hai" or "that's it" and move on. No party.
+When they get it wrong — be curious about their thinking. Ask before correcting.
+When they don't know — shrink the problem. Find a piece they CAN answer.
+When they ask to explain — explain simply, like a human.
+
+RULES:
+1. Complete every sentence. Never stop mid-thought.
+2. ONLY discuss the CURRENT question (shown below). NEVER reference previous questions.
+3. When saying fractions: "minus 3 over 7", "2 over 3". Never write -3/7.
+4. No markdown, no bullets, no formatting. Spoken words only.
+5. 2-4 sentences usually. Up to 5 when teaching a concept.
+
+NEVER SAY: "Great job!", "Excellent!", "Let me help you", "That's a great question", "I understand", "Can you tell me how you would approach this?"
+
+{lang_strict}
+
+{history}"""
+
+
+# ============================================================
+# PUBLIC FUNCTIONS
+# ============================================================
+
+def generate_greeting(student_name: str, chapter_name: str,
+                      question_text: str, lang: str) -> str:
+    """Generate Didi's opening greeting + first question."""
+    system = _build_system(student_name, lang, "")
+    prompt = (
+        f"{student_name} just sat down. You're doing {chapter_name} today. "
+        f"Say hi — short, warm, real — then read the first question: {question_text}"
+    )
+    return _speak(system, prompt)
+
+
+def judge_answer(student_input: str, question_context: str,
+                 student_name: str, lang: str, history: str) -> dict:
+    """
+    LLM judges the student's answer using tool calling.
+    Returns: {"tool": str, "args": dict}
+    """
+    system = _build_system(student_name, lang, history)
+
+    try:
+        response = _get_client().chat.completions.create(
+            model=TOOL_MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": question_context}
+            ],
+            tools=TUTOR_TOOLS,
+            tool_choice="required",
+            max_tokens=200,
+            temperature=0.4
+        )
+        tc = response.choices[0].message.tool_calls[0]
+        return {
+            "tool": tc.function.name,
+            "args": json.loads(tc.function.arguments)
+        }
+    except Exception as e:
+        print(f"[Judge Error] {e}")
+        return {"tool": "give_hint", "args": {"hint_level": 1, "student_mistake": "unclear"}}
+
+
+def generate_speech(instruction: str, student_name: str,
+                    lang: str, history: str) -> str:
+    """Generate Didi's spoken response for any action."""
+    system = _build_system(student_name, lang, history)
+    return _speak(system, instruction)
+
+
+# ============================================================
+# SPEECH BUILDERS — one per action type
+# ============================================================
+
+def build_hint_instruction(question_ctx: str, hint_level: int,
+                           student_input: str) -> str:
+    return (
+        f"Give a level {hint_level} hint.\n\n"
+        f"{question_ctx}\n\n"
+        f"Student said: \"{student_input}\"\n\n"
+        f"{'Give a conceptual nudge — point them in the right direction without revealing the answer.' if hint_level == 1 else 'Show them the first step of the solution. Still dont reveal the final answer.'}"
+    )
+
+
+def build_explain_instruction(question_ctx: str, next_question: str = "") -> str:
+    transition = ""
+    if next_question:
+        transition = f"\n\nAfter explaining, say 'Okay, let's try the next one' and read: {next_question}"
+    return (
+        f"Explain the full solution step by step. Be kind — they struggled.\n\n"
+        f"{question_ctx}"
+        f"{transition}"
+    )
+
+
+def build_encourage_instruction(question_ctx: str, student_input: str) -> str:
+    return (
+        f"Student doesn't know the answer. Encourage them to try.\n"
+        f"Break the problem into a smaller piece. Ask for just the first step.\n"
+        f"Don't repeat the full question — just ask one small thing.\n\n"
+        f"{question_ctx}\n\n"
+        f"Student said: \"{student_input}\""
+    )
+
+
+def build_praise_instruction(question_ctx: str, what_they_did: str,
+                              next_question: str = "") -> str:
+    transition = ""
+    if next_question:
+        transition = f"\n\nThen move to: {next_question}"
+    return (
+        f"Student got it right! Quick specific praise — {what_they_did}.\n"
+        f"Don't overdo it. One sentence of praise, then transition.\n\n"
+        f"{question_ctx}"
+        f"{transition}"
+    )
+
+
+def build_reask_instruction(question_text: str, after_hint: bool = False) -> str:
+    if after_hint:
+        return (
+            f"You gave a hint and the student acknowledged it. "
+            f"Now ask them to try answering. Be encouraging: "
+            f"'Good, now try it — {question_text}'"
+        )
+    return f"The student acknowledged but hasn't answered. Gently ask: {question_text}"
+
+
+def build_redirect_instruction(student_input: str, question_text: str,
+                                is_troll: bool = False) -> str:
+    if is_troll:
+        return (
+            f'Student said: "{student_input}" — they\'re joking around. '
+            f"Smile it off in ONE short sentence — 'Haha, focus yaar' or 'Arre chalo wapas' — "
+            f"then briefly re-read: {question_text}. Do NOT explain anything."
+        )
+    return (
+        f'Student said: "{student_input}" — off-topic. '
+        f"Redirect gently in ONE sentence, then re-read: {question_text}"
+    )
+
+
+def build_offer_exit_instruction(student_name: str) -> str:
+    return (
+        f"{student_name} keeps going off-topic. They might be bored. "
+        f"Say warmly: 'Lagta hai aaj mood nahi hai. Koi baat nahi, "
+        f"hum baad mein continue kar sakte hain. Ya ek aur try karte hain?' "
+        f"No guilt, no pressure."
+    )
+
+
+def build_language_switch_instruction(question_text: str) -> str:
+    return (
+        f"Student asked for English. Switch to English and re-read: {question_text}"
+    )
+
+
+def build_language_reject_instruction(language: str, question_text: str) -> str:
+    return (
+        f"Student asked to speak in {language}. You can't yet. "
+        f"Be warm: 'Sorry yaar, {language} mein abhi nahi bol sakti. "
+        f"Jaldi seekh loongi! For now English ya Hindi mein chalate hain.' "
+        f"Then re-read: {question_text}"
+    )
+
+
+def build_end_instruction(student_name: str, score: int,
+                           completed: int, duration: int, reason: str) -> str:
+    return (
+        f"Session over. {student_name} got {score}/{completed}. "
+        f"Took {duration} minutes. Reason: {reason}. "
+        f"Say bye naturally, 2 sentences max."
+    )
+
+
+def build_move_next_instruction(next_question: str) -> str:
+    return (
+        f"Student understood. Move on immediately. "
+        f"Say something brief like 'Okay, next one' — ONE short sentence — "
+        f"then read: {next_question}"
+    )
+
+
+# ============================================================
+# PRIVATE HELPERS
+# ============================================================
+
+def _build_system(student_name: str, lang: str, history: str) -> str:
+    if lang == "english":
+        lang_instruction = "The student asked for English only."
+        lang_strict = "STRICT ENGLISH ONLY. Do NOT use ANY Hindi words — no 'Chalo', no 'Dekho', no 'Haan', no 'Accha'. Pure English. Keep your warm tone."
+    else:
+        lang_instruction = "Natural Hindi-English mix. 'Haan', 'Accha', 'Dekho', 'Chalo', 'Koi baat nahi' come out naturally."
+        lang_strict = ""
+
+    return DIDI_PROMPT.format(
+        student_name=student_name,
+        lang_instruction=lang_instruction,
+        lang_strict=lang_strict,
+        history=history
+    )
+
+
+def _speak(system: str, prompt: str) -> str:
+    """Single LLM call for speech generation."""
+    try:
+        response = _get_client().chat.completions.create(
+            model=SPEECH_MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=400,
+            temperature=0.8
+        )
+        text = _clean(response.choices[0].message.content)
+
+        # Ensure complete sentences
+        if text and text[-1] not in '.?!।':
+            for i in range(len(text) - 1, -1, -1):
+                if text[i] in '.?!।':
+                    text = text[:i + 1]
+                    break
+        return text
+
+    except Exception as e:
+        print(f"[Speech Error] {e}")
+        return "Ek second. Chalo phir se dekhte hain."
+
+
+def _clean(text: str) -> str:
+    """Clean LLM output for TTS."""
+    text = text.strip()
+    for char in ['**', '*', '##', '#', '`', '•']:
+        text = text.replace(char, '')
+    text = text.replace('- ', '')
+
+    # Remove LaTeX
+    text = re.sub(r'\\\(.*?\\\)', '', text)
+    text = re.sub(r'\\\[.*?\\\]', '', text)
+
+    # Fractions → TTS-friendly
+    text = re.sub(r'-(\d+)/(\d+)', r'minus \1 over \2', text)
+    text = re.sub(r'(\d+)/(\d+)', r'\1 over 2', text)
+
+    # Remove wrapping quotes
+    if len(text) > 2 and text[0] == '"' and text[-1] == '"':
+        text = text[1:-1]
+    if len(text) > 2 and text[0] == "'" and text[-1] == "'":
+        text = text[1:-1]
+
+    # Remove Didi: prefix
+    for prefix in ["Didi:", "didi:", "DIDI:", "Teacher:", "Didi -", "Didi —"]:
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+    return text
