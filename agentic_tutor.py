@@ -162,7 +162,15 @@ class AgenticTutor:
         lang = self.session["language"]
 
         if action == Action.JUDGE_AND_RESPOND:
-            judge_ctx = q_ctx + f'\n\nStudent answered: "{student_input}"\nCheck against answer key. Spoken math: "2 by 3" = 2/3, "minus 5" = -5, "seven" = 7.'
+            judge_ctx = q_ctx + f'''
+
+Student answered: "{student_input}"
+
+INSTRUCTION: Compare student answer to correct answer above.
+Spoken math: "minus 1 by 7" = -1/7, "2 by 3" = 2/3, "negative one seventh" = -1/7
+
+IF CORRECT → use praise_and_continue
+IF WRONG → use ask_what_they_did (first time) or give_hint (after asking)'''
             result = voice.judge_answer(judge_ctx, q_ctx, name, lang, history)
             tool = result["tool"]
             args = result["args"]
