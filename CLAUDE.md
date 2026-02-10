@@ -15,36 +15,70 @@
 ## Architecture
 
 ```
-Brain = FSM (flow control) + Evaluator (deterministic)
-Teach First = Deterministic concept lesson before first question per skill
-Conversational Mode = GPT drives tutoring with full context (Feb 2026)
-TutorIntent = Teaching micro-behaviors, off-topic detection
+NEW (Feb 7, 2026): Agentic Tutor with Tool-Based Reasoning
+OLD (Deprecated): FSM + Teacher Policy + TutorIntent
 ```
 
-**Conversational Mode (Current - February 2026):**
-- GPT gets full context: question, answer, correctness, attempt count, frustration signals
-- GPT generates natural responses like a real teacher
-- Minimal guardrails: max 30 words, banned phrases removed
-- Evaluator stays deterministic (math correctness)
+**Agentic Architecture (Current - February 7, 2026):**
+```
+Student Input → Python Evaluates → Agent Picks Tool → Guardrails Check → Execute Tool → Speech
+```
 
-**Previous 2-Pass Approach (Deprecated):**
-1. ~~Pass 1 (Planner): Teacher Policy decides teaching move~~
-2. ~~Pass 2 (Speaker): GPT polishes predetermined response~~
+1. **Python evaluates answer** (deterministic) - `evaluator.py`
+2. **Agent reasons about teaching move** (LLM with tools) - picks from 6 tools
+3. **Guardrails override if needed** (Python) - `guardrails.py`
+4. **Tool executes and generates speech** (LLM)
 
-**Single Entry Point:** `web_server.py` is the only server file. No gRPC, no orchestrator.
+**Key Principle: "Agent proposes, Python disposes"**
+- LLM decides WHAT to do (teaching move)
+- Python decides IF it's allowed (guardrails)
+- LLM decides HOW to say it (speech generation)
+
+**6 Teaching Tools:**
+| Tool | When Used |
+|------|-----------|
+| `give_hint` | Wrong answer - give progressive hints |
+| `praise_and_continue` | Correct answer - celebrate and next question |
+| `explain_solution` | After max hints - full walkthrough |
+| `encourage_attempt` | Student says "I don't know" |
+| `ask_what_they_did` | Wrong answer - ask before correcting (key teacher behavior!) |
+| `end_session` | Student wants to stop |
+
+**Why This Works:**
+- Feels like a real teacher because agent can choose `ask_what_they_did` before correcting
+- Guardrails prevent bad moves (can't explain before 2 hints, can't skip hint levels)
+- Specificity Rule enforced: every response references student's actual answer
+
+**Entry Points:**
+- `server.py` - New clean agentic server (recommended)
+- `web_server.py` - Old FSM-based server (deprecated but functional)
 
 ## Key Files
 
+### New Agentic Architecture (February 7, 2026)
 | File | Purpose |
 |------|---------|
-| `web_server.py` | Main FastAPI app - FSM, API endpoints, TTS/STT integration |
-| `tutor_intent.py` | Natural language generation, teaching intents, voice pacing |
-| `teacher_policy.py` | Error diagnosis, teaching moves, planner (ChatGPT architecture) |
-| `questions.py` | Question bank (ALL_CHAPTERS, CHAPTER_NAMES, SKILL_LESSONS) |
+| `server.py` | **NEW** Clean FastAPI server using AgenticTutor |
+| `agentic_tutor.py` | **NEW** Main tutor brain - tool selection, execution, speech generation |
+| `tutor_tools.py` | **NEW** 6 teaching tools as OpenAI function definitions |
+| `tutor_prompts.py` | **NEW** System prompt + speech generation prompts |
+| `guardrails.py` | **NEW** Python rules that override agent decisions |
+| `context_builder.py` | **NEW** Builds context packet for agent (includes eval result) |
 | `evaluator.py` | Answer evaluation - handles fractions, words, units, spoken variants |
-| `demo_tutor.py` | Single-concept demo showing human-like teaching behavior |
-| `subject_pack.py` | Subject pack management |
-| `web/index.html` | Student learning interface |
+| `questions.py` | Question bank (ALL_CHAPTERS, CHAPTER_NAMES, SKILL_LESSONS) |
+| `web/index.html` | Student learning interface (updated for new API) |
+
+### Legacy Files (Deprecated but functional)
+| File | Purpose |
+|------|---------|
+| `web_server.py` | Old FSM-based server with all endpoints |
+| `tutor_intent.py` | Old NLG layer, teaching intents |
+| `teacher_policy.py` | Old error diagnosis, teaching moves |
+| `demo_tutor.py` | Single-concept demo |
+
+### Other Files
+| File | Purpose |
+|------|---------|
 | `static/` | Static assets |
 | `.claude/settings.json` | Claude Code hooks configuration |
 | `.claude/hooks/` | Auto-review hook scripts |
@@ -116,9 +150,25 @@ cp .env.example .env
 # Add: OPENAI_API_KEY=sk-...
 # Add: GOOGLE_APPLICATION_CREDENTIALS_JSON=... (for Google TTS)
 
-# Run server
-python web_server.py
+# Run NEW agentic server (recommended)
+python server.py
 # Opens at http://localhost:8000
+
+# Or run OLD FSM server (legacy)
+python web_server.py
+```
+
+### Quick Test (Agentic Server)
+```bash
+# Start session
+curl -X POST http://localhost:8000/api/session/start \
+  -H "Content-Type: application/json" \
+  -d '{"student_name": "Test", "chapter": "rational_numbers"}'
+
+# Submit answer
+curl -X POST http://localhost:8000/api/session/input \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "YOUR_ID", "text": "minus 1 by 7"}'
 ```
 
 ## Environment Variables
@@ -131,31 +181,67 @@ python web_server.py
 
 ## API Endpoints
 
-### Session APIs
+### New Agentic API (server.py) - Simplified
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/chapters` | GET | List available chapters |
+| `/api/session/start` | POST | Start session (returns greeting + first question) |
+| `/api/session/input` | POST | Process any student input (answers, stop requests, etc.) |
+| `/api/session/{id}/state` | GET | Get current session state |
+| `/api/text-to-speech` | POST | Convert text to speech |
+| `/api/speech-to-text` | POST | Convert speech to text with confidence |
+| `/health` | GET | Health check |
+
+**Request/Response Examples:**
+
+Start Session:
+```json
+// POST /api/session/start
+{"student_name": "Rahul", "chapter": "rational_numbers"}
+
+// Response
+{
+  "session_id": "abc123",
+  "speech": "Hi Rahul! Let's practice Ch 1. Here's your first question: What is -3/7 + 2/7?",
+  "state": {"score": 0, "questions_completed": 0, ...}
+}
+```
+
+Process Input:
+```json
+// POST /api/session/input
+{"session_id": "abc123", "text": "minus 1 by 7"}
+
+// Response (correct answer)
+{
+  "speech": "Bohot accha! Tumne -1/7 sahi nikala. Next question: ...",
+  "state": {"score": 1, "questions_completed": 1, ...}
+}
+
+// Response (wrong answer - asks before correcting!)
+{
+  "speech": "Tell me, what did you do to get 5?",
+  "state": {"attempt_count": 1, ...}
+}
+```
+
+### Legacy API (web_server.py) - Full Featured
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/api/session/start` | POST | Start new session |
 | `/api/session/chapter` | POST | Select chapter |
 | `/api/session/question` | POST | Get next question |
 | `/api/session/answer` | POST | Submit answer |
-| `/api/session/end` | POST | End session with performance summary |
-| `/api/session/{id}/attempts` | GET | Get all attempts for session |
-| `/api/session/{id}/performance` | GET | Topic-level performance breakdown |
-
-### Parent Dashboard APIs
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/dashboard/{student_id}` | GET | Full dashboard data |
-| `/api/dashboard/{student_id}/voice-report` | POST | Dashboard with TTS audio |
-| `/api/dashboard/{student_id}/whatsapp-summary` | GET | WhatsApp-ready text summary |
-| `/api/dashboard/{student_id}/whatsapp-summary/voice` | POST | WhatsApp summary with TTS |
-| `/api/student/{student_id}/weak-topics` | GET | Topics needing practice |
+| `/api/session/end` | POST | End session |
+| `/api/session/{id}/attempts` | GET | Get all attempts |
+| `/api/session/{id}/performance` | GET | Topic-level performance |
+| `/api/dashboard/{student_id}` | GET | Parent dashboard |
+| `/api/dashboard/{student_id}/whatsapp-summary` | GET | WhatsApp summary |
 
 ### Voice APIs
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/text-to-speech` | POST | Convert text to speech |
+| `/api/text-to-speech` | POST | Convert text to speech (Google TTS + OpenAI fallback) |
 | `/api/speech-to-text` | POST | Convert speech to text with confidence |
 | `/health` | GET | Health check |
 
@@ -346,12 +432,43 @@ Log events include:
 - Evaluator handles spoken number variants ("seven" = 7, "x equals 7" = 7)
 - Sessions persist across server restarts (SQLite)
 
-## Current State (February 6, 2026)
+## Current State (February 7, 2026)
+
+### Agentic Tutor Implementation - NEW
+
+**What Changed:** Complete rebuild using tool-based agentic architecture.
+
+**Why:** Previous approaches (FSM + Teacher Policy, Full Conversational Mode) still felt like a chatbot. The tutor would immediately correct wrong answers instead of asking "what did you do?" like a real teacher.
+
+**New Architecture:**
+```
+server.py → AgenticTutor → 6 Tools → Guardrails → Speech Generation
+```
+
+**Key Files Created:**
+- `agentic_tutor.py` - Main tutor brain with tool execution
+- `tutor_tools.py` - 6 teaching tools as OpenAI function definitions
+- `tutor_prompts.py` - System prompt + speech prompts per tool
+- `guardrails.py` - Python rules that override bad agent decisions
+- `context_builder.py` - Builds context with eval result for agent
+- `server.py` - Clean FastAPI server using AgenticTutor
+
+**Teacher Behavior Verified:**
+```
+Wrong answer → "Tell me, what did you do to get 5?"  (asks before correcting!)
+Correct answer → "Bohot accha! Tumne -1/7 sahi nikala." (references their work)
+IDK → "Koi baat nahi... pehla step socho" (encourages without giving answer)
+```
+
+**ChatGPT's Critique (Addressed):**
+- ChatGPT said "don't skip FSM, go hybrid"
+- My response: I kept Python control (guardrails.py enforces rules, evaluator.py is deterministic)
+- This IS hybrid: agent proposes, Python disposes
 
 ### Deployment Status
 - **Railway**: Auto-deploys from GitHub `main` branch
 - **Database**: Postgres (production), SQLite (development)
-- **Latest Deploy**: Full Conversational Mode - GPT drives tutoring naturally
+- **Latest Deploy**: Agentic Tutor with tool-based reasoning
 
 ### Completed
 - Bug fixes (7 bugs fixed)
@@ -812,10 +929,22 @@ After:  "Not quite. What do you find?"
 - `tutor_intent.py` - Updated to use teacher policy (2-pass approach)
 - `web_server.py` - Passes session_id for move tracking
 
+### Completed Items (February 7, 2026)
+| Item | Type | Implementation |
+|------|------|----------------|
+| **Agentic Tutor** | **Architecture** | **Complete rebuild with tool-based reasoning. Agent picks from 6 tools, guardrails.py enforces rules. Key: `ask_what_they_did` tool asks before correcting.** |
+| **server.py** | **New File** | **Clean FastAPI server with simplified API: `/api/session/start`, `/api/session/input`** |
+| **agentic_tutor.py** | **New File** | **AgenticTutor class - evaluates, picks tool, executes, generates speech** |
+| **tutor_tools.py** | **New File** | **6 teaching tools as OpenAI function definitions** |
+| **tutor_prompts.py** | **New File** | **SYSTEM_PROMPT + SPEECH_PROMPTS for each tool** |
+| **guardrails.py** | **New File** | **`check_guardrails()` - Python overrides agent decisions** |
+| **context_builder.py** | **New File** | **`build_context()` - includes eval result so agent doesn't decide correctness** |
+| **Frontend Update** | **UI** | **Simplified to use new API, single session start call, voice features preserved** |
+
 ### Completed Items (February 6, 2026)
 | Item | Type | Implementation |
 |------|------|----------------|
-| **Full Conversational Mode** | **Architecture** | **GPT drives tutoring with full context. No predetermined moves. System prompt from user's tutoring script. `generate_conversational_response()` in tutor_intent.py.** |
+| **Full Conversational Mode** | **Architecture** | **GPT drives tutoring with full context. No predetermined moves. System prompt from user's tutoring script. `generate_conversational_response()` in tutor_intent.py. (SUPERSEDED by Agentic Tutor)** |
 | **Spam/Gibberish Detection** | **Feature** | **Detects YouTube phrases ("like and subscribe"), song lyrics, random nonsense. Short natural redirects: "Hmm?" instead of templated messages.** |
 | **Stop Phrase Expansion** | **Feature** | **Added "the end", "that's it", "can we stop now" to stop_session detection.** |
 | **Teach First Phase** | **Architecture** | **Tutor explains concept before first question of each skill. Deterministic lessons (no GPT) from `SKILL_LESSONS` dict (31 entries). One lesson per skill per session. Frontend chains lesson TTS → question TTS.** |
@@ -854,6 +983,70 @@ After:  "Not quite. What do you find?"
 | **Frustration Patterns** | **Feature** | **Regex detection for ". .", "...", punctuation-only, hesitation sounds** |
 | **Repetition Prevention** | **Feature** | **Help explanations vary: 1st=steps, 2nd=reframe, 3rd=simple, 4th=reveal** |
 | **Terminology Explanations** | **Feature** | **"what is p/q" → explains specific term, not whole solution** |
+
+---
+
+## Session Summary (February 7, 2026)
+
+### Agentic Tutor - Complete Rebuild
+
+**User's Core Problem:** Tutor didn't feel like a real teacher. Even with GPT driving, responses felt templated and chatbot-like.
+
+**Solution:** Built new agentic architecture with tool-based reasoning.
+
+**Key Insight:** A real teacher asks "Tell me, what did you do?" BEFORE correcting. Previous implementations jumped straight to correction.
+
+### Files Created
+| File | Purpose |
+|------|---------|
+| `server.py` | Clean FastAPI server with simplified API |
+| `agentic_tutor.py` | AgenticTutor class - the "teacher brain" |
+| `tutor_tools.py` | 6 teaching tools as OpenAI function definitions |
+| `tutor_prompts.py` | SYSTEM_PROMPT + SPEECH_PROMPTS per tool |
+| `guardrails.py` | `check_guardrails()` - Python overrides agent decisions |
+| `context_builder.py` | `build_context()` - includes eval result so agent doesn't decide correctness |
+
+### Architecture
+```
+1. Python evaluates answer (deterministic)
+2. Agent picks tool from 6 options (LLM with tools)
+3. Guardrails check and override if needed (Python)
+4. Tool executes and generates speech (LLM)
+```
+
+### 6 Teaching Tools
+- `give_hint` - Progressive hints (level 1, 2, 3)
+- `praise_and_continue` - Correct answer, move to next
+- `explain_solution` - Full walkthrough after max hints
+- `encourage_attempt` - Student says "I don't know"
+- `ask_what_they_did` - Ask before correcting (KEY!)
+- `end_session` - Student wants to stop
+
+### Guardrails (Python Enforcement)
+- Can't explain before 2 hints
+- Can't skip hint levels
+- Session time limit (30 min)
+- Max attempts per question (5)
+- Can't praise wrong answer
+
+### Frontend Updated
+- Simplified from multi-step to single API calls
+- `/api/session/start` returns greeting + first question
+- `/api/session/input` handles all student input
+- Voice features preserved (Whisper STT, Google TTS)
+
+### ChatGPT Critique Response
+ChatGPT said "don't rebuild, go hybrid." But:
+- I DID keep Python control (guardrails + evaluator are deterministic)
+- This IS hybrid: agent proposes teaching move, Python can override
+- FSM is gone, but enforcement is stronger
+
+### Verified Teacher Behavior
+```
+Correct: "Bohot accha! Tumne -1/7 sahi nikala."
+Wrong:   "Tell me, what did you do to get 5?"  ← KEY!
+IDK:     "Koi baat nahi... pehla step socho"
+```
 
 ---
 

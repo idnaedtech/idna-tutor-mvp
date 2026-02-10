@@ -163,6 +163,36 @@
             border-color: var(--accent);
         }
 
+        .name-input {
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 16px;
+        }
+
+        .name-input label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .name-input input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+        }
+
+        .name-input input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
         .btn-start {
             width: 100%;
             max-width: 400px;
@@ -232,34 +262,13 @@
             margin: 15px 0;
         }
 
-        .message-content {
-            /* Clean, no boxes */
-        }
-
-        .message-content.question {
-            font-size: 18px;
-            color: var(--text-primary);
-            margin: 10px 0;
-        }
-
         .message-content.correct {
             color: var(--success);
         }
 
-        .message-content.incorrect {
-            color: var(--text-secondary);
-        }
-
         .message-content.hint {
-            border: 1px solid var(--warning);
-        }
-
-        .message-label {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 6px;
-            opacity: 0.7;
+            border-left: 2px solid var(--warning);
+            padding-left: 12px;
         }
 
         /* Typing Indicator */
@@ -420,7 +429,6 @@
             color: var(--warning);
         }
 
-        /* Phase indicator dot */
         .phase-dot {
             width: 8px;
             height: 8px;
@@ -489,10 +497,6 @@
                 padding: 16px;
             }
 
-            .message-content {
-                max-width: 85%;
-            }
-
             .input-area {
                 padding: 12px 16px;
             }
@@ -532,7 +536,12 @@
     <div class="welcome-screen" id="welcome-screen">
         <div class="welcome-icon">📚</div>
         <h1 class="welcome-title">Ready to Learn?</h1>
-        <p class="welcome-subtitle">Select a chapter to start practicing</p>
+        <p class="welcome-subtitle">Enter your name and pick a chapter</p>
+
+        <div class="name-input">
+            <label for="name-field">Your name</label>
+            <input type="text" id="name-field" placeholder="Enter your name..." value="Student">
+        </div>
 
         <div class="chapter-select">
             <label for="chapter-dropdown">Choose a chapter</label>
@@ -574,9 +583,7 @@
     <script>
         // State
         let sessionId = null;
-        let currentChapter = null;
         let isListening = false;
-        let recognition = null;
         let currentAudio = null;
 
         // Elements
@@ -585,6 +592,7 @@
         const inputArea = document.getElementById('input-area');
         const messages = document.getElementById('messages');
         const chapterDropdown = document.getElementById('chapter-dropdown');
+        const nameField = document.getElementById('name-field');
         const startBtn = document.getElementById('start-btn');
         const answerInput = document.getElementById('answer-input');
         const sendBtn = document.getElementById('send-btn');
@@ -595,7 +603,7 @@
         const scoreEl = document.getElementById('score');
         const totalEl = document.getElementById('total');
 
-        // API
+        // API helper
         async function api(endpoint, method = 'GET', body = null) {
             const options = {
                 method,
@@ -604,7 +612,6 @@
             if (body) options.body = JSON.stringify(body);
             const res = await fetch(endpoint, options);
             if (!res.ok) {
-                // Handle both JSON and plain text error responses
                 const contentType = res.headers.get('content-type');
                 if (contentType && contentType.includes('application/json')) {
                     const errorData = await res.json();
@@ -617,89 +624,16 @@
             return res.json();
         }
 
-        // Add message - clean and simple, no boxes or avatars
-        function addMessage(content, type = 'tutor', extraClass = '', stream = false) {
+        // Add message to chat
+        function addMessage(content, type = 'tutor', extraClass = '') {
             const msg = document.createElement('div');
             msg.className = `message ${type} ${extraClass}`;
-
-            if (stream && type === 'tutor') {
-                messages.appendChild(msg);
-                streamText(msg, content);
-            } else {
-                msg.textContent = content;
-                messages.appendChild(msg);
-                requestAnimationFrame(() => {
-                    messages.scrollTop = messages.scrollHeight;
-                });
-            }
-
-            return msg;
-        }
-
-        // Add message - for questions, just show the content naturally
-        function addLabeledMessage(label, content, type = 'tutor', extraClass = '', stream = false) {
-            // Skip labels, just show content naturally
-            return addMessage(content, type, extraClass, stream);
-        }
-
-        // Streaming text effect - reveals text character by character
-        function streamText(element, text, speed = 20) {
-            let index = 0;
-            element.textContent = '';
-
-            function scrollToBottom() {
-                requestAnimationFrame(() => {
-                    messages.scrollTop = messages.scrollHeight;
-                });
-            }
-
-            function addChar() {
-                if (index < text.length) {
-                    element.textContent += text[index];
-                    index++;
-                    scrollToBottom();
-                    setTimeout(addChar, speed);
-                }
-            }
-
-            addChar();
-        }
-
-        // Display steps line by line (for explanations)
-        function displayStepByStep(element, text, lineDelay = 800) {
-            // Split by sentences or line breaks
-            const lines = text.split(/(?<=[.!?])\s+|[\n]+/).filter(line => line.trim());
-            element.innerHTML = '';
-            let lineIndex = 0;
-
-            function showNextLine() {
-                if (lineIndex < lines.length) {
-                    const lineDiv = document.createElement('div');
-                    lineDiv.style.marginBottom = '8px';
-                    lineDiv.style.opacity = '0';
-                    lineDiv.style.transition = 'opacity 0.3s';
-                    lineDiv.textContent = lines[lineIndex];
-                    element.appendChild(lineDiv);
-
-                    // Fade in
-                    requestAnimationFrame(() => {
-                        lineDiv.style.opacity = '1';
-                        messages.scrollTop = messages.scrollHeight;
-                    });
-
-                    lineIndex++;
-                    setTimeout(showNextLine, lineDelay);
-                }
-            }
-
-            showNextLine();
-        }
-
-        // Ensure scroll to bottom after any message
-        function scrollToBottom() {
+            msg.textContent = content;
+            messages.appendChild(msg);
             requestAnimationFrame(() => {
                 messages.scrollTop = messages.scrollHeight;
             });
+            return msg;
         }
 
         function showTyping() {
@@ -711,7 +645,6 @@
             typingIndicator.classList.remove('show');
         }
 
-        // UI Phase states: idle, listening, speaking, processing
         let currentPhase = 'idle';
 
         function setStatus(text, type = '') {
@@ -723,7 +656,6 @@
             currentPhase = type || 'idle';
         }
 
-        // Barge-in: Stop TTS immediately when student wants to speak
         function stopTTS() {
             if (currentAudio) {
                 currentAudio.pause();
@@ -735,9 +667,11 @@
             }
         }
 
-        function updateScore(score, total) {
-            scoreEl.textContent = score;
-            totalEl.textContent = total;
+        function updateScore(state) {
+            if (state) {
+                scoreEl.textContent = state.score || 0;
+                totalEl.textContent = state.questions_completed || 0;
+            }
         }
 
         // Load chapters
@@ -756,13 +690,20 @@
             }
         }
 
-        // Start session
+        // Start session - single API call now!
         async function startSession() {
             showTyping();
             try {
-                // Step 1: Start session and get personalized greeting
-                const startData = await api('/api/session/start', 'POST');
-                sessionId = startData.session_id;
+                const studentName = nameField.value.trim() || 'Student';
+                const chapter = chapterDropdown.value;
+
+                // Single API call starts session and returns greeting + first question
+                const data = await api('/api/session/start', 'POST', {
+                    student_name: studentName,
+                    chapter: chapter
+                });
+
+                sessionId = data.session_id;
 
                 // Switch to chat view
                 welcomeScreen.classList.add('hidden');
@@ -771,73 +712,22 @@
                 endBtn.style.display = 'block';
                 hideTyping();
 
-                // Step 2: Show and speak the welcome message
-                addMessage(startData.message, 'tutor', '', false);
+                // Show the greeting + question
+                addMessage(data.speech, 'tutor');
+                updateScore(data.state);
 
-                // Step 3: Select chapter and get intro
-                currentChapter = chapterDropdown.value;
-                const chapterData = await api('/api/session/chapter', 'POST', {
-                    session_id: sessionId,
-                    chapter: currentChapter
-                });
+                // Speak it
+                speak(data.speech, { autoListen: true });
 
-                // Step 4: Show chapter intro
-                addMessage(chapterData.message, 'tutor', '', false);
-
-                // Speak greeting first (faster), then chapter intro, then get question
-                speak(startData.message, null, {
-                    onComplete: () => {
-                        speak(chapterData.message, null, {
-                            onComplete: () => getNextQuestion()
-                        });
-                    }
-                });
-
-            } catch (e) {
-                hideTyping();
-                alert('Error: ' + e.message);
-            }
-        }
-
-        // Get next question
-        async function getNextQuestion() {
-            showTyping();
-            try {
-                const data = await api('/api/session/question', 'POST', {
-                    session_id: sessionId,
-                    chapter: currentChapter
-                });
-
-                hideTyping();
-
-                if (data.completed) {
-                    addMessage(data.message, 'tutor', '', false);
-                    speak(data.message, null, {});
-                    inputArea.style.display = 'none';
-                    return;
-                }
-
-                // "Teach First" — speak lesson before question (first encounter only)
-                if (data.lesson) {
-                    addMessage(data.lesson, 'tutor', '', false);
-                    speak(data.lesson, data.lesson_ssml, {
-                        onComplete: () => {
-                            addMessage(data.question_text, 'tutor', 'question', false);
-                            speak(data.intro, data.intro_ssml, { autoListen: true });
-                        }
-                    });
-                } else {
-                    addMessage(data.question_text, 'tutor', 'question', false);
-                    speak(data.intro, data.intro_ssml, { autoListen: true });
-                }
                 answerInput.focus();
+
             } catch (e) {
                 hideTyping();
                 alert('Error: ' + e.message);
             }
         }
 
-        // Submit answer
+        // Submit answer - now uses /api/session/input
         async function submitAnswer() {
             const answer = answerInput.value.trim();
             if (!answer) return;
@@ -847,41 +737,27 @@
             showTyping();
 
             try {
-                const data = await api('/api/session/answer', 'POST', {
+                const data = await api('/api/session/input', 'POST', {
                     session_id: sessionId,
-                    answer: answer
+                    text: answer
                 });
 
                 hideTyping();
-                updateScore(data.score, data.total);
+                updateScore(data.state);
 
-                // Handle session end request (e.g., "let's stop")
-                if (data.completed) {
-                    addMessage(data.message, 'tutor', '', false);
-                    speak(data.message, data.ssml, {});
+                // Check if session ended
+                if (data.state && data.state.session_ended) {
+                    addMessage(data.speech, 'tutor');
+                    speak(data.speech, {});
                     inputArea.style.display = 'none';
                     endBtn.style.display = 'none';
                     return;
                 }
 
-                if (data.correct) {
-                    // Show text, then speak, then move to next question AFTER audio finishes
-                    addMessage(data.message, 'tutor', 'correct', false);
-                    speak(data.message, data.ssml, {
-                        onComplete: () => getNextQuestion()
-                    });
-                } else if (data.show_answer) {
-                    // Explanation - show steps, speak, then move on AFTER audio finishes
-                    const msgEl = addMessage('', 'tutor', 'incorrect', false);
-                    displayStepByStep(msgEl, data.message, 800);
-                    speak(data.message, data.ssml, {
-                        onComplete: () => getNextQuestion()
-                    });
-                } else {
-                    // Hint - show text, speak, then auto-listen for next attempt
-                    addMessage(data.message, 'tutor', 'hint', false);
-                    speak(data.message, data.ssml, { autoListen: true });
-                }
+                // Show tutor response
+                addMessage(data.speech, 'tutor');
+                speak(data.speech, { autoListen: true });
+
             } catch (e) {
                 hideTyping();
                 alert('Error: ' + e.message);
@@ -892,36 +768,21 @@
         async function endSession() {
             if (!confirm('End this session?')) return;
 
-            try {
-                const data = await api('/api/session/end', 'POST', {
-                    session_id: sessionId,
-                    chapter: currentChapter
-                });
-
-                addMessage(`Session complete! You got ${data.score} out of ${data.total} correct (${data.accuracy}%)`);
-                speak(data.message, data.ssml, {});
-                inputArea.style.display = 'none';
-                endBtn.style.display = 'none';
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
+            // Just say "bye" to the tutor
+            answerInput.value = 'bye';
+            await submitAnswer();
         }
 
-        // Text to Speech - with optional callbacks
-        // onComplete: function to call when audio finishes
-        // autoListen: start recording after audio ends
-        async function speak(text, ssml = null, options = {}) {
+        // Text to Speech
+        async function speak(text, options = {}) {
             const { onComplete, autoListen } = options;
-            stopTTS(); // Stop any currently playing audio
+            stopTTS();
 
             try {
                 setStatus('Speaking...', 'speaking');
-                const payload = { text, voice: 'nova' };
-                if (ssml) payload.ssml = ssml;
-                const data = await api('/api/text-to-speech', 'POST', payload);
+                const data = await api('/api/text-to-speech', 'POST', { text });
 
                 if (!data.audio) {
-                    console.error('TTS returned no audio');
                     throw new Error('No audio data');
                 }
 
@@ -937,20 +798,15 @@
                     setStatus('');
                     currentAudio = null;
 
-                    // Call completion callback if provided
                     if (onComplete) {
-                        setTimeout(onComplete, 300); // Small pause before next action
+                        setTimeout(onComplete, 300);
                     }
 
-                    // Auto-start listening after tutor finishes speaking
                     if (autoListen && !isListening) {
-                        setTimeout(() => {
-                            startRecording();
-                        }, 300);
+                        setTimeout(() => startRecording(), 300);
                     }
                 };
 
-                // Try to play with user gesture requirement handling
                 const playPromise = currentAudio.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
@@ -962,24 +818,19 @@
             } catch (e) {
                 console.error('TTS error:', e);
                 setStatus('');
-                // Still call onComplete even if TTS fails
-                if (onComplete) {
-                    onComplete();
-                }
+                if (onComplete) onComplete();
             }
         }
 
-        // Voice Recognition using Whisper API (much more accurate for math)
+        // Voice Recognition
         let mediaRecorder = null;
         let audioChunks = [];
-
         let recordingTimeout = null;
         let silenceTimeout = null;
         let audioContext = null;
         let analyser = null;
 
         async function startRecording() {
-            // BARGE-IN: Stop tutor audio immediately when student starts speaking
             stopTTS();
 
             try {
@@ -987,7 +838,6 @@
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
 
-                // Set up silence detection
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
                 analyser = audioContext.createAnalyser();
@@ -995,8 +845,8 @@
                 source.connect(analyser);
 
                 let silenceStart = null;
-                const silenceThreshold = 0.01; // Adjust sensitivity
-                const silenceDuration = 1500; // Stop after 1.5s of silence
+                const silenceThreshold = 0.01;
+                const silenceDuration = 1500;
 
                 function checkSilence() {
                     if (!isListening) return;
@@ -1008,12 +858,11 @@
                     if (average < silenceThreshold) {
                         if (!silenceStart) silenceStart = Date.now();
                         else if (Date.now() - silenceStart > silenceDuration) {
-                            // Silence detected for long enough - auto stop
                             stopRecording();
                             return;
                         }
                     } else {
-                        silenceStart = null; // Reset on sound
+                        silenceStart = null;
                     }
 
                     silenceTimeout = requestAnimationFrame(checkSilence);
@@ -1024,7 +873,6 @@
                 };
 
                 mediaRecorder.onstop = async () => {
-                    // Clean up
                     stream.getTracks().forEach(track => track.stop());
                     if (audioContext) {
                         audioContext.close();
@@ -1039,7 +887,6 @@
                         recordingTimeout = null;
                     }
 
-                    // Create audio blob and send to Whisper API
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                     await sendToWhisper(audioBlob);
                 };
@@ -1048,12 +895,10 @@
                 isListening = true;
                 voiceBtn.classList.add('recording');
                 voiceBtn.textContent = '⏹';
-                setStatus('Listening... (auto-stops after silence)', 'listening');
+                setStatus('Listening...', 'listening');
 
-                // Start silence detection
                 checkSilence();
 
-                // Max recording time (8 seconds) as fallback
                 recordingTimeout = setTimeout(() => {
                     if (isListening) stopRecording();
                 }, 8000);
@@ -1093,7 +938,6 @@
 
                 if (data.text && data.text.trim()) {
                     answerInput.value = data.text.trim();
-                    // Auto-submit after successful transcription
                     setTimeout(() => submitAnswer(), 300);
                 } else {
                     setStatus('Could not understand. Try again or type.', 'error');
@@ -1109,14 +953,8 @@
                 stopRecording();
             } else {
                 answerInput.value = '';
-                startRecording(); // This calls stopTTS() for barge-in
+                startRecording();
             }
-        }
-
-        // Legacy browser speech recognition (fallback, less accurate)
-        function initSpeechRecognition() {
-            // Now using Whisper API instead - this is just a stub
-            return null;
         }
 
         // Event listeners
@@ -1133,25 +971,21 @@
             if (e.key === 'Enter') submitAnswer();
         });
 
-        // Keyboard shortcuts for barge-in
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Escape stops TTS (barge-in)
             if (e.key === 'Escape') {
                 stopTTS();
                 if (isListening) stopRecording();
             }
-            // Spacebar in chat area starts/stops voice (when not typing)
             if (e.key === ' ' && document.activeElement !== answerInput) {
                 e.preventDefault();
                 toggleVoice();
             }
         });
 
-        // Clicking messages area while tutor speaks = barge-in + start listening
         messages.addEventListener('click', () => {
             if (currentPhase === 'speaking' && currentAudio) {
                 stopTTS();
-                // Optionally start listening after barge-in
                 setTimeout(() => startRecording(), 100);
             }
         });
