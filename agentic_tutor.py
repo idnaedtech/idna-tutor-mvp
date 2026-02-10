@@ -428,9 +428,14 @@ class AgenticTutor:
 
     def _is_stop_request(self, text: str) -> bool:
         """Check if student wants to stop."""
+        # Check IDK first - if student is asking for help, don't stop
+        if self._is_idk(text):
+            return False
+
         stop_phrases = [
-            "stop", "bye", "quit", "end", "done", "that's it", "the end",
-            "i want to stop", "can we stop", "let's stop", "enough"
+            "let's stop", "i want to stop", "can we stop", "stop now",
+            "bye", "goodbye", "quit", "i'm done", "im done", "that's it",
+            "the end", "enough", "end session"
         ]
         text_lower = text.lower()
         return any(p in text_lower for p in stop_phrases)
