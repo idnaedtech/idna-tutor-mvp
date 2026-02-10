@@ -175,15 +175,12 @@ def build_encourage_instruction(question_ctx: str, student_input: str) -> str:
 
 def build_praise_instruction(question_ctx: str, what_they_did: str,
                               next_question: str = "") -> str:
-    transition = ""
     if next_question:
-        transition = f"\n\nThen say 'Chal agla' and read: {next_question}"
-    return (
-        f"Correct! Say 'Sahi hai' or 'Haan bilkul' — ONE sentence max.\n"
-        f"Example: 'Sahi hai, minus 1 over 7. Chal agla.'\n\n"
-        f"{question_ctx}"
-        f"{transition}"
-    )
+        return (
+            f"CORRECT! Say ONLY: 'Sahi hai! Chal agla.' Then read: {next_question}\n"
+            f"DO NOT explain anything. Just praise and move on."
+        )
+    return "CORRECT! Say ONLY: 'Sahi hai!' Nothing else."
 
 
 def build_reask_instruction(question_text: str, after_hint: bool = False) -> str:
