@@ -50,8 +50,8 @@ Student Input → Python Evaluates → Agent Picks Tool → Guardrails Check →
 - Specificity Rule enforced: every response references student's actual answer
 
 **Entry Points:**
-- `server.py` - New clean agentic server (recommended)
-- `web_server.py` - Old FSM-based server (deprecated but functional)
+- `server.py` - **PRODUCTION** - Agentic server with tool-based reasoning
+- `web_server.py` - Legacy FSM-based server (deprecated)
 
 ## Key Files
 
@@ -465,10 +465,19 @@ IDK → "Koi baat nahi... pehla step socho" (encourages without giving answer)
 - My response: I kept Python control (guardrails.py enforces rules, evaluator.py is deterministic)
 - This IS hybrid: agent proposes, Python disposes
 
-### Deployment Status
+### Deployment Status (Updated February 10, 2026)
 - **Railway**: Auto-deploys from GitHub `main` branch
+- **Production Server**: `server.py` (agentic tutor with 6 tools)
 - **Database**: Postgres (production), SQLite (development)
-- **Latest Deploy**: Agentic Tutor with tool-based reasoning
+- **URL**: https://idna-tutor-mvp-production.up.railway.app
+
+**Verified Teacher Behavior in Production:**
+| Input | Response |
+|-------|----------|
+| Wrong answer | "Tell me, what did you do to arrive at 5?" |
+| Correct answer | "Bahut accha! Aapne denominator ko yaad rakha..." |
+| "I don't know" | "Koi baat nahi, aap pehle step se shuru kar sakte hain" |
+| Off-topic | "Hmm, let's focus on our question..." (no chatbot chat)
 
 ### Completed
 - Bug fixes (7 bugs fixed)
@@ -546,11 +555,11 @@ Health check timed out while tests were running.
 3. Keep-alive task still runs as backup (pings `/health` every 30s)
 
 ```toml
-# railway.toml (fixed)
-startCommand = "uvicorn web_server:app --host 0.0.0.0 --port $PORT"
+# railway.toml (current - Feb 10, 2026)
+startCommand = "uvicorn server:app --host 0.0.0.0 --port $PORT"
 ```
 
-**Status**: ✅ FIXED - Server now starts immediately, tests run in CI.
+**Status**: ✅ FIXED - Now using agentic server (server.py) in production.
 
 ### Full Conversational Mode (February 6, 2026)
 
@@ -983,6 +992,34 @@ After:  "Not quite. What do you find?"
 | **Frustration Patterns** | **Feature** | **Regex detection for ". .", "...", punctuation-only, hesitation sounds** |
 | **Repetition Prevention** | **Feature** | **Help explanations vary: 1st=steps, 2nd=reframe, 3rd=simple, 4th=reveal** |
 | **Terminology Explanations** | **Feature** | **"what is p/q" → explains specific term, not whole solution** |
+
+---
+
+## Session Summary (February 10, 2026)
+
+### Production Switch to Agentic Server
+
+**Change:** Switched production from `web_server.py` (legacy FSM) to `server.py` (agentic tutor).
+
+**Files Updated:**
+- `Procfile`: `uvicorn server:app --host 0.0.0.0 --port $PORT`
+- `railway.toml`: Same startCommand change
+
+**Bug Fixed:** Import error in `web_server.py` - removed unused `detect_warmth_level` import.
+
+**Verified in Production:**
+```
+Wrong answer → "Tell me, what did you do to arrive at 5?"
+Correct → "Bahut accha! Aapne denominator ko yaad rakha..."
+IDK → "Koi baat nahi, aap pehle step se shuru kar sakte hain"
+Off-topic → "Hmm, let's focus on our question..." (redirects, no chat)
+```
+
+**Key Behavior:** Tutor does NOT behave like a chatbot:
+- Ignores off-topic questions (just redirects to math)
+- Asks "what did you do?" before correcting
+- Short responses (2-3 sentences max)
+- Natural Hindi-English mix
 
 ---
 
