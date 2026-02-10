@@ -41,6 +41,25 @@ Response spoken to student
 5. `_advance_question`: Brain plans for next question
 6. `_end_speech`: Brain generates session summary
 
+## KEY BEHAVIORS
+
+### ask_what_they_did Limit
+- First wrong answer: asks "Tell me, what did you do?"
+- Second wrong answer: gives hint (does NOT ask again)
+- Implementation: `_count_action_in_history("ask_what_they_did") >= 1` triggers override
+- History stores actual LLM tool via `session["last_tool"]`, not state machine action
+
+### IDK Detection
+Triggers IDK category:
+- "I don't know", "help me", "explain"
+- "how can I use", "daily life", "real life example", "where do we use this"
+
+### Brain Overrides
+Brain can override ask_what_they_did when:
+1. `needs_concept_teaching` is True → teach concept instead
+2. Already asked once → give hint instead
+3. `frustration_signals >= 2` → just help, don't question
+
 ## CRITICAL RULES
 
 ### Never modify these public interfaces:
@@ -62,4 +81,28 @@ Response spoken to student
 - `gpt-4o` for speech generation
 
 ### Dead code (do NOT import):
-web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.py
+web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.py, guardrails.py
+
+## VERIFIED TEST FLOWS (February 10, 2026)
+
+| Input | Expected Response |
+|-------|-------------------|
+| Correct: "minus 1 by 7" | "Bahut accha!" + next question |
+| Wrong: "5" | "Tell me, what did you do to arrive at 5?" |
+| Second wrong: "I added" | Hint (NOT asking again) |
+| "how can I use in daily life" | Classified as IDK, encouragement |
+| "stop" | Session ends gracefully |
+
+## HISTORY TRACKING
+
+History entries store:
+```python
+{
+    "student": str,      # student input
+    "teacher": str,      # tutor response
+    "action": str,       # actual LLM tool used (e.g., "ask_what_they_did")
+    "category": str      # input category (e.g., "ANSWER")
+}
+```
+
+Important: `action` is the LLM tool (from `session["last_tool"]`), NOT the state machine action.
