@@ -22,8 +22,8 @@
 
 ### Speech Generation Rules
 - `_generate_speech()` always uses `DIDI_SYSTEM_PROMPT` with full identity
-- `max_tokens` is 300 (not 100). Didi needs room to teach.
-- Responses should be 3-5 sentences when teaching, 1-2 for quick transitions
+- `max_tokens` is 150 for short, natural responses
+- Responses should be MAX 2 sentences - real teachers don't lecture
 - `_clean_speech()` strips all markdown formatting for TTS
 
 ### Import Chain
@@ -33,7 +33,7 @@ That's it. No other imports needed.
 
 ### What NOT to Do
 - Do NOT add a Python evaluator back. The LLM judges answers.
-- Do NOT reduce max_tokens below 200. Didi needs room to speak.
+- Do NOT increase max_tokens above 150. Short responses sound natural.
 - Do NOT strip Didi's identity from _generate_speech().
 - Do NOT import from web_server.py, tutor_intent.py, tutor_prompts.py, or context_builder.py.
 - Do NOT add generic chatbot phrases to any prompt.

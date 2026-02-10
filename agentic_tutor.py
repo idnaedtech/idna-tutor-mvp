@@ -48,14 +48,12 @@ You're the kind of teacher students remember 20 years later. You're patient but 
 6. **You create productive struggle.** You don't hand them the answer. You guide them to discover it. The "aha!" moment belongs to the student, not to you.
 7. **You notice patterns.** If a student keeps making sign errors, you address the pattern, not just the individual mistake.
 
-## YOUR VOICE (This is spoken aloud via TTS, not written text)
+## YOUR VOICE (This is spoken aloud via TTS)
 
-- Natural spoken Hindi-English mix unless student asked for English only: "Bahut accha!", "Chalo next question", "Dekho", "Accha, toh batao", "Koi baat nahi", "Sochke batao"
 - {lang_instruction}
-- Use contractions: "let's", "what's", "that's", "you've"
-- Speak in flowing sentences, not bullet points
-- You can be 3-5 sentences when teaching a concept. Don't limit yourself to 2 sentences when the student needs more.
-- But don't ramble. Every sentence should earn its place.
+- KEEP IT SHORT. 1-2 sentences max. Real teachers don't give speeches.
+- Use contractions: "let's", "what's", "that's"
+- Sound like you're sitting next to them, not lecturing.
 
 ## WHAT YOU NEVER DO
 
@@ -104,18 +102,16 @@ Tool arguments: {tool_args}
 Here is the full teaching context:
 {context}
 
-Now generate Didi's SPOKEN response. Remember:
-- This will be converted to audio via TTS
-- No formatting, no bullets, no markdown
-- Be warm, specific, and educational
-- Reference the student's actual answer
+Generate Didi's SPOKEN response. CRITICAL RULES:
+- MAX 2 SENTENCES. This is spoken aloud — short is better.
+- No formatting, no markdown, just natural speech.
+- Reference the student's actual answer.
 - {lang_instruction}
-- If praising: mention the specific concept or step they got right, then smoothly read the next question
-- If hinting: reference their mistake, guide toward the right thinking, do NOT reveal the answer
-- If explaining: walk through step by step in simple language, use analogies if helpful
-- If encouraging: reduce pressure, break the problem into a smaller first step
-- If asking what they did: be curious and warm, just ask the question
-- 3-5 sentences when teaching. 1-2 sentences for quick transitions."""
+- praise → quick acknowledgment + next question
+- hint → one nudge, don't lecture
+- explain → simple steps, not paragraphs
+- encourage → reduce pressure, ask for just the first step
+- ask_what_they_did → just ask "What did you do to get X?" — that's it"""
 
 
 class AgenticTutor:
@@ -260,12 +256,9 @@ Hint 2 (show first step): {q.get('hint_2', 'Try the first step')}"""
         )
 
         prompt = (
-            f"Start the tutoring session. Greet {name} warmly — like a real teacher "
-            f"would when a student sits down for a private class. Not over-the-top, "
-            f"not robotic. Then naturally transition to the first question.\n\n"
-            f"Chapter: {chapter}\n"
-            f"First question: {question_text}\n\n"
-            f"Keep the greeting short and natural (1-2 sentences), then read the question clearly."
+            f"Greet {name} and give the first question. MAX 2 sentences total.\n\n"
+            f"Example: 'Namaste {name}! Chalo, pehla sawaal: {question_text}'\n\n"
+            f"Question: {question_text}"
         )
 
         try:
@@ -275,7 +268,7 @@ Hint 2 (show first step): {q.get('hint_2', 'Try the first step')}"""
                     {"role": "system", "content": system},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=200,
+                max_tokens=100,  # Short greeting only
                 temperature=0.7
             )
             text = self._clean_speech(response.choices[0].message.content)
@@ -288,7 +281,7 @@ Hint 2 (show first step): {q.get('hint_2', 'Try the first step')}"""
 
         except Exception as e:
             print(f"[Start Session Error] {e}")
-            return f"Hi {name}! Chalo, let's start. {question_text}"
+            return f"Namaste {name}! Chalo, pehla sawaal: {question_text}"
 
     async def process_input(self, student_input: str) -> str:
         """
@@ -316,9 +309,12 @@ Hint 2 (show first step): {q.get('hint_2', 'Try the first step')}"""
             {"role": "user", "content": student_input}
         )
 
-        # Step 0: Language switch
+        # Step 0: Language switch - handle directly without full LLM flow
         if self._wants_english(student_input):
             self.session["language"] = "english"
+            # Just repeat the question in English, don't elaborate
+            q = self.session["current_question"]
+            return f"Sure. {q.get('text', 'What is the answer?')}"
 
         # Step 1: Quick Python pre-checks
         is_stop = self._is_stop_request(student_input)
@@ -496,7 +492,7 @@ Hint 2 (show first step): {q.get('hint_2', 'Try the first step')}"""
                     {"role": "system", "content": system},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=300,  # Allow richer responses
+                max_tokens=150,  # Keep responses short
                 temperature=0.7
             )
             text = self._clean_speech(response.choices[0].message.content)
