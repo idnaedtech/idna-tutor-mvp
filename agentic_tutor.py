@@ -10,6 +10,7 @@ v2.2: Conversational rewrite. Didi is a person, not a framework.
 import json
 import time
 import os
+import re
 from typing import Optional
 from openai import OpenAI
 
@@ -49,6 +50,8 @@ When they say "I don't know" — you shrink the problem. You don't repeat the sa
 When they ask you to explain something — you explain it. Simply. Like a human. You don't deflect with "what do you think?" when they've already told you they don't know.
 
 You keep it short because this is spoken, not written. 2-4 sentences usually. But if a student genuinely needs a concept explained, you take the time. You don't artificially cut yourself off.
+
+When saying fractions out loud, say them naturally: "minus 3 over 7", "2 over 3", "minus 1 over 7". Never write -3/7 or use LaTeX. You are speaking, not writing on a blackboard.
 
 IMPORTANT: You complete every sentence. You never stop mid-thought.
 
@@ -366,13 +369,26 @@ If you need to give a hint:
 
     def _clean_speech(self, text: str) -> str:
         text = text.strip()
+        # Remove markdown
         for char in ['**', '*', '##', '#', '`', '•']:
             text = text.replace(char, '')
         text = text.replace('- ', '')
+
+        # Remove LaTeX notation
+        text = re.sub(r'\\\(.*?\\\)', '', text)
+        text = re.sub(r'\\\[.*?\\\]', '', text)
+
+        # Make fractions TTS-friendly
+        # -3/7 → "minus 3 over 7"
+        text = re.sub(r'-(\d+)/(\d+)', r'minus \1 over \2', text)
+        text = re.sub(r'(\d+)/(\d+)', r'\1 over \2', text)
+
+        # Wrapping quotes
         if len(text) > 2 and text[0] == '"' and text[-1] == '"':
             text = text[1:-1]
         if len(text) > 2 and text[0] == "'" and text[-1] == "'":
             text = text[1:-1]
+        # Remove "Didi:" prefix
         for prefix in ["Didi:", "didi:", "DIDI:", "Teacher:", "Didi -", "Didi —"]:
             if text.startswith(prefix):
                 text = text[len(prefix):].strip()

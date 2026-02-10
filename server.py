@@ -111,14 +111,12 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
 
     voice = texttospeech.VoiceSelectionParams(
         language_code="en-IN",
-        name="en-IN-Neural2-A",  # Warm Indian female voice
+        name="en-IN-Journey-F",  # Natural conversational Indian female voice
     )
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.92,
-        pitch=-0.5,
-        volume_gain_db=3.0,
+        speaking_rate=0.95,  # Let Journey voice use natural prosody
     )
 
     try:
@@ -127,9 +125,9 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
         )
         return response.audio_content
     except Exception:
-        # Fallback to male voice
+        # Fallback to male Journey voice
         voice = texttospeech.VoiceSelectionParams(
-            language_code="en-IN", name="en-IN-Neural2-D"
+            language_code="en-IN", name="en-IN-Journey-D"
         )
         response = tts_client.synthesize_speech(
             input=synthesis_input, voice=voice, audio_config=audio_config
