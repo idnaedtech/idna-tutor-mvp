@@ -456,11 +456,13 @@ class AgenticTutor:
     def _is_idk(self, text: str) -> bool:
         """Check if student said they don't know."""
         idk_phrases = [
-            "i don't know", "i dont know", "idk", "no idea",
+            "i don't know", "i dont know", "i do not know", "idk", "no idea",
             "tell me the answer", "just tell me", "skip",
-            "i can't", "i cant", "nahi pata", "pata nahi",
+            "i can't", "i cant", "i can not", "nahi pata", "pata nahi",
             "what is the answer", "give me the answer",
-            "please explain", "explain to me", "please start"
+            "please explain", "explain to me", "please start",
+            "how is it done", "what is it", "how do i", "how to do",
+            "i need help", "help me", "don't understand", "do not understand"
         ]
         text_lower = text.lower()
         return any(p in text_lower for p in idk_phrases)
