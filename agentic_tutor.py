@@ -1,11 +1,21 @@
 """
-IDNA Agentic Tutor v3.0 — State Machine Architecture
-======================================================
-Clean separation:
+IDNA Agentic Tutor v3.1 — With Tutor Brain
+=============================================
+Architecture:
   input_classifier.py  → classifies student input (pure Python)
   tutor_states.py      → state machine transitions (pure Python)
+  tutor_brain.py       → pedagogical reasoning (pure Python) ← NEW
   didi_voice.py        → LLM speech generation (all LLM calls)
-  agentic_tutor.py     → THIS FILE: orchestrator + session state
+  agentic_tutor.py     → THIS FILE: orchestrator
+
+The brain sits between state machine and voice:
+  classify → transition → BRAIN ENRICHES → voice generates
+
+What the brain does:
+  1. Before each question: builds a teaching plan (pre-teach? scaffold? examples?)
+  2. Before each response: injects context packet ("student is frustrated, needs examples")
+  3. After each interaction: updates student model (confidence, error patterns, learning style)
+  4. At session end: generates summary for parent reports
 
 Public interface (unchanged):
   AgenticTutor(student_name, chapter)
@@ -19,6 +29,7 @@ from questions import ALL_CHAPTERS, CHAPTER_NAMES
 
 import input_classifier as classifier
 from tutor_states import State, Action, get_transition
+from tutor_brain import TutorBrain
 import didi_voice as voice
 
 
@@ -26,6 +37,7 @@ class AgenticTutor:
 
     def __init__(self, student_name: str, chapter: str):
         self.session = self._init_session(student_name, chapter)
+        self.brain = TutorBrain(student_name)
 
     def _init_session(self, student_name: str, chapter: str) -> dict:
         questions = ALL_CHAPTERS.get(chapter, [])[:10]
@@ -46,7 +58,6 @@ class AgenticTutor:
             "hint_count": 0,
             "attempt_count": 0,
             "idk_count": 0,
-            "ask_count": 0,  # Track how many times we asked "what did you do"
             "offtopic_streak": 0,
             "language": "hinglish",
             "history": [],
@@ -62,12 +73,30 @@ class AgenticTutor:
 
     async def start_session(self) -> str:
         q = self.session["current_question"]
-        speech = voice.generate_greeting(
-            student_name=self.session["student_name"],
-            chapter_name=self.session["chapter_name"],
-            question_text=q.get("text", q.get("question_text", "")),
-            lang=self.session["language"]
-        )
+        q_text = q.get("text", q.get("question_text", ""))
+        name = self.session["student_name"]
+        lang = self.session["language"]
+
+        # Brain plans for first question
+        plan = self.brain.plan_for_question(q, self.session)
+
+        if plan.should_pre_teach:
+            # Brain says: teach the concept before asking
+            pre_teach = plan.pre_teach_instruction
+            instruction = (
+                f"{name} just sat down. You're doing {self.session['chapter_name']} today. "
+                f"Say hi warmly. Then: {pre_teach} "
+                f"After teaching the concept, read the first question: {q_text}"
+            )
+            speech = voice.generate_speech(instruction, name, lang, "")
+        else:
+            speech = voice.generate_greeting(
+                student_name=name,
+                chapter_name=self.session["chapter_name"],
+                question_text=q_text,
+                lang=lang
+            )
+
         self.session["state"] = State.WAITING_ANSWER
         return speech
 
@@ -83,7 +112,7 @@ class AgenticTutor:
         result = classifier.classify(student_input)
         category = result["category"]
 
-        # 2. Language switch side-effect
+        # 2. Language switch
         if category == "LANGUAGE":
             self.session["language"] = result["detail"]
 
@@ -108,19 +137,26 @@ class AgenticTutor:
         next_state = transition["next_state"]
         meta = transition["meta"]
 
-        # Pass language detail for LANG_UNSUPPORTED
         if category == "LANG_UNSUPPORTED":
             meta["language"] = result["detail"]
 
-        # 5. Execute → speech
-        speech = self._execute_action(action, student_input, meta)
+        # 5. Execute action (brain-enriched)
+        speech = self._execute_action(action, student_input, meta, category)
 
-        # 6. Update state
+        # 6. Brain observes what happened
+        self.brain.observe_interaction(
+            student_input=student_input,
+            category=category,
+            action=action.value,
+            question=self.session.get("current_question", {})
+        )
+
+        # 7. Update state
         self.session["state"] = next_state
         if next_state == State.ENDED:
             self.session["session_ended"] = True
 
-        # 7. History
+        # 8. History
         self.session["history"].append({
             "student": student_input,
             "teacher": speech,
@@ -148,62 +184,114 @@ class AgenticTutor:
                 "topic": q.get("subtopic", q.get("topic", "")),
                 "difficulty": q.get("difficulty", 1),
                 "image_url": q.get("image_url", None),
+            },
+            # Brain data for frontend/debugging
+            "brain": {
+                "confidence": self.brain.student.confidence_level,
+                "struggling": self.brain.student.concepts_struggling[-3:],
+                "error_patterns": self.brain.student.error_patterns[-3:],
+                "needs_examples": self.brain.student.needs_concrete_examples,
+                "needs_concept_teaching": self.brain.student.needs_concept_teaching,
             }
         }
 
+    def get_session_summary(self) -> dict:
+        """For parent reports and debugging."""
+        return self.brain.get_session_summary()
+
     # ============================================================
-    # ACTION EXECUTOR
+    # ACTION EXECUTOR — now brain-enriched
     # ============================================================
 
-    def _execute_action(self, action: Action, student_input: str, meta: dict) -> str:
+    def _execute_action(self, action: Action, student_input: str,
+                        meta: dict, category: str) -> str:
         q_ctx = self._build_question_context()
         q_text = self._current_question_text()
         history = self._build_history()
         name = self.session["student_name"]
         lang = self.session["language"]
 
+        # Brain's context packet — injected into every LLM call
+        brain_ctx = self.brain.get_context_packet()
+        if brain_ctx:
+            q_ctx = brain_ctx + "\n\n" + q_ctx
+
+        # ---- JUDGE_AND_RESPOND ----
         if action == Action.JUDGE_AND_RESPOND:
-            # PYTHON CHECK FIRST - if correct, skip LLM tool calling
-            if self._is_correct_answer(student_input):
-                tool = "praise_and_continue"
-                args = {}
-            else:
-                # After 2 asks, force hint instead of more questions
-                if self.session["ask_count"] >= 2:
-                    tool = "give_hint"
-                    args = {"hint_level": min(self.session["hint_count"] + 1, 2)}
-                else:
-                    # First wrong answer - ask what they did
-                    tool = "ask_what_they_did"
-                    args = {}
-                    self.session["ask_count"] += 1
+            judge_input = q_ctx + f'\n\nStudent answered: "{student_input}"\nCheck against answer key. Spoken math: "2 by 3" = 2/3, "minus 5" = -5.'
+            result = voice.judge_answer(judge_input, q_ctx, name, lang, history)
+            tool = result["tool"]
+            args = result["args"]
 
             if tool == "praise_and_continue":
                 self.session["score"] += 1
                 self.session["questions_completed"] += 1
                 self._advance_question()
                 self.session["state"] = State.TRANSITIONING
+                # Brain plans for next question
+                if not self.session["session_ended"]:
+                    self.brain.plan_for_question(self.session["current_question"], self.session)
                 nq = self._current_question_text()
-                instr = voice.build_praise_instruction(q_ctx, args.get("what_they_did_well", "got it right"), nq)
+                pre_teach = self.brain.get_pre_teach_instruction()
+                if pre_teach and nq:
+                    instr = voice.build_praise_instruction(
+                        q_ctx, args.get("what_they_did_well", "got it right"), ""
+                    ) + f"\n\nBefore the next question, {pre_teach}\nThen ask: {nq}"
+                else:
+                    instr = voice.build_praise_instruction(
+                        q_ctx, args.get("what_they_did_well", "got it right"), nq
+                    )
 
             elif tool == "give_hint":
                 level = args.get("hint_level", 1)
                 self.session["hint_count"] = max(self.session["hint_count"], level)
                 self.session["state"] = State.HINTING
-                instr = voice.build_hint_instruction(q_ctx, level, student_input)
+                # Brain may have a better hint
+                enhanced = self.brain.get_enhanced_hint(level)
+                if enhanced:
+                    instr = voice.build_hint_instruction(q_ctx, level, student_input) + f"\n\nBrain suggests: {enhanced}"
+                else:
+                    instr = voice.build_hint_instruction(q_ctx, level, student_input)
 
             elif tool == "explain_solution":
                 self.session["questions_completed"] += 1
                 self._advance_question()
                 self.session["state"] = State.EXPLAINING
+                if not self.session["session_ended"]:
+                    self.brain.plan_for_question(self.session["current_question"], self.session)
                 nq = self._current_question_text()
                 instr = voice.build_explain_instruction(q_ctx, nq)
 
             elif tool == "encourage_attempt":
-                instr = voice.build_encourage_instruction(q_ctx, student_input)
+                # Brain enriches encouragement
+                brain_encourage = self.brain.get_encouragement_instruction()
+                instr = voice.build_encourage_instruction(q_ctx, student_input) + f"\n\n{brain_encourage}"
 
             elif tool == "ask_what_they_did":
-                instr = f'Student answered: "{student_input}". Ask what they did — be curious. Question:\n{q_ctx}'
+                # Brain override 1: student needs concept teaching
+                if self.brain.student.needs_concept_teaching:
+                    instr = (
+                        f"Student needs the concept explained. Don't ask what they did — "
+                        f"they don't understand the basics. Teach the concept simply with "
+                        f"a concrete example, then re-read the question.\n\n{q_ctx}"
+                    )
+                # Brain override 2: already asked once — don't loop
+                elif self._count_action_in_history("ask_what_they_did") >= 1:
+                    instr = (
+                        f'Student said: "{student_input}". You already asked them to explain '
+                        f'their thinking. Do NOT ask again. Instead:\n'
+                        f'- If their reasoning sounds correct, confirm and guide to final answer.\n'
+                        f'- If wrong, point out the specific mistake gently.\n'
+                        f'- If unclear, give a concrete hint.\n\n{q_ctx}'
+                    )
+                # Brain override 3: student is frustrated
+                elif self.brain.student.frustration_signals >= 2:
+                    instr = (
+                        f"Student is frustrated. Don't ask what they did — just help. "
+                        f"Give a clear hint or explain.\n\n{q_ctx}"
+                    )
+                else:
+                    instr = f'Student answered: "{student_input}". Ask what they did — be curious, ONE question only.\n{q_ctx}'
 
             elif tool == "end_session":
                 return self._end_speech("student_requested")
@@ -213,36 +301,62 @@ class AgenticTutor:
 
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- GIVE_HINT (forced by state machine) ----
         elif action == Action.GIVE_HINT:
             level = meta.get("hint_level", min(self.session["hint_count"] + 1, 2))
             self.session["hint_count"] = max(self.session["hint_count"], level)
+            enhanced = self.brain.get_enhanced_hint(level)
             instr = voice.build_hint_instruction(q_ctx, level, student_input)
+            if enhanced:
+                instr += f"\n\nBrain suggests: {enhanced}"
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- EXPLAIN_SOLUTION (forced by state machine) ----
         elif action == Action.EXPLAIN_SOLUTION:
             self.session["questions_completed"] += 1
             self._advance_question()
+            if not self.session["session_ended"]:
+                self.brain.plan_for_question(self.session["current_question"], self.session)
             nq = self._current_question_text()
             instr = voice.build_explain_instruction(q_ctx, nq)
+            # If student needs examples, tell the LLM
+            if self.brain.student.needs_concrete_examples:
+                instr += "\n\nUSE A CONCRETE EXAMPLE in your explanation — everyday objects like money, sharing food, or temperature."
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- ENCOURAGE ----
         elif action == Action.ENCOURAGE:
+            brain_encourage = self.brain.get_encouragement_instruction()
             instr = voice.build_encourage_instruction(q_ctx, student_input)
+            instr += f"\n\n{brain_encourage}"
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- MOVE_TO_NEXT ----
         elif action == Action.MOVE_TO_NEXT:
             self.session["questions_completed"] += 1
             self._advance_question()
             if self.session["session_ended"]:
                 return self._end_speech("completed_all_questions")
+            # Brain plans for next question
+            self.brain.plan_for_question(self.session["current_question"], self.session)
             nq = self._current_question_text()
-            instr = voice.build_move_next_instruction(nq)
+            pre_teach = self.brain.get_pre_teach_instruction()
+            if pre_teach:
+                instr = (
+                    f"Student understood. Move on. Say something brief like 'Good, next one.' "
+                    f"Then: {pre_teach} "
+                    f"After teaching the concept briefly, ask: {nq}"
+                )
+            else:
+                instr = voice.build_move_next_instruction(nq)
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- RE_ASK ----
         elif action == Action.RE_ASK:
             instr = voice.build_reask_instruction(q_text, meta.get("after_hint", False))
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- REDIRECTS ----
         elif action == Action.REDIRECT_TROLL:
             instr = voice.build_redirect_instruction(student_input, q_text, is_troll=True)
             return voice.generate_speech(instr, name, lang, history)
@@ -255,6 +369,7 @@ class AgenticTutor:
             instr = voice.build_offer_exit_instruction(name)
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- LANGUAGE ----
         elif action == Action.SWITCH_LANGUAGE:
             instr = voice.build_language_switch_instruction(q_text)
             return voice.generate_speech(instr, name, lang, history)
@@ -263,6 +378,7 @@ class AgenticTutor:
             instr = voice.build_language_reject_instruction(meta.get("language", "that language"), q_text)
             return voice.generate_speech(instr, name, lang, history)
 
+        # ---- END ----
         elif action == Action.END_SESSION:
             return self._end_speech(meta.get("reason", "unknown"))
 
@@ -272,46 +388,11 @@ class AgenticTutor:
     # HELPERS
     # ============================================================
 
-    def _is_correct_answer(self, student_input: str) -> bool:
-        """Python check for correct answer - handles spoken forms."""
-        q = self.session["current_question"]
-        correct = q.get("answer", "").lower().strip()
-        accept_also = [a.lower().strip() for a in q.get("accept_also", [])]
-
-        # Normalize student input
-        s = student_input.lower().strip()
-
-        # Direct match
-        if s == correct or s in accept_also:
-            return True
-
-        # Spoken fraction conversions
-        # "minus 1 by 7" → "-1/7"
-        import re
-        s_normalized = s
-        s_normalized = re.sub(r"minus\s*(\d+)\s*(?:by|over)\s*(\d+)", r"-\1/\2", s_normalized)
-        s_normalized = re.sub(r"negative\s*(\d+)\s*(?:by|over)\s*(\d+)", r"-\1/\2", s_normalized)
-        s_normalized = re.sub(r"(\d+)\s*(?:by|over)\s*(\d+)", r"\1/\2", s_normalized)
-        s_normalized = s_normalized.replace(" ", "")
-
-        # Check normalized
-        correct_normalized = correct.replace(" ", "")
-        if s_normalized == correct_normalized:
-            return True
-
-        # Check against accept_also normalized
-        for a in accept_also:
-            if s_normalized == a.replace(" ", ""):
-                return True
-
-        return False
-
     def _advance_question(self):
         self.session["current_question_index"] += 1
         self.session["hint_count"] = 0
         self.session["attempt_count"] = 0
         self.session["idk_count"] = 0
-        self.session["ask_count"] = 0
         self.session["offtopic_streak"] = 0
         if self.session["current_question_index"] < len(self.session["questions"]):
             self.session["current_question"] = self.session["questions"][
@@ -319,6 +400,18 @@ class AgenticTutor:
             ]
         else:
             self.session["session_ended"] = True
+
+    def _count_action_in_history(self, action_name: str) -> int:
+        """Count how many times an action has been used for the current question.
+        Resets when question advances (history tracks all, but we count from last advance)."""
+        count = 0
+        for h in reversed(self.session.get("history", [])):
+            if h.get("action") == action_name:
+                count += 1
+            # Stop counting when we hit a question transition
+            if h.get("action") in ("praise_and_continue", "explain_solution", "move_to_next"):
+                break
+        return count
 
     def _current_question_text(self) -> str:
         q = self.session.get("current_question", {})
@@ -370,6 +463,9 @@ L2: {q.get('hint_2', '')}"""
     def _end_speech(self, reason: str) -> str:
         self.session["session_ended"] = True
         self.session["state"] = State.ENDED
+        # Get brain summary for logging
+        summary = self.brain.get_session_summary()
+        print(f"[Session Summary] {json.dumps(summary, indent=2)}")
         return voice.generate_speech(
             voice.build_end_instruction(
                 self.session["student_name"],
@@ -382,3 +478,7 @@ L2: {q.get('hint_2', '')}"""
             self.session["language"],
             self._build_history()
         )
+
+
+# Need json for summary logging
+import json

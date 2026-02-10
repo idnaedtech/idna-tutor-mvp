@@ -149,9 +149,9 @@ def _is_ack(t: str) -> bool:
 
 def _is_idk(t: str) -> bool:
     phrases = [
-        "don't know", "dont know", "idk", "no idea",
+        "i don't know", "i dont know", "idk", "no idea",
         "tell me the answer", "just tell me", "skip",
-        "can't do", "cant do", "nahi pata", "pata nahi",
+        "i can't", "i cant", "nahi pata", "pata nahi",
         "what is the answer", "give me the answer",
         "please explain", "explain to me", "please start",
         "mujhe nahi aata", "samajh nahi aa raha",
@@ -160,10 +160,10 @@ def _is_idk(t: str) -> bool:
         "can you teach me", "i'm confused", "i am confused",
         "help me", "no clue", "not sure", "i need help",
         "explain this", "explain it", "what does this mean",
-        "don't understand", "dont understand", "please help",
-        "explain me", "can you teach", "just explain",
-        "how to solve", "how do i", "what should i do",
-        "simple format", "in simple", "easy way"
+        "i don't understand", "i dont understand",
+        "how can i use", "how do we use", "daily life",
+        "real life example", "where do we use this",
+        "how is this useful", "give me example"
     ]
     return any(p in t for p in phrases)
 
