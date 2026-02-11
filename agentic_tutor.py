@@ -233,7 +233,7 @@ class AgenticTutor:
                     break
                 turns_on_question += 1
 
-            if turns_on_question >= 5:
+            if turns_on_question >= 4:
                 # Force explain — student has been stuck too long
                 self.session["questions_completed"] += 1
                 self._advance_question()
@@ -247,10 +247,21 @@ class AgenticTutor:
 
             judge_input = (
                 q_ctx + f'\n\nStudent answered: "{student_input}"\n'
-                f'Check against answer key. Spoken math: "2 by 3" = 2/3, "minus 5" = -5, "minus one" = -1.\n\n'
-                f'PARTIAL ANSWER RULE: If the student said the numerator correctly but forgot the denominator '
-                f'(e.g. answer is "-1/7" and student said "minus 1" or "-1"), use give_hint to acknowledge '
-                f'the correct part and guide them to the full answer. Do NOT use ask_what_they_did for partial answers.'
+                f'Check against answer key.\n\n'
+                f'SPOKEN MATH RULES (Indian English) — parse the FULL phrase before matching:\n'
+                f'- "minus X by Y" = -X/Y (e.g. "minus 1 by 7" = -1/7) ← FULL ANSWER, not partial\n'
+                f'- "minus X over Y" = -X/Y (e.g. "minus 3 over 7" = -3/7) ← FULL ANSWER\n'
+                f'- "X by Y" = X/Y (e.g. "5 by 8" = 5/8)\n'
+                f'- "X over Y" = X/Y\n'
+                f'- "X upon Y" = X/Y\n'
+                f'- "minus X" ALONE (no "by/over/upon" after it) = -X ← PARTIAL if answer is a fraction\n'
+                f'- Numbers can be spoken as words: "one" = 1, "seven" = 7\n\n'
+                f'CRITICAL: Parse the ENTIRE student answer as one expression. '
+                f'"minus 1 by 7" is -1/7, NOT "minus 1" + extra words. '
+                f'If it matches the answer key, use praise_and_continue IMMEDIATELY.\n\n'
+                f'PARTIAL ANSWER RULE: Only if the student said the numerator WITHOUT any denominator '
+                f'(no "by", "over", "upon" in their answer), use give_hint. '
+                f'Do NOT use ask_what_they_did for partial answers.'
             )
             result = voice.judge_answer(judge_input, q_ctx, name, lang, history)
             tool = result["tool"]
@@ -464,6 +475,36 @@ class AgenticTutor:
         q = self.session.get("current_question", {})
         return q.get("text", q.get("question_text", ""))
 
+    def _spoken_variants(self, answer: str) -> str:
+        """Generate spoken variants of a math answer for the judge."""
+        import re
+        variants = []
+        answer = answer.strip()
+
+        # Fraction: -1/7 → "minus 1 by 7", "minus 1 over 7", "minus one by seven"
+        m = re.match(r'^(-?)(\d+)/(\d+)$', answer)
+        if m:
+            sign = "minus " if m.group(1) == "-" else ""
+            num, den = m.group(2), m.group(3)
+            variants.extend([
+                f"{sign}{num} by {den}",
+                f"{sign}{num} over {den}",
+                f"{sign}{num} upon {den}",
+                f"{sign}{num}/{den}",
+            ])
+
+        # Integer: -5 → "minus 5", "minus five", "negative 5"
+        m = re.match(r'^(-?)(\d+)$', answer)
+        if m and not '/' in answer:
+            sign = "minus " if m.group(1) == "-" else ""
+            num = m.group(2)
+            variants.extend([
+                f"{sign}{num}",
+                f"negative {num}" if sign else num,
+            ])
+
+        return ", ".join(variants) if variants else answer
+
     def _build_question_context(self) -> str:
         q = self.session["current_question"]
         s = self.session
@@ -486,6 +527,7 @@ Topic: {q.get('topic', '')} / {q.get('subtopic', '')}
 ANSWER KEY (never reveal unless explaining):
 Correct: {q.get('answer', '')}
 Also accept: {q.get('accept_also', [])}
+Spoken variants (auto-generated): {self._spoken_variants(q.get('answer', ''))}
 Solution: {steps}
 Full: {q.get('solution', '')}
 
