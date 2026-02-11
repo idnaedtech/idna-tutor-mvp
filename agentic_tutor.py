@@ -249,19 +249,22 @@ class AgenticTutor:
                 q_ctx + f'\n\nStudent answered: "{student_input}"\n'
                 f'Check against answer key.\n\n'
                 f'SPOKEN MATH RULES (Indian English) — parse the FULL phrase before matching:\n'
-                f'- "minus X by Y" = -X/Y (e.g. "minus 1 by 7" = -1/7) ← FULL ANSWER, not partial\n'
+                f'- "minus X by Y" = -X/Y (e.g. "minus 1 by 7" = -1/7) ← FULL ANSWER\n'
                 f'- "minus X over Y" = -X/Y (e.g. "minus 3 over 7" = -3/7) ← FULL ANSWER\n'
                 f'- "X by Y" = X/Y (e.g. "5 by 8" = 5/8)\n'
                 f'- "X over Y" = X/Y\n'
                 f'- "X upon Y" = X/Y\n'
-                f'- "minus X" ALONE (no "by/over/upon" after it) = -X ← PARTIAL if answer is a fraction\n'
-                f'- Numbers can be spoken as words: "one" = 1, "seven" = 7\n\n'
+                f'- "minus X" ALONE (no "by/over/upon" after it) = -X\n'
+                f'- Numbers as words: "one" = 1, "seven" = 7\n\n'
                 f'CRITICAL: Parse the ENTIRE student answer as one expression. '
                 f'"minus 1 by 7" is -1/7, NOT "minus 1" + extra words. '
                 f'If it matches the answer key, use praise_and_continue IMMEDIATELY.\n\n'
-                f'PARTIAL ANSWER RULE: Only if the student said the numerator WITHOUT any denominator '
-                f'(no "by", "over", "upon" in their answer), use give_hint. '
-                f'Do NOT use ask_what_they_did for partial answers.'
+                f'DECISION RULES:\n'
+                f'- Answer matches answer key → praise_and_continue\n'
+                f'- Answer is CLOSE but incomplete (e.g. said numerator only, forgot denominator) → guide_partial_answer\n'
+                f'- Answer is WRONG → give_hint\n'
+                f'- Student says IDK or is confused → encourage_attempt\n'
+                f'- NEVER ask student to explain their thinking or process.'
             )
             result = voice.judge_answer(judge_input, q_ctx, name, lang, history)
             tool = result["tool"]
@@ -287,6 +290,20 @@ class AgenticTutor:
                         q_ctx, args.get("what_they_did_well", "got it right"), nq
                     )
 
+            elif tool == "guide_partial_answer":
+                self.session["state"] = State.HINTING
+                correct_part = args.get("correct_part", "")
+                missing_part = args.get("missing_part", "")
+                instr = (
+                    f"Student's answer is PARTIALLY correct.\n"
+                    f"What they got right: {correct_part}\n"
+                    f"What's missing: {missing_part}\n\n"
+                    f"Acknowledge the correct part FIRST — 'Haan, {correct_part}.' "
+                    f"Then guide them to the missing piece with ONE specific question. "
+                    f"Do NOT re-ask the full question. Do NOT ask how they thought about it.\n\n"
+                    f"{q_ctx}"
+                )
+
             elif tool == "give_hint":
                 level = args.get("hint_level", 1)
                 self.session["hint_count"] = max(self.session["hint_count"], level)
@@ -311,38 +328,6 @@ class AgenticTutor:
                 # Brain enriches encouragement
                 brain_encourage = self.brain.get_encouragement_instruction()
                 instr = voice.build_encourage_instruction(q_ctx, student_input) + f"\n\n{brain_encourage}"
-
-            elif tool == "ask_what_they_did":
-                # Brain override 1: student needs concept teaching
-                if self.brain.student.needs_concept_teaching:
-                    self._last_tool = "encourage_attempt"  # Override tool tracking
-                    instr = (
-                        f"Student needs the concept explained. Don't ask what they did — "
-                        f"they don't understand the basics. Teach the concept simply with "
-                        f"a concrete example, then re-read the question.\n\n{q_ctx}"
-                    )
-                # Brain override 2: already asked once — CONVERT to hint
-                elif self._count_action_in_history("ask_what_they_did") >= 1:
-                    self._last_tool = "give_hint"  # Override tool tracking — prevent future loops
-                    level = min(self.session["hint_count"] + 1, 2)
-                    self.session["hint_count"] = max(self.session["hint_count"], level)
-                    self.session["state"] = State.HINTING
-                    instr = (
-                        f'Student said: "{student_input}". You already asked them to explain '
-                        f'their thinking. Do NOT ask again. Instead:\n'
-                        f'- If their answer is partially correct, acknowledge what is right and guide to what is missing.\n'
-                        f'- If wrong, point out the specific mistake gently.\n'
-                        f'- If unclear, give a concrete hint showing the first step.\n\n{q_ctx}'
-                    )
-                # Brain override 3: student is frustrated
-                elif self.brain.student.frustration_signals >= 2:
-                    self._last_tool = "give_hint"  # Override tool tracking
-                    instr = (
-                        f"Student is frustrated. Don't ask what they did — just help. "
-                        f"Give a clear hint or explain.\n\n{q_ctx}"
-                    )
-                else:
-                    instr = f'Student answered: "{student_input}". Ask what they did — be curious, ONE question only.\n{q_ctx}'
 
             elif tool == "end_session":
                 return self._end_speech("student_requested")
@@ -427,12 +412,6 @@ class AgenticTutor:
 
         elif action == Action.REJECT_LANGUAGE:
             instr = voice.build_language_reject_instruction(meta.get("language", "that language"), q_text)
-            return voice.generate_speech(instr, name, lang, history)
-
-        elif action == Action.ADJUST_TONE:
-            # Set formal mode in session
-            self.session["tone"] = "formal"
-            instr = voice.build_tone_adjustment_instruction(q_text)
             return voice.generate_speech(instr, name, lang, history)
 
         # ---- END ----
