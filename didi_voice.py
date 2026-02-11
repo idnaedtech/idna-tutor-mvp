@@ -39,28 +39,30 @@ def _get_client():
 # DIDI'S IDENTITY
 # ============================================================
 
-DIDI_PROMPT = """You are Didi, a friendly math tutor in India. You're sitting with {student_name}, Class 8. Everything you say goes through a speaker.
+DIDI_PROMPT = """You are Didi — a private math tutor working with {student_name}, a Class 8 student in India. Everything you say is spoken aloud. This is a one-on-one tutoring session.
+
+YOUR CHARACTER:
+You are an experienced teacher with 12 years of teaching. You are warm but professional. You speak with the natural authority of a teacher who genuinely cares. You use respectful Hindi — 'aap', 'dekhiye', 'sochiye', 'bataiye' — not casual 'tu/tum'. You are like a respected older sister or a kind school teacher, NOT a street friend. Your students respect you AND feel comfortable with you.
 
 {lang_instruction}
 
-TEACHING STYLE:
-- Correct answer → "Sahi hai!" and move on. Don't overpraise.
-- Wrong answer → Give a small hint, don't just ask questions.
-- Student confused → EXPLAIN the concept simply. Don't keep asking.
-- Student asks "why" or "how to use" → Give a short real-world example.
+YOUR TEACHING STYLE:
+- When they answer correctly: Brief, specific acknowledgment. "Bilkul sahi. Minus 1 over 7." Then move on.
+- When they answer partially correct: Acknowledge what's right FIRST. "Haan, minus 1 sahi hai — that's the numerator. Ab denominator kya hoga? Denominator same rehta hai na?"
+- When they answer wrong: Don't ask "what were you thinking?" — instead, point out the specific error gently. "Yahan sign pe dhyan do. Minus 3 plus 2 hota hai minus 1, plus 1 nahi."
+- When they don't know: Don't ask micro-questions repeatedly. Teach the concept simply with one concrete example, then ask them to try.
+- When they repeat the same answer: NEVER re-ask the same question. Either confirm what's right and guide to what's missing, or explain the full solution.
 
-SPEAKING RULES:
-1. Short sentences. 2-3 max unless explaining.
-2. Say fractions as "minus 3 over 7", not -3/7.
-3. Natural Hindi-English: "Dekh", "Chal", "Sahi hai", "Accha". NOT "Kya aap bata sakte hain".
-4. NO robotic phrases like "Can you tell me what you were thinking?"
+RULES:
+1. Complete every sentence. Never stop mid-thought.
+2. ONLY discuss the CURRENT question. NEVER reference previous questions.
+3. Say fractions as words: "minus 3 over 7", "2 over 3". Never write -3/7.
+4. No markdown, no bullets. Spoken words only.
+5. Keep responses 2-4 sentences. Up to 5 when teaching a concept.
+6. If the student gives the same answer twice, do NOT ask the same question again. Either accept it and guide forward, or explain.
+7. Use respectful Hindi. NEVER say "dekh", "batao", "sun", "karo" — use "dekhiye", "bataiye", "suniye", "kariye".
 
-BANNED PHRASES (never use):
-- "Can you tell me..."
-- "What was your thought process?"
-- "How did you approach this?"
-- "That's a great question"
-- "Let me help you"
+NEVER SAY: "Great job!", "Excellent!", "Let me help you", "That's a great question", "Can you tell me how you would approach this?", "Can you tell me more about how you thought about that?", "Haha focus yaar", "Arre chalo"
 
 {lang_strict}
 
@@ -82,39 +84,25 @@ def generate_greeting(student_name: str, chapter_name: str,
     return _speak(system, prompt)
 
 
-JUDGE_PROMPT = """You judge math answers. Pick ONE tool.
-
-EXAMPLES:
-- Correct: "-1/7", Student: "minus 1 by 7" → MATCH → praise_and_continue
-- Correct: "2/3", Student: "two thirds" → MATCH → praise_and_continue
-- Correct: "-1/7", Student: "5" → NO MATCH → ask_what_they_did
-- Correct: "2/3", Student: "1/3" → NO MATCH → ask_what_they_did
-
-Spoken forms that MATCH written:
-- "minus X by Y" = "-X/Y"
-- "negative X over Y" = "-X/Y"
-- "X by Y" = "X/Y"
-
-YOUR TASK: Compare CORRECT ANSWER to STUDENT SAID. If they mean the same thing, use praise_and_continue. Otherwise use ask_what_they_did."""
-
-
 def judge_answer(student_input: str, question_context: str,
                  student_name: str, lang: str, history: str) -> dict:
     """
     LLM judges the student's answer using tool calling.
     Returns: {"tool": str, "args": dict}
     """
+    system = _build_system(student_name, lang, history)
+
     try:
         response = _get_client().chat.completions.create(
             model=TOOL_MODEL,
             messages=[
-                {"role": "system", "content": JUDGE_PROMPT},
+                {"role": "system", "content": system},
                 {"role": "user", "content": question_context}
             ],
             tools=TUTOR_TOOLS,
             tool_choice="required",
             max_tokens=200,
-            temperature=0.2
+            temperature=0.4
         )
         tc = response.choices[0].message.tool_calls[0]
         return {
@@ -139,26 +127,23 @@ def generate_speech(instruction: str, student_name: str,
 
 def build_hint_instruction(question_ctx: str, hint_level: int,
                            student_input: str) -> str:
-    if hint_level == 1:
-        guidance = "Give ONE small hint. Example: 'Dekh, denominator same hai toh sirf numerator add kar.'"
-    else:
-        guidance = "Show the first step clearly. Example: 'Pehle step: minus 3 plus 2 karo. Kitna aaya?'"
     return (
-        f"{guidance}\n\n"
+        f"Give a level {hint_level} hint.\n\n"
         f"{question_ctx}\n\n"
         f"Student said: \"{student_input}\"\n\n"
-        f"DO NOT ask 'what did you do' or 'how did you think'. Just give the hint directly."
+        f"IMPORTANT: If the student's answer is PARTIALLY correct (e.g. they got the numerator right but forgot the denominator), "
+        f"acknowledge what's right FIRST, then guide them to what's missing. "
+        f"Do NOT re-ask the same question from scratch.\n\n"
+        f"{'Give a conceptual nudge — point them in the right direction without revealing the answer.' if hint_level == 1 else 'Show them the first step of the solution. Still dont reveal the final answer.'}"
     )
 
 
 def build_explain_instruction(question_ctx: str, next_question: str = "") -> str:
     transition = ""
     if next_question:
-        transition = f"\n\nAfter explaining, say 'Chal, agla try karte hain' and read: {next_question}"
+        transition = f"\n\nAfter explaining, say 'Okay, let's try the next one' and read: {next_question}"
     return (
-        f"Explain simply like talking to your younger sibling.\n"
-        f"Example: 'Dekh, yahan dono mein neeche 7 hai na? Toh bas upar wale add kar. Minus 3 plus 2 equals minus 1. Answer minus 1 over 7.'\n"
-        f"Short, clear, no fancy words.\n\n"
+        f"Explain the full solution step by step. Be kind — they struggled.\n\n"
         f"{question_ctx}"
         f"{transition}"
     )
@@ -166,21 +151,25 @@ def build_explain_instruction(question_ctx: str, next_question: str = "") -> str
 
 def build_encourage_instruction(question_ctx: str, student_input: str) -> str:
     return (
-        f"Student doesn't know. Give them a starting point, not a question.\n"
-        f"Example: 'Dekh, pehle ye samajh - dono fractions mein neeche 7 hai. Toh upar wale numbers ko...'\n"
-        f"Lead them, don't interrogate them.\n\n"
-        f"{question_ctx}"
+        f"Student doesn't know the answer. Encourage them to try.\n"
+        f"Break the problem into a smaller piece. Ask for just the first step.\n"
+        f"Don't repeat the full question — just ask one small thing.\n\n"
+        f"{question_ctx}\n\n"
+        f"Student said: \"{student_input}\""
     )
 
 
 def build_praise_instruction(question_ctx: str, what_they_did: str,
                               next_question: str = "") -> str:
+    transition = ""
     if next_question:
-        return (
-            f"CORRECT! Say ONLY: 'Sahi hai! Chal agla.' Then read: {next_question}\n"
-            f"DO NOT explain anything. Just praise and move on."
-        )
-    return "CORRECT! Say ONLY: 'Sahi hai!' Nothing else."
+        transition = f"\n\nThen move to: {next_question}"
+    return (
+        f"Student got it right! Quick specific praise — {what_they_did}.\n"
+        f"Don't overdo it. One sentence of praise, then transition.\n\n"
+        f"{question_ctx}"
+        f"{transition}"
+    )
 
 
 def build_reask_instruction(question_text: str, after_hint: bool = False) -> str:
@@ -198,7 +187,7 @@ def build_redirect_instruction(student_input: str, question_text: str,
     if is_troll:
         return (
             f'Student said: "{student_input}" — they\'re joking around. '
-            f"Smile it off in ONE short sentence — 'Haha, focus yaar' or 'Arre chalo wapas' — "
+            f"Gently redirect in ONE short sentence — something like 'Chalo, wapas question pe aate hain' — "
             f"then briefly re-read: {question_text}. Do NOT explain anything."
         )
     return (
@@ -209,9 +198,9 @@ def build_redirect_instruction(student_input: str, question_text: str,
 
 def build_offer_exit_instruction(student_name: str) -> str:
     return (
-        f"{student_name} keeps going off-topic. They might be bored. "
-        f"Say warmly: 'Lagta hai aaj mood nahi hai. Koi baat nahi, "
-        f"hum baad mein continue kar sakte hain. Ya ek aur try karte hain?' "
+        f"{student_name} keeps going off-topic. They might be bored or tired. "
+        f"Say warmly but respectfully: 'Lagta hai aaj aapka mood thoda alag hai. "
+        f"Koi baat nahi, hum baad mein continue kar sakte hain. Ya ek aur question try karein?' "
         f"No guilt, no pressure."
     )
 
@@ -225,9 +214,19 @@ def build_language_switch_instruction(question_text: str) -> str:
 def build_language_reject_instruction(language: str, question_text: str) -> str:
     return (
         f"Student asked to speak in {language}. You can't yet. "
-        f"Be warm: 'Sorry yaar, {language} mein abhi nahi bol sakti. "
-        f"Jaldi seekh loongi! For now English ya Hindi mein chalate hain.' "
+        f"Be warm and respectful: 'Sorry, abhi {language} mein baat nahi kar sakti. "
+        f"Jaldi seekh loongi! Filhaal English ya Hindi mein chalte hain.' "
         f"Then re-read: {question_text}"
+    )
+
+
+def build_tone_adjustment_instruction(question_text: str) -> str:
+    return (
+        f"Student doesn't like how you're talking — they want you to be more respectful "
+        f"and formal. Apologize briefly and warmly: 'Sorry about that! I'll speak more respectfully.' "
+        f"Then switch to 'aap' instead of 'tu/tum', use 'dekhiye' instead of 'dekh', "
+        f"'kariye' instead of 'karo'. Keep being warm but more polite. "
+        f"Re-read the current question respectfully: {question_text}"
     )
 
 
@@ -253,12 +252,23 @@ def build_move_next_instruction(next_question: str) -> str:
 # ============================================================
 
 def _build_system(student_name: str, lang: str, history: str) -> str:
-    if lang == "english":
+    formal = "_formal" in lang
+    base_lang = lang.replace("_formal", "")
+
+    if base_lang == "english":
         lang_instruction = "The student asked for English only."
-        lang_strict = "STRICT ENGLISH ONLY. Do NOT use ANY Hindi words — no 'Chalo', no 'Dekho', no 'Haan', no 'Accha'. Pure English. Keep your warm tone."
+        lang_strict = "STRICT ENGLISH ONLY. Do NOT use ANY Hindi words — no 'Chalo', no 'Dekhiye', no 'Haan', no 'Accha'. Pure English. Keep your warm, respectful tone."
     else:
-        lang_instruction = "Natural Hindi-English mix. 'Haan', 'Accha', 'Dekho', 'Chalo', 'Koi baat nahi' come out naturally."
+        lang_instruction = "Respectful Hindi-English mix. Use 'Haan', 'Accha', 'Dekhiye', 'Chaliye', 'Koi baat nahi' naturally. Always use 'aap' form, never 'tu/tum'."
         lang_strict = ""
+
+    if formal:
+        lang_strict += (
+            "\n\nIMPORTANT — FORMAL/RESPECTFUL TONE: The student asked you to be more respectful. "
+            "Use 'aap' instead of 'tu/tum'. Use 'dekhiye' instead of 'dekh'. "
+            "Use 'kariye' instead of 'karo'. Use 'bataiye' instead of 'batao'. "
+            "Still be warm and friendly, but polite — like talking to an older student, not a little kid."
+        )
 
     return DIDI_PROMPT.format(
         student_name=student_name,
@@ -308,7 +318,7 @@ def _clean(text: str) -> str:
 
     # Fractions → TTS-friendly
     text = re.sub(r'-(\d+)/(\d+)', r'minus \1 over \2', text)
-    text = re.sub(r'(\d+)/(\d+)', r'\1 over 2', text)
+    text = re.sub(r'(\d+)/(\d+)', r'\1 over \2', text)
 
     # Remove wrapping quotes
     if len(text) > 2 and text[0] == '"' and text[-1] == '"':

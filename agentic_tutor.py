@@ -141,7 +141,6 @@ class AgenticTutor:
             meta["language"] = result["detail"]
 
         # 5. Execute action (brain-enriched)
-        self.session["last_tool"] = None  # Reset before execute
         speech = self._execute_action(action, student_input, meta, category)
 
         # 6. Brain observes what happened
@@ -157,12 +156,11 @@ class AgenticTutor:
         if next_state == State.ENDED:
             self.session["session_ended"] = True
 
-        # 8. History - use actual LLM tool if available, otherwise state machine action
-        actual_action = self.session.get("last_tool") or action.value
+        # 8. History
         self.session["history"].append({
             "student": student_input,
             "teacher": speech,
-            "action": actual_action,
+            "action": action.value,
             "category": category
         })
 
@@ -212,6 +210,11 @@ class AgenticTutor:
         history = self._build_history()
         name = self.session["student_name"]
         lang = self.session["language"]
+        tone = self.session.get("tone", "casual")  # "casual" or "formal"
+
+        # If formal tone, append instruction to lang
+        if tone == "formal":
+            lang = lang + "_formal"
 
         # Brain's context packet — injected into every LLM call
         brain_ctx = self.brain.get_context_packet()
@@ -220,11 +223,16 @@ class AgenticTutor:
 
         # ---- JUDGE_AND_RESPOND ----
         if action == Action.JUDGE_AND_RESPOND:
-            judge_input = q_ctx + f'\n\nStudent answered: "{student_input}"\nCheck against answer key. Spoken math: "2 by 3" = 2/3, "minus 5" = -5.'
+            judge_input = (
+                q_ctx + f'\n\nStudent answered: "{student_input}"\n'
+                f'Check against answer key. Spoken math: "2 by 3" = 2/3, "minus 5" = -5, "minus one" = -1.\n\n'
+                f'PARTIAL ANSWER RULE: If the student said the numerator correctly but forgot the denominator '
+                f'(e.g. answer is "-1/7" and student said "minus 1" or "-1"), use give_hint to acknowledge '
+                f'the correct part and guide them to the full answer. Do NOT use ask_what_they_did for partial answers.'
+            )
             result = voice.judge_answer(judge_input, q_ctx, name, lang, history)
             tool = result["tool"]
             args = result["args"]
-            self.session["last_tool"] = tool  # Track actual LLM tool for history
 
             if tool == "praise_and_continue":
                 self.session["score"] += 1
@@ -381,6 +389,12 @@ class AgenticTutor:
             instr = voice.build_language_reject_instruction(meta.get("language", "that language"), q_text)
             return voice.generate_speech(instr, name, lang, history)
 
+        elif action == Action.ADJUST_TONE:
+            # Set formal mode in session
+            self.session["tone"] = "formal"
+            instr = voice.build_tone_adjustment_instruction(q_text)
+            return voice.generate_speech(instr, name, lang, history)
+
         # ---- END ----
         elif action == Action.END_SESSION:
             return self._end_speech(meta.get("reason", "unknown"))
@@ -397,7 +411,6 @@ class AgenticTutor:
         self.session["attempt_count"] = 0
         self.session["idk_count"] = 0
         self.session["offtopic_streak"] = 0
-        self.session["last_tool"] = None
         if self.session["current_question_index"] < len(self.session["questions"]):
             self.session["current_question"] = self.session["questions"][
                 self.session["current_question_index"]
