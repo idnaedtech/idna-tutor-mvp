@@ -141,6 +141,7 @@ class AgenticTutor:
             meta["language"] = result["detail"]
 
         # 5. Execute action (brain-enriched)
+        self._last_tool = None  # Track LLM tool for history
         speech = self._execute_action(action, student_input, meta, category)
 
         # 6. Brain observes what happened
@@ -156,11 +157,12 @@ class AgenticTutor:
         if next_state == State.ENDED:
             self.session["session_ended"] = True
 
-        # 8. History
+        # 8. History — store both state machine action AND LLM tool
         self.session["history"].append({
             "student": student_input,
             "teacher": speech,
             "action": action.value,
+            "tool": self._last_tool,  # e.g. "ask_what_they_did", "give_hint"
             "category": category
         })
 
@@ -223,6 +225,26 @@ class AgenticTutor:
 
         # ---- JUDGE_AND_RESPOND ----
         if action == Action.JUDGE_AND_RESPOND:
+            # CIRCUIT BREAKER: If student has been on this question for 5+ turns, force explain
+            turns_on_question = 0
+            for h in reversed(self.session.get("history", [])):
+                if h.get("tool") in ("praise_and_continue", "explain_solution") or \
+                   h.get("action") in ("praise_and_continue", "explain_solution", "move_to_next"):
+                    break
+                turns_on_question += 1
+
+            if turns_on_question >= 5:
+                # Force explain — student has been stuck too long
+                self.session["questions_completed"] += 1
+                self._advance_question()
+                self.session["state"] = State.EXPLAINING
+                if not self.session["session_ended"]:
+                    self.brain.plan_for_question(self.session["current_question"], self.session)
+                nq = self._current_question_text()
+                self._last_tool = "explain_solution"
+                instr = voice.build_explain_instruction(q_ctx, nq)
+                return voice.generate_speech(instr, name, lang, history)
+
             judge_input = (
                 q_ctx + f'\n\nStudent answered: "{student_input}"\n'
                 f'Check against answer key. Spoken math: "2 by 3" = 2/3, "minus 5" = -5, "minus one" = -1.\n\n'
@@ -233,6 +255,7 @@ class AgenticTutor:
             result = voice.judge_answer(judge_input, q_ctx, name, lang, history)
             tool = result["tool"]
             args = result["args"]
+            self._last_tool = tool  # Track for history counter
 
             if tool == "praise_and_continue":
                 self.session["score"] += 1
@@ -281,22 +304,28 @@ class AgenticTutor:
             elif tool == "ask_what_they_did":
                 # Brain override 1: student needs concept teaching
                 if self.brain.student.needs_concept_teaching:
+                    self._last_tool = "encourage_attempt"  # Override tool tracking
                     instr = (
                         f"Student needs the concept explained. Don't ask what they did — "
                         f"they don't understand the basics. Teach the concept simply with "
                         f"a concrete example, then re-read the question.\n\n{q_ctx}"
                     )
-                # Brain override 2: already asked once — don't loop
+                # Brain override 2: already asked once — CONVERT to hint
                 elif self._count_action_in_history("ask_what_they_did") >= 1:
+                    self._last_tool = "give_hint"  # Override tool tracking — prevent future loops
+                    level = min(self.session["hint_count"] + 1, 2)
+                    self.session["hint_count"] = max(self.session["hint_count"], level)
+                    self.session["state"] = State.HINTING
                     instr = (
                         f'Student said: "{student_input}". You already asked them to explain '
                         f'their thinking. Do NOT ask again. Instead:\n'
-                        f'- If their reasoning sounds correct, confirm and guide to final answer.\n'
+                        f'- If their answer is partially correct, acknowledge what is right and guide to what is missing.\n'
                         f'- If wrong, point out the specific mistake gently.\n'
-                        f'- If unclear, give a concrete hint.\n\n{q_ctx}'
+                        f'- If unclear, give a concrete hint showing the first step.\n\n{q_ctx}'
                     )
                 # Brain override 3: student is frustrated
                 elif self.brain.student.frustration_signals >= 2:
+                    self._last_tool = "give_hint"  # Override tool tracking
                     instr = (
                         f"Student is frustrated. Don't ask what they did — just help. "
                         f"Give a clear hint or explain.\n\n{q_ctx}"
@@ -418,15 +447,16 @@ class AgenticTutor:
         else:
             self.session["session_ended"] = True
 
-    def _count_action_in_history(self, action_name: str) -> int:
-        """Count how many times an action has been used for the current question.
+    def _count_action_in_history(self, tool_name: str) -> int:
+        """Count how many times an LLM tool has been used for the current question.
         Resets when question advances (history tracks all, but we count from last advance)."""
         count = 0
         for h in reversed(self.session.get("history", [])):
-            if h.get("action") == action_name:
+            if h.get("tool") == tool_name:
                 count += 1
             # Stop counting when we hit a question transition
-            if h.get("action") in ("praise_and_continue", "explain_solution", "move_to_next"):
+            if h.get("tool") in ("praise_and_continue", "explain_solution") or \
+               h.get("action") in ("praise_and_continue", "explain_solution", "move_to_next"):
                 break
         return count
 
