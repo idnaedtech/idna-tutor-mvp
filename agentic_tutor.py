@@ -163,8 +163,12 @@ class AgenticTutor:
             self.session["attempt_count"] += 1
         elif category in ("TROLL", "OFFTOPIC"):
             self.session["offtopic_streak"] += 1
-        elif category not in ("ACK", "LANGUAGE", "LANG_UNSUPPORTED"):
+        elif category not in ("ACK", "LANGUAGE", "LANG_UNSUPPORTED", "CONFIRM"):
             self.session["offtopic_streak"] = 0
+
+        # 3b. Handle CONFIRM — student asking "was my answer correct?"
+        if category == "CONFIRM":
+            return self._handle_confirm_request()
 
         # 4. State machine transition
         transition = get_transition(
@@ -589,6 +593,43 @@ class AgenticTutor:
             ]
         else:
             self.session["session_ended"] = True
+
+    def _handle_confirm_request(self) -> str:
+        """Handle 'was my answer correct?' type questions."""
+        # Find the last student answer from history
+        last_answer = None
+        for h in reversed(self.session.get("history", [])):
+            if h.get("category") == "ANSWER":
+                last_answer = h.get("student")
+                break
+
+        if not last_answer:
+            return f"{self.session['student_name']}, pehle answer toh dijiye!"
+
+        # Check against current question
+        q = self.session["current_question"]
+        answer_key = q.get("answer", "")
+        accept_also = q.get("accept_also", [])
+        result = check_answer(last_answer, answer_key, accept_also)
+
+        name = self.session["student_name"]
+        q_text = self._current_question_text()
+
+        if result is True:
+            # Correct! Praise and move on
+            self.session["score"] += 1
+            self.session["questions_completed"] += 1
+            self._advance_question()
+            if self.session["session_ended"]:
+                return self._end_speech("completed_all_questions")
+            nq = self._current_question_text()
+            return f"Haan {name}, aapka answer bilkul sahi tha! Chaliye agla sawal: {nq}"
+        elif result is None:
+            # Partial
+            return f"{name}, aapka answer partial sahi tha. Poora answer dijiye: {q_text}"
+        else:
+            # Wrong
+            return f"{name}, wo answer sahi nahi tha. Phir se try kijiye: {q_text}"
 
     def _extract_sub_question(self, speech: str) -> str:
         """Extract the last question from Didi's response for repeat detection."""

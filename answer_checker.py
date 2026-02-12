@@ -22,6 +22,9 @@ def normalize_answer(raw: str) -> str:
     text = raw.strip().lower()
 
     # Spoken → symbolic mappings
+    # "my" is often Whisper mishearing "minus"
+    text = re.sub(r'\bmy\s+(\d)', r'minus \1', text)
+    text = re.sub(r'\bmy\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b', r'minus \1', text)
     text = text.replace("minus ", "-")
     text = text.replace("negative ", "-")
     text = text.replace(" by ", "/")

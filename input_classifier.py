@@ -55,11 +55,15 @@ def classify(text: str) -> dict:
     if _is_idk(t):
         return {"category": "IDK", "detail": "", "cleaned": raw}
 
-    # 7. OFF-TOPIC
+    # 7. CONFIRMATION REQUEST — "was my answer correct?"
+    if _is_confirm_request(t):
+        return {"category": "CONFIRM", "detail": "", "cleaned": raw}
+
+    # 8. OFF-TOPIC
     if _is_offtopic(t):
         return {"category": "OFFTOPIC", "detail": "", "cleaned": raw}
 
-    # 8. ANSWER — everything else is treated as an answer attempt
+    # 9. ANSWER — everything else is treated as an answer attempt
     return {"category": "ANSWER", "detail": "", "cleaned": raw}
 
 
@@ -200,6 +204,19 @@ def _is_offtopic(t: str) -> bool:
         "next chapter", "another chapter",
         "what else can you do", "are you a robot",
         "are you real", "are you human", "are you ai"
+    ]
+    return any(p in t for p in phrases)
+
+
+def _is_confirm_request(t: str) -> bool:
+    """Student asking if their previous answer was correct."""
+    phrases = [
+        "was my answer correct", "is that right", "is that correct",
+        "am i correct", "am i right", "is it correct", "is it right",
+        "did i get it", "was that right", "was that correct",
+        "kya mera answer sahi", "sahi hai kya", "sahi tha kya",
+        "theek hai kya", "correct hai kya", "right hai kya",
+        "maine sahi kaha", "mera answer theek", "kya ye sahi hai"
     ]
     return any(p in t for p in phrases)
 
