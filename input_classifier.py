@@ -57,6 +57,11 @@ def classify(text: str) -> dict:
     if _is_idk(t):
         return {"category": "IDK", "detail": "", "cleaned": raw}
 
+    # 6.5 CONCEPT_REQUEST — student asks about a concept (v5.0)
+    if _is_concept_request(t):
+        concept = _extract_concept(t)
+        return {"category": "CONCEPT_REQUEST", "detail": concept, "cleaned": raw}
+
     # 7. CONFIRMATION REQUEST — "was my answer correct?"
     if _is_confirm_request(t):
         return {"category": "CONFIRM", "detail": "", "cleaned": raw}
@@ -220,6 +225,47 @@ def _is_offtopic(t: str) -> bool:
         "are you real", "are you human", "are you ai"
     ]
     return any(p in t for p in phrases)
+
+
+def _is_concept_request(t: str) -> bool:
+    """Student asks about a concept, not just 'I don't know'."""
+    concept_patterns = [
+        r'\bwhat (?:is|are) (?:a |an )?(?:rational number|fraction|variable|integer|equation|linear equation|algebraic expression|denominator|numerator)',
+        r'\bkya ho(?:ta|te|ti) (?:hai|hain)\b.*(?:rational|fraction|variable|integer|equation|denominator|numerator)',
+        r'\bexplain (?:me |to me )?(?:what|about)\b',
+        r'\b(?:samjha|samjhao|samjhiye|batao|bataiye)\b.*(?:kya|what)\b',
+        r'\bwhat (?:does|do) .+ mean\b',
+        r'\byou are (?:a |not |supposed to ).*(?:teach|explain)\b',
+        r'\b(?:teach|explain|tell) me (?:about|what)\b',
+        r'\bI don\'?t (?:know|understand) (?:anything )?about\b',
+        r'\bmujhe nahi (?:pata|samajh)\b.*(?:kya|what)\b',
+        r'\b(?:pehle|first) (?:samjha|explain|teach|bata)\b',
+    ]
+    for pattern in concept_patterns:
+        if re.search(pattern, t, re.IGNORECASE):
+            return True
+    return False
+
+
+def _extract_concept(t: str) -> str:
+    """Extract concept name from student's request."""
+    concepts = {
+        'rational number': ['rational number', 'rational numbers', 'rashnal number', 'rashan number', 'ration number'],
+        'fraction': ['fraction', 'fractions'],
+        'variable': ['variable', 'variables'],
+        'integer': ['integer', 'integers'],
+        'equation': ['equation', 'equations'],
+        'linear equation': ['linear equation', 'linear equations'],
+        'denominator': ['denominator'],
+        'numerator': ['numerator'],
+        'algebraic expression': ['algebraic expression', 'algebraic expressions'],
+    }
+    t_lower = t.lower()
+    for concept, variants in concepts.items():
+        for v in variants:
+            if v in t_lower:
+                return concept
+    return "this concept"
 
 
 def _is_confirm_request(t: str) -> bool:

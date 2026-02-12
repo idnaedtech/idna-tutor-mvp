@@ -45,6 +45,7 @@ class Action(str, Enum):
     OFFER_EXIT = "offer_exit"                    # Too many trolls
     END_SESSION = "end_session"
     RE_ASK = "re_ask"                            # After hint ack, ask to try again
+    TEACH_CONCEPT = "teach_concept"              # v5.0: teach prerequisite concept
 
 
 def get_transition(state: State, category: str, session: dict) -> dict:
@@ -137,6 +138,14 @@ def _waiting_answer_transition(category: str, session: dict) -> dict:
     attempt_count = session.get("attempt_count", 0)
     offtopic_streak = session.get("offtopic_streak", 0)
 
+    # v5.0: Student asks about a concept - teach it
+    if category == "CONCEPT_REQUEST":
+        return {
+            "action": Action.TEACH_CONCEPT,
+            "next_state": State.WAITING_ANSWER,
+            "meta": {}
+        }
+
     if category == "ANSWER":
         # Let LLM judge and pick tool
         return {
@@ -219,6 +228,14 @@ def _hinting_transition(category: str, session: dict) -> dict:
     hint_count = session.get("hint_count", 0)
     idk_count = session.get("idk_count", 0)
 
+    # v5.0: Student asks about a concept - teach it
+    if category == "CONCEPT_REQUEST":
+        return {
+            "action": Action.TEACH_CONCEPT,
+            "next_state": State.WAITING_ANSWER,
+            "meta": {}
+        }
+
     if category == "ANSWER":
         # They're trying again — let LLM judge
         return {
@@ -276,6 +293,14 @@ def _hinting_transition(category: str, session: dict) -> dict:
 
 def _explaining_transition(category: str, session: dict) -> dict:
     """We explained the solution. Waiting for student to acknowledge, then we move on."""
+
+    # v5.0: Student asks about a concept - teach it
+    if category == "CONCEPT_REQUEST":
+        return {
+            "action": Action.TEACH_CONCEPT,
+            "next_state": State.WAITING_ANSWER,
+            "meta": {}
+        }
 
     if category == "ACK":
         # Good — they understood. Move to next question.

@@ -112,6 +112,50 @@ def get_google_tts_client():
         return None
 
 
+def preprocess_for_tts(text: str, lang: str = "hi-IN") -> str:
+    """
+    v5.0: Preprocess tutor response text for better TTS pronunciation.
+    Transliterates common English math terms to Hindi phonetic equivalents
+    so Google TTS hi-IN voice pronounces them correctly.
+    """
+    import re as re_mod
+
+    if "hi" not in lang.lower() and "en-IN" not in lang:
+        return text
+
+    # Common math terms that Google TTS mispronounces in hi-IN
+    replacements = {
+        'denominator': 'डिनॉमिनेटर',
+        'numerator': 'न्यूमरेटर',
+        'fraction': 'फ़्रैक्शन',
+        'fractions': 'फ़्रैक्शन्स',
+        'equation': 'इक्वेशन',
+        'variable': 'वेरिएबल',
+        'integer': 'इंटीजर',
+        'rational': 'रैशनल',
+        'rational number': 'रैशनल नंबर',
+        'rational numbers': 'रैशनल नंबर्स',
+        'linear': 'लीनियर',
+        'algebraic': 'अलजेब्रिक',
+        'expression': 'एक्सप्रेशन',
+        'multiplication': 'मल्टिप्लिकेशन',
+        'addition': 'एडिशन',
+        'subtraction': 'सबट्रैक्शन',
+        'division': 'डिविज़न',
+        'percentage': 'परसेंटेज',
+        'perimeter': 'पेरीमीटर',
+        'area': 'एरिया',
+        'volume': 'वॉल्यूम',
+    }
+
+    # Case-insensitive replacement (preserve surrounding text)
+    # Sort by length descending to match longer phrases first
+    for eng, hindi in sorted(replacements.items(), key=lambda x: -len(x[0])):
+        text = re_mod.sub(re_mod.escape(eng), hindi, text, flags=re_mod.IGNORECASE)
+
+    return text
+
+
 def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
     """Generate speech using Google Cloud TTS."""
     tts_client = get_google_tts_client()
@@ -198,7 +242,7 @@ sessions: dict[str, AgenticTutor] = {}
 # ============================================================
 
 class StartSessionRequest(BaseModel):
-    student_name: str = "Student"
+    student_name: str = ""  # v5.0: Never default to "Student"
     chapter: str = "rational_numbers"
 
 
@@ -303,9 +347,12 @@ class TextToSpeechRequest(BaseModel):
 async def text_to_speech(request: TextToSpeechRequest):
     """Convert text to speech."""
     try:
+        # v5.0: Preprocess text for better Hindi pronunciation
+        processed_text = preprocess_for_tts(request.text, "en-IN")
+
         with Timer() as tts_timer:
             if get_google_tts_client():
-                audio_content = google_tts(text=request.text, ssml=request.ssml)
+                audio_content = google_tts(text=processed_text, ssml=request.ssml)
                 audio_base64 = base64.b64encode(audio_content).decode('utf-8')
             else:
                 # Fallback to OpenAI TTS

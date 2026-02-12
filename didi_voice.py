@@ -108,7 +108,7 @@ Example: Student said 'minus 1' (numerator) then '7' (denominator)
 
 {lang_strict}
 
-{history}"""
+{history_section}"""
 
 
 # ============================================================
@@ -320,11 +320,22 @@ def _build_system(student_name: str, lang: str, history: str) -> str:
             "Still be warm and friendly, but polite — like talking to an older student, not a little kid."
         )
 
+    # v5.0: More explicit instruction to use conversation history
+    if history:
+        history_section = (
+            f"CONVERSATION SO FAR (last few turns):\n{history}\n\n"
+            "Use this to connect your response to what the student has been saying. "
+            "If they asked about something or said something, ADDRESS it. "
+            "Do not ignore what they just said."
+        )
+    else:
+        history_section = ""
+
     return DIDI_PROMPT.format(
         student_name=student_name,
         lang_instruction=lang_instruction,
         lang_strict=lang_strict,
-        history=history
+        history_section=history_section
     )
 
 

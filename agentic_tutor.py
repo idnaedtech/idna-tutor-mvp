@@ -46,8 +46,13 @@ class AgenticTutor:
             questions = ALL_CHAPTERS.get("rational_numbers", [])[:10]
             chapter = "rational_numbers"
 
+        # v5.0: Never use "Student" as a default name
+        clean_name = student_name.strip() if student_name else ""
+        if clean_name.lower() == "student":
+            clean_name = ""
+
         return {
-            "student_name": student_name,
+            "student_name": clean_name,
             "chapter": chapter,
             "chapter_name": CHAPTER_NAMES.get(chapter, chapter),
             "questions": questions,
@@ -567,6 +572,30 @@ class AgenticTutor:
         elif action == Action.REJECT_LANGUAGE:
             instr = voice.build_language_reject_instruction(meta.get("language", "that language"), q_text)
             return voice.generate_speech(instr, name, lang, history)
+
+        # ---- TEACH_CONCEPT (v5.0) ----
+        elif action == Action.TEACH_CONCEPT:
+            # Get concept from classification detail (passed via meta or need to re-classify)
+            # Re-classify to get concept detail
+            result = classifier.classify(student_input)
+            concept = result.get("detail", "this concept")
+            q = self.session["current_question"]
+            q_text_full = q.get("text", q.get("question_text", ""))
+
+            self._last_tool = "teach_concept"
+            instr = (
+                f"The student asked about '{concept}'. They don't understand it yet. "
+                f"PAUSE the current question. Teach '{concept}' using a simple real-life example "
+                f"that a 13-year-old in India would relate to. Use 3-4 short sentences max. "
+                f"Show at least one number example. "
+                f"Then connect it back to the current question: '{q_text_full}'. "
+                f"End with an invitation to try the question again. "
+                f"Do NOT just define the term. TEACH it with an example."
+            )
+            speech = voice.generate_speech(instr, name, lang, history)
+            # Reset attempt count since we paused to teach
+            self.session["attempt_count"] = max(0, self.session["attempt_count"] - 1)
+            return speech
 
         # ---- END ----
         elif action == Action.END_SESSION:

@@ -1,13 +1,14 @@
 """
 IDNA Tutor Tools - OpenAI Function Calling Definitions
 ======================================================
-5 tools. No ask_what_they_did — it caused infinite loops.
+6 tools. No ask_what_they_did — it caused infinite loops.
 
 Decision tree for the LLM:
   Student answer matches answer key exactly → praise_and_continue
   Student answer is partially correct       → guide_partial_answer
   Student answer is wrong                   → give_hint
   Student says IDK / is stuck               → encourage_attempt
+  Student asks about a concept              → teach_concept (v5.0)
   Student wants to stop                     → end_session
 """
 
@@ -105,6 +106,36 @@ TUTOR_TOOLS = [
                     }
                 },
                 "required": ["approach"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "teach_concept",
+            "description": (
+                "Student does not understand a prerequisite concept needed for the current question. "
+                "Pause the question. Teach the concept using a simple real-life example, then connect "
+                "it back to the question. Use this when: student explicitly asks 'what is [concept]?', "
+                "student says they don't understand the underlying topic, or brain detects zero foundational understanding."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "concept_name": {
+                        "type": "string",
+                        "description": "The concept to teach (e.g., 'rational numbers', 'fractions', 'variables')"
+                    },
+                    "explanation": {
+                        "type": "string",
+                        "description": "Simple explanation with a real-life example. Max 4 sentences. Must use numbers, not paragraphs about numbers."
+                    },
+                    "bridge_back": {
+                        "type": "string",
+                        "description": "One sentence connecting the concept back to the current question."
+                    }
+                },
+                "required": ["concept_name", "explanation", "bridge_back"]
             }
         }
     },
