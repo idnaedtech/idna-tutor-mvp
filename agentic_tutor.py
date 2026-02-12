@@ -112,6 +112,15 @@ class AgenticTutor:
             (time.time() - self.session["start_time"]) / 60
         )
 
+        # 0. Filter nonsensical/ambient noise (TV, background chatter)
+        # Do NOT penalize student for background noise
+        if classifier.is_nonsensical(student_input):
+            import re
+            last_speech = self.session["history"][-1]["teacher"] if self.session.get("history") else ""
+            questions = re.findall(r'[^.!?]*\?', last_speech)
+            repeat_q = questions[-1].strip() if questions else "Ek baar phir bataiye?"
+            return f"{self.session['student_name']}, samajh nahi aaya. {repeat_q}"
+
         # 1. Classify
         result = classifier.classify(student_input)
         category = result["category"]

@@ -202,3 +202,29 @@ def _is_offtopic(t: str) -> bool:
         "are you real", "are you human", "are you ai"
     ]
     return any(p in t for p in phrases)
+
+
+def is_nonsensical(text: str) -> bool:
+    """Detect if input is ambient noise / TV / unrelated to tutoring."""
+    text_lower = text.strip().lower()
+
+    # Very short input is likely noise
+    if len(text_lower) <= 2:
+        return True
+
+    # Foreign language fragments, TV audio, etc.
+    non_relevant = [
+        "que é", "isso", "en la", "medida", "momento",
+        "merci", "bonjour", "danke", "bitte", "gracias",
+        "republic of congo", "cobalt", "your phone your laptop",
+        "your ev", "back camera", "subtitles by", "subscribe",
+        "like and subscribe", "thank you for watching",
+        "thanks for watching", "all rights reserved",
+        "copyright", "music playing", "applause",
+        "rueldo", "basically what you expect",
+    ]
+    for phrase in non_relevant:
+        if phrase in text_lower:
+            return True
+
+    return False
