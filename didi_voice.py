@@ -247,7 +247,12 @@ def build_offer_exit_instruction(student_name: str) -> str:
     )
 
 
-def build_language_switch_instruction(question_text: str) -> str:
+def build_language_switch_instruction(question_text: str, language: str = "english") -> str:
+    if language == "hindi":
+        return (
+            f"Student asked for Hindi. Acknowledge warmly: 'Theek hai, ab Hindi mein baat karte hain.' "
+            f"Then re-read in Hindi: {question_text}"
+        )
     return (
         f"Student asked for English. Switch to English and re-read: {question_text}"
     )
@@ -300,6 +305,9 @@ def _build_system(student_name: str, lang: str, history: str) -> str:
     if base_lang == "english":
         lang_instruction = "The student asked for English only."
         lang_strict = "STRICT ENGLISH ONLY. Do NOT use ANY Hindi words — no 'Chalo', no 'Dekhiye', no 'Haan', no 'Accha'. Pure English. Keep your warm, respectful tone."
+    elif base_lang == "hindi":
+        lang_instruction = "The student asked for Hindi. Speak primarily in Hindi with minimal English."
+        lang_strict = "SPEAK IN HINDI. Use Hindi for explanations: 'Dekhiye', 'Samjhiye', 'Yahan', 'Iska matlab'. Only use English for math terms (plus, minus, fraction, denominator) if needed. Keep your warm, respectful tone."
     else:
         lang_instruction = "Respectful Hindi-English mix. Use 'Haan', 'Accha', 'Dekhiye', 'Chaliye', 'Koi baat nahi' naturally. Always use 'aap' form, never 'tu/tum'."
         lang_strict = ""

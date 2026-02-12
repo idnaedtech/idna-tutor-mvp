@@ -561,7 +561,7 @@ class AgenticTutor:
 
         # ---- LANGUAGE ----
         elif action == Action.SWITCH_LANGUAGE:
-            instr = voice.build_language_switch_instruction(q_text)
+            instr = voice.build_language_switch_instruction(q_text, self.session["language"])
             return voice.generate_speech(instr, name, lang, history)
 
         elif action == Action.REJECT_LANGUAGE:

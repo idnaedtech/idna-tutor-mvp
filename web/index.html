@@ -540,7 +540,7 @@
 
         <div class="name-input">
             <label for="name-field">Your name</label>
-            <input type="text" id="name-field" placeholder="Enter your name..." value="Student">
+            <input type="text" id="name-field" placeholder="Apna naam likhiye..." required>
         </div>
 
         <div class="chapter-select">
@@ -694,7 +694,12 @@
         async function startSession() {
             showTyping();
             try {
-                const studentName = nameField.value.trim() || 'Student';
+                const studentName = nameField.value.trim();
+                if (!studentName) {
+                    alert('Please enter your name / Apna naam likhiye');
+                    hideTyping();
+                    return;
+                }
                 const chapter = chapterDropdown.value;
 
                 // Single API call starts session and returns greeting + first question

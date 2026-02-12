@@ -34,9 +34,11 @@ def classify(text: str) -> dict:
     if _is_stop(t):
         return {"category": "STOP", "detail": "", "cleaned": raw}
 
-    # 2. LANGUAGE SWITCH — English
+    # 2. LANGUAGE SWITCH — English or Hindi
     if _wants_english(t):
         return {"category": "LANGUAGE", "detail": "english", "cleaned": raw}
+    if _wants_hindi(t):
+        return {"category": "LANGUAGE", "detail": "hindi", "cleaned": raw}
 
     # 3. UNSUPPORTED LANGUAGE
     lang = _wants_other_language(t)
@@ -87,10 +89,22 @@ def _is_stop(t: str) -> bool:
 
 def _wants_english(t: str) -> bool:
     phrases = [
-        "speak in english", "english please", "in english only",
+        "speak in english", "english please", "in english",
         "can you speak english", "talk in english", "use english",
         "can you speak in english", "explain in english",
-        "english only", "only english", "only in english"
+        "english only", "only english", "only in english",
+        "english mein", "english me"
+    ]
+    return any(p in t for p in phrases)
+
+
+def _wants_hindi(t: str) -> bool:
+    phrases = [
+        "speak in hindi", "hindi please", "in hindi",
+        "can you speak hindi", "talk in hindi", "use hindi",
+        "can you speak in hindi", "explain in hindi",
+        "hindi only", "only hindi", "only in hindi",
+        "hindi mein", "hindi me", "हिंदी में", "हिन्दी में"
     ]
     return any(p in t for p in phrases)
 
