@@ -65,7 +65,10 @@ class AgenticTutor:
             "duration_minutes": 0,
             "start_time": time.time(),
             "state": State.GREETING,
-            "session_ended": False
+            "session_ended": False,
+            # v4.2: Track repeated scaffolding to prevent sub-question loops
+            "last_didi_question": None,
+            "didi_repeat_count": 0
         }
 
     # ============================================================
@@ -292,6 +295,14 @@ class AgenticTutor:
                 return voice.generate_speech(instr, name, lang, history)
 
             # ---- WRONG or AMBIGUOUS — pass to LLM ----
+            # v4.2: Check if student is repeating same answer (stuck)
+            student_repeating = self._student_repeating_answer()
+
+            # Build sub-question context from last Didi response
+            last_didi_response = ""
+            if self.session.get("history"):
+                last_didi_response = self.session["history"][-1].get("teacher", "")
+
             judge_input = (
                 q_ctx + f'\n\nStudent answered: "{student_input}"\n'
                 f'Check against answer key.\n\n'
@@ -306,6 +317,11 @@ class AgenticTutor:
                 f'CRITICAL: Parse the ENTIRE student answer as one expression. '
                 f'"minus 1 by 7" is -1/7, NOT "minus 1" + extra words. '
                 f'If it matches the answer key, use praise_and_continue IMMEDIATELY.\n\n'
+                f'SUB-QUESTION HANDLING (IMPORTANT):\n'
+                f'If you previously asked a sub-question (like "2 times minus 3 kya hota hai?") '
+                f'and the student answered THAT sub-question correctly (e.g., "minus 6"), '
+                f'you MUST acknowledge it ("Haan, sahi hai!") and MOVE FORWARD to the next step. '
+                f'Do NOT re-ask the same sub-question. Do NOT ignore their correct sub-answer.\n\n'
                 f'DECISION RULES:\n'
                 f'- Answer matches answer key → praise_and_continue\n'
                 f'- Answer is CLOSE but incomplete (e.g. said numerator only, forgot denominator) → guide_partial_answer\n'
@@ -313,6 +329,14 @@ class AgenticTutor:
                 f'- Student says IDK or is confused → encourage_attempt\n'
                 f'- NEVER ask student to explain their thinking or process.'
             )
+
+            # v4.2: Add warning if student is repeating
+            if student_repeating:
+                judge_input += (
+                    f'\n\nWARNING: Student has given the same answer twice. '
+                    f'If their answer is correct for a sub-question you asked, acknowledge it and move forward. '
+                    f'If still wrong, give a DIFFERENT hint or explain the solution.'
+                )
             result = voice.judge_answer(judge_input, q_ctx, name, lang, history)
             tool = result["tool"]
             args = result["args"]
@@ -382,7 +406,23 @@ class AgenticTutor:
             else:
                 instr = voice.build_hint_instruction(q_ctx, 1, student_input)
 
-            return voice.generate_speech(instr, name, lang, history)
+            # Generate speech
+            speech = voice.generate_speech(instr, name, lang, history)
+
+            # v4.2: Check for repeat loop AFTER generating speech
+            if self._check_repeat_loop(speech):
+                # Didi asked the same sub-question 3+ times — force explain
+                self.session["questions_completed"] += 1
+                self._advance_question()
+                self.session["state"] = State.EXPLAINING
+                if not self.session["session_ended"]:
+                    self.brain.plan_for_question(self.session["current_question"], self.session)
+                nq = self._current_question_text()
+                self._last_tool = "explain_solution"
+                explain_instr = voice.build_explain_instruction(q_ctx, nq)
+                return voice.generate_speech(explain_instr, name, lang, history)
+
+            return speech
 
         # ---- GIVE_HINT (forced by state machine) ----
         elif action == Action.GIVE_HINT:
@@ -477,12 +517,75 @@ class AgenticTutor:
         self.session["attempt_count"] = 0
         self.session["idk_count"] = 0
         self.session["offtopic_streak"] = 0
+        # v4.2: Reset repeat tracking on question advance
+        self.session["last_didi_question"] = None
+        self.session["didi_repeat_count"] = 0
         if self.session["current_question_index"] < len(self.session["questions"]):
             self.session["current_question"] = self.session["questions"][
                 self.session["current_question_index"]
             ]
         else:
             self.session["session_ended"] = True
+
+    def _extract_sub_question(self, speech: str) -> str:
+        """Extract the last question from Didi's response for repeat detection."""
+        import re
+        # Find last sentence ending with ?
+        questions = re.findall(r'[^.!?]*\?', speech)
+        if questions:
+            return questions[-1].strip().lower()
+        # Fallback: last sentence
+        sentences = re.split(r'[.!?]', speech)
+        return sentences[-2].strip().lower() if len(sentences) > 1 else speech.strip().lower()
+
+    def _check_repeat_loop(self, speech: str) -> bool:
+        """Check if Didi is stuck in a sub-question loop. Returns True if should force explain."""
+        current_q = self._extract_sub_question(speech)
+        last_q = self.session.get("last_didi_question")
+
+        # Check for similar sub-question (fuzzy match)
+        if last_q and self._similar_questions(current_q, last_q):
+            self.session["didi_repeat_count"] += 1
+        else:
+            self.session["didi_repeat_count"] = 1
+
+        self.session["last_didi_question"] = current_q
+
+        # Force explain if same sub-question asked 3+ times
+        return self.session["didi_repeat_count"] >= 3
+
+    def _similar_questions(self, q1: str, q2: str) -> bool:
+        """Check if two questions are essentially the same."""
+        import re
+        # Normalize: remove filler words, lowercase
+        def normalize(q):
+            q = q.lower()
+            q = re.sub(r'\b(toh|aur|ab|pehle|bataiye|batao|kya|hai|hoga|karo|kariye)\b', '', q)
+            q = re.sub(r'[^a-z0-9\s]', '', q)
+            return ' '.join(q.split())
+
+        n1, n2 = normalize(q1), normalize(q2)
+        # Check if one contains the other or high overlap
+        if n1 in n2 or n2 in n1:
+            return True
+        # Word overlap
+        words1, words2 = set(n1.split()), set(n2.split())
+        if not words1 or not words2:
+            return False
+        overlap = len(words1 & words2) / max(len(words1), len(words2))
+        return overlap > 0.6
+
+    def _student_repeating_answer(self) -> bool:
+        """Check if student gave essentially the same answer twice in a row."""
+        history = self.session.get("history", [])
+        if len(history) < 2:
+            return False
+        last_two = [h.get("student", "").lower().strip() for h in history[-2:]]
+        if not all(last_two):
+            return False
+        # Normalize and compare
+        from answer_checker import normalize_answer
+        return normalize_answer(last_two[0]) == normalize_answer(last_two[1])
 
     def _count_action_in_history(self, tool_name: str) -> int:
         """Count how many times an LLM tool has been used for the current question.
