@@ -32,6 +32,19 @@ def normalize_answer(raw: str) -> str:
     text = text.replace(" into ", "*")
     text = text.replace(" times ", "*")
 
+    # Compound fractions FIRST (before single words)
+    text = re.sub(r'\bone\s+half\b', '1/2', text)
+    text = re.sub(r'\btwo\s+thirds?\b', '2/3', text)
+    text = re.sub(r'\bthree\s+quarters?\b', '3/4', text)
+    text = re.sub(r'\bone\s+third\b', '1/3', text)
+    text = re.sub(r'\bone\s+quarter\b', '1/4', text)
+    text = re.sub(r'\btwo\s+quarters?\b', '1/2', text)
+
+    # Single fractional words
+    text = re.sub(r'\bhalf\b', '1/2', text)
+    text = re.sub(r'\bquarter\b', '1/4', text)
+    text = re.sub(r'\bthird\b', '1/3', text)
+
     # Word numbers → digits
     word_nums = {
         "zero": "0", "one": "1", "two": "2", "three": "3",
