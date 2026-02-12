@@ -30,6 +30,7 @@ from questions import ALL_CHAPTERS, CHAPTER_NAMES
 import input_classifier as classifier
 from tutor_states import State, Action, get_transition
 from tutor_brain import TutorBrain
+from answer_checker import check_answer
 import didi_voice as voice
 
 
@@ -245,6 +246,52 @@ class AgenticTutor:
                 instr = voice.build_explain_instruction(q_ctx, nq)
                 return voice.generate_speech(instr, name, lang, history)
 
+            # ---- DETERMINISTIC CHECK (before LLM) ----
+            q = self.session["current_question"]
+            answer_key = q.get("answer", "")
+            accept_also = q.get("accept_also", [])
+            deterministic_result = check_answer(student_input, answer_key, accept_also)
+
+            if deterministic_result is True:
+                # CORRECT — bypass LLM, force praise_and_continue
+                self._last_tool = "praise_and_continue"
+                self.session["score"] += 1
+                self.session["questions_completed"] += 1
+                self._advance_question()
+                self.session["state"] = State.TRANSITIONING
+                if not self.session["session_ended"]:
+                    self.brain.plan_for_question(self.session["current_question"], self.session)
+                nq = self._current_question_text()
+                pre_teach = self.brain.get_pre_teach_instruction()
+                if pre_teach and nq:
+                    instr = voice.build_praise_instruction(q_ctx, "got it right", "") + \
+                            f"\n\nBefore the next question, {pre_teach}\nThen ask: {nq}"
+                else:
+                    instr = voice.build_praise_instruction(q_ctx, "got it right", nq)
+                return voice.generate_speech(instr, name, lang, history)
+
+            if deterministic_result is None:
+                # PARTIAL — bypass LLM, force guide_partial_answer
+                self._last_tool = "guide_partial_answer"
+                self.session["state"] = State.HINTING
+                # Detect what's partial
+                if '/' in answer_key:
+                    correct_part = "numerator is correct"
+                    missing_part = "include the denominator"
+                else:
+                    correct_part = "the magnitude is correct"
+                    missing_part = "check the sign"
+                instr = (
+                    f"Student's answer is PARTIALLY correct.\n"
+                    f"What they got right: {correct_part}\n"
+                    f"What's missing: {missing_part}\n\n"
+                    f"Acknowledge the correct part FIRST. "
+                    f"Then guide them to the missing piece with ONE specific question.\n\n"
+                    f"{q_ctx}"
+                )
+                return voice.generate_speech(instr, name, lang, history)
+
+            # ---- WRONG or AMBIGUOUS — pass to LLM ----
             judge_input = (
                 q_ctx + f'\n\nStudent answered: "{student_input}"\n'
                 f'Check against answer key.\n\n'
