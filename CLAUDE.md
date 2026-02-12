@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v4.4 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v4.8 — CLAUDE CODE RULES
 
 ## FILE STRUCTURE (6 files)
 
@@ -121,6 +121,14 @@ Brain can override ask_what_they_did when:
 ### Models:
 - `gpt-4o-mini` for hint selection (wrong answers only)
 - `gpt-4o` for speech generation
+
+### Voice Configuration (v4.8):
+- **TTS**: Google Cloud `en-IN-Journey-F` (natural Indian English female)
+  - Fallback: `en-IN-Journey-D`
+  - DO NOT use hi-IN voices (robotic with English words)
+- **STT**: Groq Whisper `whisper-large-v3-turbo` with AUTO-DETECT
+  - NO language parameter (let Whisper detect Hindi/English/Hinglish)
+  - DO NOT force language="hi" (causes codec errors and misrecognition)
 
 ### Dead code (do NOT import):
 web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.py, guardrails.py
