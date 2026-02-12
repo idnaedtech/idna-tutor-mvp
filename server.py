@@ -117,14 +117,18 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
     else:
         synthesis_input = texttospeech.SynthesisInput(text=text)
 
+    # v4.5: Upgraded to Neural2-D for more natural Hindi voice
+    # Neural2 voices are newer and more expressive than Wavenet
     voice = texttospeech.VoiceSelectionParams(
         language_code="hi-IN",
-        name="hi-IN-Wavenet-A",  # v4.3: Hindi female voice for Didi
+        name="hi-IN-Neural2-D",  # Neural2-D: Natural female voice, warm tone
     )
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.95,  # Let Journey voice use natural prosody
+        speaking_rate=0.92,   # Slightly slower for clarity
+        pitch=1.0,            # Natural pitch
+        volume_gain_db=1.0,   # Slight boost for clarity
     )
 
     try:
@@ -132,8 +136,9 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
             input=synthesis_input, voice=voice, audio_config=audio_config
         )
         return response.audio_content
-    except Exception:
-        # Fallback to alternate Hindi voice
+    except Exception as e:
+        print(f"TTS: Neural2-D failed ({e}), trying Wavenet-D...")
+        # Fallback to Wavenet-D if Neural2 unavailable
         voice = texttospeech.VoiceSelectionParams(
             language_code="hi-IN", name="hi-IN-Wavenet-D"
         )
@@ -338,17 +343,31 @@ async def speech_to_text(audio: UploadFile = File(...)):
             tmp.write(content)
             tmp_path = tmp.name
 
-        def transcribe():
+        def transcribe_with_lang(lang: str):
             with open(tmp_path, "rb") as f:
                 return groq_client.audio.transcriptions.create(
                     model="whisper-large-v3-turbo",
                     file=f,
-                    language="hi",  # v4.3: Force Hindi to avoid "foreign"/"well period" errors
+                    language=lang,
                     response_format="verbose_json"
                 )
 
+        # v4.5: Language fallback - try Hindi first, then English
         with Timer() as whisper_timer:
-            transcript = await asyncio.to_thread(transcribe)
+            try:
+                transcript = await asyncio.to_thread(lambda: transcribe_with_lang("hi"))
+                text = transcript.text if hasattr(transcript, 'text') else str(transcript)
+                # If Hindi transcription is empty or too short, try English
+                if not text or len(text.strip()) < 2:
+                    print("STT: Hindi returned empty, trying English...")
+                    transcript = await asyncio.to_thread(lambda: transcribe_with_lang("en"))
+            except Exception as e:
+                print(f"STT: Hindi failed ({e}), trying English...")
+                try:
+                    transcript = await asyncio.to_thread(lambda: transcribe_with_lang("en"))
+                except Exception as e2:
+                    print(f"STT: English also failed ({e2})")
+                    raise e2
 
         text = transcript.text if hasattr(transcript, 'text') else str(transcript)
         segments = transcript.segments if hasattr(transcript, 'segments') else None
