@@ -343,33 +343,81 @@ async def speech_to_text(audio: UploadFile = File(...)):
             tmp.write(content)
             tmp_path = tmp.name
 
-        def transcribe_with_lang(lang: str):
-            with open(tmp_path, "rb") as f:
-                return groq_client.audio.transcriptions.create(
-                    model="whisper-large-v3-turbo",
-                    file=f,
-                    language=lang,
-                    response_format="verbose_json"
-                )
+        print(f"[STT] Audio file size: {len(content)} bytes")
 
-        # v4.5: Language fallback - try Hindi first, then English
+        def transcribe_with_lang(lang: str = None):
+            """Transcribe with optional language hint. None = auto-detect."""
+            with open(tmp_path, "rb") as f:
+                kwargs = {
+                    "model": "whisper-large-v3-turbo",
+                    "file": f,
+                    "response_format": "verbose_json"
+                }
+                if lang:
+                    kwargs["language"] = lang
+                return groq_client.audio.transcriptions.create(**kwargs)
+
+        # v4.6: Three-tier fallback: Hindi → English → Auto-detect
+        transcript = None
+        text = ""
+
         with Timer() as whisper_timer:
+            # Attempt 1: Hindi
             try:
+                print("[STT] Trying Hindi (hi)...")
                 transcript = await asyncio.to_thread(lambda: transcribe_with_lang("hi"))
                 text = transcript.text if hasattr(transcript, 'text') else str(transcript)
-                # If Hindi transcription is empty or too short, try English
-                if not text or len(text.strip()) < 2:
-                    print("STT: Hindi returned empty, trying English...")
-                    transcript = await asyncio.to_thread(lambda: transcribe_with_lang("en"))
-            except Exception as e:
-                print(f"STT: Hindi failed ({e}), trying English...")
-                try:
-                    transcript = await asyncio.to_thread(lambda: transcribe_with_lang("en"))
-                except Exception as e2:
-                    print(f"STT: English also failed ({e2})")
-                    raise e2
+                print(f"[STT] Hindi result: '{text[:80] if text else 'EMPTY'}...'")
 
-        text = transcript.text if hasattr(transcript, 'text') else str(transcript)
+                if text and len(text.strip()) >= 2:
+                    print("[STT] Hindi succeeded")
+                else:
+                    raise ValueError("Hindi returned empty/short text")
+
+            except Exception as e1:
+                print(f"[STT] Hindi failed: {e1}")
+
+                # Attempt 2: English
+                try:
+                    print("[STT] Trying English (en)...")
+                    transcript = await asyncio.to_thread(lambda: transcribe_with_lang("en"))
+                    text = transcript.text if hasattr(transcript, 'text') else str(transcript)
+                    print(f"[STT] English result: '{text[:80] if text else 'EMPTY'}...'")
+
+                    if text and len(text.strip()) >= 2:
+                        print("[STT] English succeeded")
+                    else:
+                        raise ValueError("English returned empty/short text")
+
+                except Exception as e2:
+                    print(f"[STT] English failed: {e2}")
+
+                    # Attempt 3: Auto-detect (no language param)
+                    try:
+                        print("[STT] Trying auto-detect (no language)...")
+                        transcript = await asyncio.to_thread(lambda: transcribe_with_lang(None))
+                        text = transcript.text if hasattr(transcript, 'text') else str(transcript)
+                        print(f"[STT] Auto-detect result: '{text[:80] if text else 'EMPTY'}...'")
+
+                        if not text or len(text.strip()) < 2:
+                            print("[STT] Auto-detect also empty")
+                            text = ""
+                    except Exception as e3:
+                        print(f"[STT] Auto-detect failed: {e3}")
+                        text = ""
+
+        # If all attempts failed, return error
+        if not text or len(text.strip()) < 2:
+            print("[STT] All attempts failed, returning voice error")
+            return {
+                "text": "",
+                "confidence": 0.0,
+                "is_low_confidence": True,
+                "reason": "transcription_failed",
+                "retry_message": "Voice nahi samajh aaya. Please phir se boliye."
+            }
+
+        text = text.strip()
         segments = transcript.segments if hasattr(transcript, 'segments') else None
 
         confidence_result = estimate_stt_confidence(text, segments)
