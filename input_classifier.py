@@ -163,7 +163,21 @@ def _is_idk(t: str) -> bool:
         "i don't understand", "i dont understand",
         "how can i use", "how do we use", "daily life",
         "real life example", "where do we use this",
-        "how is this useful", "give me example"
+        "how is this useful", "give me example",
+        # v4.3: Hindi IDK phrases
+        "nahi aata", "nahi aate", "nahi aati",  # don't know how to
+        "samajh nahi aata", "samajh nahi aati", "samajh nahi aaye",
+        "nahi samjha", "nahi samjhi", "nahi samajh",
+        "kaise karte hain", "kaise karu", "kaise karun",  # how do I do this
+        "batao na", "bata do", "batao please",  # tell me
+        "sikhao", "sikha do",  # teach me
+        "kya hai ye", "ye kya hai",  # what is this
+        "explain karo", "explain kar do",  # explain it
+        # v4.3: Simpler English triggers
+        "explain fraction", "explain fractions",
+        "explain the fraction", "explain the fractions",
+        "explain this topic", "explain the topic",
+        "what is this", "how to do this", "how do i do this"
     ]
     return any(p in t for p in phrases)
 
