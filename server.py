@@ -123,18 +123,15 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
     else:
         synthesis_input = texttospeech.SynthesisInput(text=text)
 
-    # v4.5: Upgraded to Neural2-D for more natural Hindi voice
-    # Neural2 voices are newer and more expressive than Wavenet
+    # v4.8: Reverted to en-IN-Journey-F (natural Indian English female)
     voice = texttospeech.VoiceSelectionParams(
-        language_code="hi-IN",
-        name="hi-IN-Neural2-D",  # Neural2-D: Natural female voice, warm tone
+        language_code="en-IN",
+        name="en-IN-Journey-F",  # Natural conversational Indian female voice
     )
 
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.92,   # Slightly slower for clarity
-        pitch=1.0,            # Natural pitch
-        volume_gain_db=1.0,   # Slight boost for clarity
+        speaking_rate=0.95,  # Natural prosody
     )
 
     try:
@@ -142,11 +139,10 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
             input=synthesis_input, voice=voice, audio_config=audio_config
         )
         return response.audio_content
-    except Exception as e:
-        print(f"TTS: Neural2-D failed ({e}), trying Wavenet-D...")
-        # Fallback to Wavenet-D if Neural2 unavailable
+    except Exception:
+        # Fallback to male Journey voice
         voice = texttospeech.VoiceSelectionParams(
-            language_code="hi-IN", name="hi-IN-Wavenet-D"
+            language_code="en-IN", name="en-IN-Journey-D"
         )
         response = tts_client.synthesize_speech(
             input=synthesis_input, voice=voice, audio_config=audio_config
@@ -305,30 +301,23 @@ class TextToSpeechRequest(BaseModel):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech using OpenAI TTS (nova voice for Hinglish)."""
+    """Convert text to speech."""
     try:
         with Timer() as tts_timer:
-            # v4.7: OpenAI TTS "nova" as primary - handles Hinglish code-switching naturally
-            try:
+            if get_google_tts_client():
+                audio_content = google_tts(text=request.text, ssml=request.ssml)
+                audio_base64 = base64.b64encode(audio_content).decode('utf-8')
+            else:
+                # Fallback to OpenAI TTS
                 response = client.audio.speech.create(
                     model="tts-1",
-                    voice="nova",  # Warm female voice, great for Hindi+English mix
-                    input=request.text,
-                    response_format="mp3",
-                    speed=0.95
+                    voice=request.voice,
+                    speed=0.95,
+                    input=request.text
                 )
                 audio_base64 = base64.b64encode(response.content).decode('utf-8')
-                print(f"TTS (OpenAI nova) completed in {tts_timer.elapsed_ms}ms")
-            except Exception as e:
-                print(f"OpenAI TTS failed ({e}), trying Google Cloud...")
-                # Fallback to Google Cloud TTS
-                if get_google_tts_client():
-                    audio_content = google_tts(text=request.text, ssml=request.ssml)
-                    audio_base64 = base64.b64encode(audio_content).decode('utf-8')
-                    print(f"TTS (Google Cloud) completed in {tts_timer.elapsed_ms}ms")
-                else:
-                    raise e
 
+        print(f"TTS completed in {tts_timer.elapsed_ms}ms")
         return {"audio": audio_base64, "format": "mp3"}
 
     except Exception as e:
@@ -356,81 +345,19 @@ async def speech_to_text(audio: UploadFile = File(...)):
             tmp.write(content)
             tmp_path = tmp.name
 
-        print(f"[STT] Audio file size: {len(content)} bytes", flush=True)
-
-        def transcribe_with_lang(lang: str = None):
-            """Transcribe with optional language hint. None = auto-detect."""
+        def transcribe():
             with open(tmp_path, "rb") as f:
-                kwargs = {
-                    "model": "whisper-large-v3-turbo",
-                    "file": f,
-                    "response_format": "verbose_json"
-                }
-                if lang:
-                    kwargs["language"] = lang
-                return groq_client.audio.transcriptions.create(**kwargs)
+                return groq_client.audio.transcriptions.create(
+                    model="whisper-large-v3-turbo",
+                    file=f,
+                    response_format="verbose_json"
+                )
 
-        # v4.6: Three-tier fallback: Hindi → English → Auto-detect
-        transcript = None
-        text = ""
-
+        # v4.8: Simple auto-detect (no language parameter)
         with Timer() as whisper_timer:
-            # Attempt 1: Hindi
-            try:
-                print("[STT] Trying Hindi (hi)...", flush=True)
-                transcript = await asyncio.to_thread(lambda: transcribe_with_lang("hi"))
-                text = transcript.text if hasattr(transcript, 'text') else str(transcript)
-                print(f"[STT] Hindi result: '{text[:80] if text else 'EMPTY'}...'")
+            transcript = await asyncio.to_thread(transcribe)
 
-                if text and len(text.strip()) >= 2:
-                    print("[STT] Hindi succeeded")
-                else:
-                    raise ValueError("Hindi returned empty/short text")
-
-            except Exception as e1:
-                print(f"[STT] Hindi failed: {e1}")
-
-                # Attempt 2: English
-                try:
-                    print("[STT] Trying English (en)...")
-                    transcript = await asyncio.to_thread(lambda: transcribe_with_lang("en"))
-                    text = transcript.text if hasattr(transcript, 'text') else str(transcript)
-                    print(f"[STT] English result: '{text[:80] if text else 'EMPTY'}...'")
-
-                    if text and len(text.strip()) >= 2:
-                        print("[STT] English succeeded")
-                    else:
-                        raise ValueError("English returned empty/short text")
-
-                except Exception as e2:
-                    print(f"[STT] English failed: {e2}")
-
-                    # Attempt 3: Auto-detect (no language param)
-                    try:
-                        print("[STT] Trying auto-detect (no language)...")
-                        transcript = await asyncio.to_thread(lambda: transcribe_with_lang(None))
-                        text = transcript.text if hasattr(transcript, 'text') else str(transcript)
-                        print(f"[STT] Auto-detect result: '{text[:80] if text else 'EMPTY'}...'")
-
-                        if not text or len(text.strip()) < 2:
-                            print("[STT] Auto-detect also empty")
-                            text = ""
-                    except Exception as e3:
-                        print(f"[STT] Auto-detect failed: {e3}")
-                        text = ""
-
-        # If all attempts failed, return error
-        if not text or len(text.strip()) < 2:
-            print("[STT] All attempts failed, returning voice error")
-            return {
-                "text": "",
-                "confidence": 0.0,
-                "is_low_confidence": True,
-                "reason": "transcription_failed",
-                "retry_message": "Voice nahi samajh aaya. Please phir se boliye."
-            }
-
-        text = text.strip()
+        text = transcript.text if hasattr(transcript, 'text') else str(transcript)
         segments = transcript.segments if hasattr(transcript, 'segments') else None
 
         confidence_result = estimate_stt_confidence(text, segments)
