@@ -53,11 +53,19 @@ LOW_CONFIDENCE_MESSAGES = [
 
 
 # ============================================================
-# OpenAI & Google TTS Clients
+# OpenAI & Google TTS & Groq STT Clients
 # ============================================================
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=30.0,
+    max_retries=2
+)
+
+# Groq client for Whisper STT (faster & cheaper)
+groq_client = OpenAI(
+    api_key=os.getenv("GROQ_API_KEY"),
+    base_url="https://api.groq.com/openai/v1",
     timeout=30.0,
     max_retries=2
 )
@@ -332,8 +340,8 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
         def transcribe():
             with open(tmp_path, "rb") as f:
-                return client.audio.transcriptions.create(
-                    model="whisper-1",
+                return groq_client.audio.transcriptions.create(
+                    model="whisper-large-v3-turbo",
                     file=f,
                     language="en",
                     response_format="verbose_json"
