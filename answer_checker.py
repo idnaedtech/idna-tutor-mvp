@@ -27,11 +27,15 @@ def normalize_answer(raw: str) -> str:
     text = re.sub(r'\bmy\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b', r'minus \1', text)
     text = text.replace("minus ", "-")
     text = text.replace("negative ", "-")
+    # ORDER MATTERS: " divided by " and " divided " must run BEFORE " by "
+    # because " by " is a substring — it would split "divided by" into "divided/"
+    # if it ran first. E.g. "one divided by seven" → "one divided/seven" (broken).
+    text = text.replace(" divided by ", "/")
+    text = text.replace(" divided ", "/")
     text = text.replace(" by ", "/")
     text = text.replace(" over ", "/")
     text = text.replace(" upon ", "/")
     text = text.replace(" or ", "/")  # STT mishears "over" as "or"
-    text = text.replace(" divided by ", "/")
     text = text.replace(" plus ", "+")
     text = text.replace(" into ", "*")
     text = text.replace(" times ", "*")
