@@ -305,23 +305,30 @@ class TextToSpeechRequest(BaseModel):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech."""
+    """Convert text to speech using OpenAI TTS (nova voice for Hinglish)."""
     try:
         with Timer() as tts_timer:
-            if get_google_tts_client():
-                audio_content = google_tts(text=request.text, ssml=request.ssml)
-                audio_base64 = base64.b64encode(audio_content).decode('utf-8')
-            else:
-                # Fallback to OpenAI TTS
+            # v4.7: OpenAI TTS "nova" as primary - handles Hinglish code-switching naturally
+            try:
                 response = client.audio.speech.create(
                     model="tts-1",
-                    voice=request.voice,
-                    speed=0.85,
-                    input=request.text
+                    voice="nova",  # Warm female voice, great for Hindi+English mix
+                    input=request.text,
+                    response_format="mp3",
+                    speed=0.95
                 )
                 audio_base64 = base64.b64encode(response.content).decode('utf-8')
+                print(f"TTS (OpenAI nova) completed in {tts_timer.elapsed_ms}ms")
+            except Exception as e:
+                print(f"OpenAI TTS failed ({e}), trying Google Cloud...")
+                # Fallback to Google Cloud TTS
+                if get_google_tts_client():
+                    audio_content = google_tts(text=request.text, ssml=request.ssml)
+                    audio_base64 = base64.b64encode(audio_content).decode('utf-8')
+                    print(f"TTS (Google Cloud) completed in {tts_timer.elapsed_ms}ms")
+                else:
+                    raise e
 
-        print(f"TTS completed in {tts_timer.elapsed_ms}ms")
         return {"audio": audio_base64, "format": "mp3"}
 
     except Exception as e:
