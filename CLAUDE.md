@@ -64,8 +64,8 @@ Response spoken to student
 
 ### TTS preprocessing
 - preprocess_for_tts() transliterates English math terms to Hindi Devanagari
+- Only runs for `hi-IN` voice (not en-IN English voice)
 - Runs BEFORE Google TTS call
-- Fixes "t" and "g" English phonetic pronunciation
 
 ### Student name fix
 - NEVER default to "Student"
@@ -120,8 +120,15 @@ check_answer(student_input, answer_key, accept_also) → True/None/False
 - `gpt-4o` for BOTH tool calling AND speech generation
 
 ### Voice Configuration (v5.0):
-- **TTS**: Google Cloud `en-IN-Journey-F` with preprocess_for_tts() Hindi transliteration
+- **TTS**: Google Cloud `en-IN-Journey-F` (preprocess_for_tts only for hi-IN)
 - **STT**: Groq Whisper `whisper-large-v3-turbo` with AUTO-DETECT
+
+### Test Suite (246 tests)
+- `test_answer_checker.py` — spoken math normalization, correct/partial/wrong detection
+- `test_input_classifier.py` — all input categories including CONCEPT_REQUEST
+- `test_tutor_states.py` — state machine transitions, circuit breakers
+- `test_regression_live.py` — real session scenarios, full chain tests
+- Run: `python -m pytest test_*.py -v`
 
 ### Dead code (do NOT import):
 web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.py, guardrails.py
