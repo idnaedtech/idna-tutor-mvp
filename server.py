@@ -120,7 +120,7 @@ def preprocess_for_tts(text: str, lang: str = "hi-IN") -> str:
     """
     import re as re_mod
 
-    if "hi" not in lang.lower() and "en-IN" not in lang:
+    if "hi-IN" not in lang.lower():
         return text
 
     # Common math terms that Google TTS mispronounces in hi-IN
