@@ -19,7 +19,7 @@ from tutor_tools import TUTOR_TOOLS
 # ============================================================
 # CONFIG
 # ============================================================
-TOOL_MODEL = "gpt-4o-mini"
+TOOL_MODEL = "gpt-4o"
 SPEECH_MODEL = "gpt-4o"
 
 _client = None
