@@ -1,4 +1,4 @@
-# IDNA EdTech - Voice-First AI Math Tutor
+# IDNA EdTech - Voice-First AI Tutor
 
 Voice-based math tutoring system for CBSE Class 8 students.
 
