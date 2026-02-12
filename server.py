@@ -5,6 +5,7 @@ Simple FastAPI server using the AgenticTutor.
 """
 
 import os
+import sys
 import asyncio
 import json
 import time
@@ -12,6 +13,11 @@ import base64
 import random
 import tempfile
 from typing import Optional
+
+# Fix Windows console encoding for Hindi text
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -343,7 +349,7 @@ async def speech_to_text(audio: UploadFile = File(...)):
             tmp.write(content)
             tmp_path = tmp.name
 
-        print(f"[STT] Audio file size: {len(content)} bytes")
+        print(f"[STT] Audio file size: {len(content)} bytes", flush=True)
 
         def transcribe_with_lang(lang: str = None):
             """Transcribe with optional language hint. None = auto-detect."""
@@ -364,7 +370,7 @@ async def speech_to_text(audio: UploadFile = File(...)):
         with Timer() as whisper_timer:
             # Attempt 1: Hindi
             try:
-                print("[STT] Trying Hindi (hi)...")
+                print("[STT] Trying Hindi (hi)...", flush=True)
                 transcript = await asyncio.to_thread(lambda: transcribe_with_lang("hi"))
                 text = transcript.text if hasattr(transcript, 'text') else str(transcript)
                 print(f"[STT] Hindi result: '{text[:80] if text else 'EMPTY'}...'")
