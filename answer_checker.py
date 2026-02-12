@@ -27,6 +27,7 @@ def normalize_answer(raw: str) -> str:
     text = text.replace(" by ", "/")
     text = text.replace(" over ", "/")
     text = text.replace(" upon ", "/")
+    text = text.replace(" or ", "/")  # STT mishears "over" as "or"
     text = text.replace(" divided by ", "/")
     text = text.replace(" plus ", "+")
     text = text.replace(" into ", "*")
