@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v4.11 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v4.12 — CLAUDE CODE RULES
 
 ## FILE STRUCTURE (6 files)
 
@@ -101,10 +101,12 @@ Brain can override ask_what_they_did when:
 2. Already asked once → give hint instead
 3. `frustration_signals >= 2` → just help, don't question
 
-### Noise Filter (v4.11)
+### Noise Filter (v4.12)
 - Detects ambient noise/TV audio via `is_nonsensical()` in classifier
 - Re-asks CURRENT question via `_current_question_text()`, not from history
 - Does NOT penalize student for background noise
+- Math patterns (e.g., "1 by 2", "minus 5") are NEVER treated as noise
+- After 3+ consecutive unclear inputs, forces explain and advances question
 
 ### Never Paraphrase (v4.11)
 - Didi must use student's EXACT words when quoting them
@@ -155,7 +157,9 @@ web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.
 | Sub-answer: "minus six" after "2 times minus 3?" | "Haan sahi!" + guide forward (v4.4) |
 | "how can I use in daily life" | Classified as IDK, encouragement |
 | "nahi aata" (Hindi IDK) | Classified as IDK, encouragement (v4.3) |
-| Noise: "me", "x", "rueldo" | Re-ask CURRENT question (v4.11) |
+| Noise: "me", "x", "." | Re-ask CURRENT question (v4.11) |
+| "Mine is 1 by 2" | NOT noise — contains math pattern (v4.12) |
+| 3x consecutive noise | Force explain + advance (v4.12) |
 | "stop" | Session ends gracefully |
 
 ## HISTORY TRACKING
