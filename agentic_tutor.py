@@ -114,12 +114,11 @@ class AgenticTutor:
 
         # 0. Filter nonsensical/ambient noise (TV, background chatter)
         # Do NOT penalize student for background noise
+        # Use the CURRENT question, not questions extracted from last response
         if classifier.is_nonsensical(student_input):
-            import re
-            last_speech = self.session["history"][-1]["teacher"] if self.session.get("history") else ""
-            questions = re.findall(r'[^.!?]*\?', last_speech)
-            repeat_q = questions[-1].strip() if questions else "Ek baar phir bataiye?"
-            return f"{self.session['student_name']}, samajh nahi aaya. {repeat_q}"
+            q_text = self._current_question_text()
+            print(f"[NOISE] Input: '{student_input}', re-asking current Q: '{q_text[:80]}...'")
+            return f"{self.session['student_name']}, samajh nahi aaya. {q_text}"
 
         # 1. Classify
         result = classifier.classify(student_input)
