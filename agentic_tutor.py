@@ -68,7 +68,9 @@ class AgenticTutor:
             "session_ended": False,
             # v4.2: Track repeated scaffolding to prevent sub-question loops
             "last_didi_question": None,
-            "didi_repeat_count": 0
+            "didi_repeat_count": 0,
+            # v4.12: Track consecutive unclear inputs to break "samajh nahi aaya" loop
+            "consecutive_unclear": 0
         }
 
     # ============================================================
@@ -116,9 +118,35 @@ class AgenticTutor:
         # Do NOT penalize student for background noise
         # Use the CURRENT question, not questions extracted from last response
         if classifier.is_nonsensical(student_input):
+            self.session["consecutive_unclear"] += 1
             q_text = self._current_question_text()
-            print(f"[NOISE] Input: '{student_input}', re-asking current Q: '{q_text[:80]}...'")
+            print(f"[NOISE] Input: '{student_input}', consecutive: {self.session['consecutive_unclear']}")
+
+            # After 3+ consecutive unclear inputs, force explain and advance
+            if self.session["consecutive_unclear"] >= 3:
+                print(f"[NOISE] 3+ unclear inputs, forcing explain")
+                self.session["consecutive_unclear"] = 0
+                self.session["questions_completed"] += 1
+                self._advance_question()
+                if self.session["session_ended"]:
+                    return self._end_speech("completed_all_questions")
+                # Build explain instruction
+                q_ctx = self._build_question_context()
+                nq = self._current_question_text()
+                name = self.session["student_name"]
+                lang = self.session["language"]
+                history = self._build_history()
+                instr = (
+                    f"{name}, lagta hai awaaz mein problem aa rahi hai. "
+                    f"Koi baat nahi, main answer samjha deti hoon.\n\n"
+                    f"Explain the solution simply, then move to: {nq}"
+                )
+                return voice.generate_speech(instr, name, lang, history)
+
             return f"{self.session['student_name']}, samajh nahi aaya. {q_text}"
+
+        # Valid input received — reset consecutive unclear counter
+        self.session["consecutive_unclear"] = 0
 
         # 1. Classify
         result = classifier.classify(student_input)

@@ -208,6 +208,18 @@ def is_nonsensical(text: str) -> bool:
     """Detect if input is ambient noise / TV / unrelated to tutoring."""
     text_lower = text.strip().lower()
 
+    # Exception: if text contains math patterns, it's likely a real answer
+    # Check this FIRST before length/phrase checks
+    math_patterns = [
+        r'\d+\s*(by|over|upon)\s*\d+',  # "1 by 2", "5 over 8"
+        r'\d+/\d+',                       # "1/2", "-3/7"
+        r'minus\s+\d+',                   # "minus 5"
+        r'plus\s+\d+',                    # "plus 3"
+    ]
+    for pattern in math_patterns:
+        if re.search(pattern, text_lower):
+            return False  # Contains math, not nonsensical
+
     # Very short input is likely noise
     if len(text_lower) <= 2:
         return True
