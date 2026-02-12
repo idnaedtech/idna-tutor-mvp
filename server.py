@@ -118,8 +118,8 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
         synthesis_input = texttospeech.SynthesisInput(text=text)
 
     voice = texttospeech.VoiceSelectionParams(
-        language_code="en-IN",
-        name="en-IN-Journey-F",  # Natural conversational Indian female voice
+        language_code="hi-IN",
+        name="hi-IN-Wavenet-A",  # v4.3: Hindi female voice for Didi
     )
 
     audio_config = texttospeech.AudioConfig(
@@ -133,9 +133,9 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
         )
         return response.audio_content
     except Exception:
-        # Fallback to male Journey voice
+        # Fallback to alternate Hindi voice
         voice = texttospeech.VoiceSelectionParams(
-            language_code="en-IN", name="en-IN-Journey-D"
+            language_code="hi-IN", name="hi-IN-Wavenet-D"
         )
         response = tts_client.synthesize_speech(
             input=synthesis_input, voice=voice, audio_config=audio_config
@@ -343,7 +343,7 @@ async def speech_to_text(audio: UploadFile = File(...)):
                 return groq_client.audio.transcriptions.create(
                     model="whisper-large-v3-turbo",
                     file=f,
-                    language="en",
+                    language="hi",  # v4.3: Force Hindi to avoid "foreign"/"well period" errors
                     response_format="verbose_json"
                 )
 
