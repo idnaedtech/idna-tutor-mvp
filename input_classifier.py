@@ -5,14 +5,16 @@ Classifies every student input into exactly one category.
 Order matters: first match wins.
 
 Categories (priority order):
-1. STOP        → student wants to end session
-2. LANGUAGE    → student wants to switch language
+1. STOP             → student wants to end session
+2. LANGUAGE         → student wants to switch language
 3. LANG_UNSUPPORTED → student wants a language we don't support
-4. TROLL       → nonsense, spam, not engaging
-5. ACK         → acknowledgment (yeah, okay, got it)
-6. IDK         → doesn't know, wants help
-7. OFFTOPIC    → unrelated to math
-8. ANSWER      → an actual attempt at answering
+4. TROLL            → nonsense, spam, not engaging
+5. ACK              → acknowledgment (yeah, okay, got it)
+6. CONCEPT_REQUEST  → asks about a concept (v5.0)
+7. IDK              → doesn't know, wants help
+8. CONFIRM          → asks if previous answer was correct
+9. OFFTOPIC         → unrelated to math
+10. ANSWER          → an actual attempt at answering
 """
 
 import re
@@ -53,24 +55,25 @@ def classify(text: str) -> dict:
     if _is_ack(t):
         return {"category": "ACK", "detail": "", "cleaned": raw}
 
-    # 6. IDK — student doesn't know or wants explanation
-    if _is_idk(t):
-        return {"category": "IDK", "detail": "", "cleaned": raw}
-
-    # 6.5 CONCEPT_REQUEST — student asks about a concept (v5.0)
+    # 6. CONCEPT_REQUEST — student asks about a concept (v5.0)
+    # Must run BEFORE IDK so "teach me about fractions" isn't caught by IDK's "teach me"
     if _is_concept_request(t):
         concept = _extract_concept(t)
         return {"category": "CONCEPT_REQUEST", "detail": concept, "cleaned": raw}
 
-    # 7. CONFIRMATION REQUEST — "was my answer correct?"
+    # 7. IDK — student doesn't know or wants explanation
+    if _is_idk(t):
+        return {"category": "IDK", "detail": "", "cleaned": raw}
+
+    # 8. CONFIRMATION REQUEST — "was my answer correct?"
     if _is_confirm_request(t):
         return {"category": "CONFIRM", "detail": "", "cleaned": raw}
 
-    # 8. OFF-TOPIC
+    # 9. OFF-TOPIC
     if _is_offtopic(t):
         return {"category": "OFFTOPIC", "detail": "", "cleaned": raw}
 
-    # 9. ANSWER — everything else is treated as an answer attempt
+    # 10. ANSWER — everything else is treated as an answer attempt
     return {"category": "ANSWER", "detail": "", "cleaned": raw}
 
 
@@ -171,6 +174,12 @@ def _is_ack(t: str) -> bool:
 
 
 def _is_idk(t: str) -> bool:
+    # Guard: "help me with homework" contains IDK substring "help me" but is
+    # actually OFFTOPIC (student wants homework done, not asking for a hint).
+    # Without this guard, _is_idk matches before _is_offtopic runs.
+    if "homework" in t:
+        return False
+
     phrases = [
         "i don't know", "i dont know", "idk", "no idea",
         "tell me the answer", "just tell me", "skip",
@@ -232,6 +241,7 @@ def _is_concept_request(t: str) -> bool:
     concept_patterns = [
         r'\bwhat (?:is|are) (?:a |an )?(?:rational number|fraction|variable|integer|equation|linear equation|algebraic expression|denominator|numerator)',
         r'\bkya ho(?:ta|te|ti) (?:hai|hain)\b.*(?:rational|fraction|variable|integer|equation|denominator|numerator)',
+        r'(?:rational number|fraction|variable|integer|equation|denominator|numerator).*\bkya ho(?:ta|te|ti) (?:hai|hain)\b',
         r'\bexplain (?:me |to me )?(?:what|about)\b',
         r'\b(?:samjha|samjhao|samjhiye|batao|bataiye)\b.*(?:kya|what)\b',
         r'\bwhat (?:does|do) .+ mean\b',
