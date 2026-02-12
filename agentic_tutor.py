@@ -303,8 +303,33 @@ class AgenticTutor:
             if self.session.get("history"):
                 last_didi_response = self.session["history"][-1].get("teacher", "")
 
+            # v4.4: Deterministic sub-question answer detection
+            sub_answer_correct = self._check_sub_question_answer(last_didi_response, student_input)
+            if sub_answer_correct:
+                # Student answered a sub-question correctly — acknowledge and guide forward
+                self._last_tool = "guide_partial_answer"
+                self.session["state"] = State.HINTING
+                instr = (
+                    f"Student correctly answered your sub-question!\n"
+                    f"You asked something like: '{last_didi_response[-150:]}'\n"
+                    f"Student said: '{student_input}' which is CORRECT for that sub-step.\n\n"
+                    f"Say 'Haan, sahi hai!' or 'Bilkul!' and then guide them to the NEXT step.\n"
+                    f"Do NOT re-ask the same sub-question. Move forward.\n\n"
+                    f"{q_ctx}"
+                )
+                return voice.generate_speech(instr, name, lang, history)
+
+            # Include last Didi response for LLM context
+            sub_q_context = ""
+            if last_didi_response:
+                sub_q_context = (
+                    f'\n\nYOUR LAST RESPONSE (check if you asked a sub-question):\n'
+                    f'"{last_didi_response[-300:]}"\n'
+                )
+
             judge_input = (
                 q_ctx + f'\n\nStudent answered: "{student_input}"\n'
+                f'{sub_q_context}'
                 f'Check against answer key.\n\n'
                 f'SPOKEN MATH RULES (Indian English) — parse the FULL phrase before matching:\n'
                 f'- "minus X by Y" = -X/Y (e.g. "minus 1 by 7" = -1/7) ← FULL ANSWER\n'
@@ -313,21 +338,23 @@ class AgenticTutor:
                 f'- "X over Y" = X/Y\n'
                 f'- "X upon Y" = X/Y\n'
                 f'- "minus X" ALONE (no "by/over/upon" after it) = -X\n'
-                f'- Numbers as words: "one" = 1, "seven" = 7\n\n'
+                f'- Numbers as words: "one" = 1, "seven" = 7, "six" = 6\n\n'
                 f'CRITICAL: Parse the ENTIRE student answer as one expression. '
                 f'"minus 1 by 7" is -1/7, NOT "minus 1" + extra words. '
                 f'If it matches the answer key, use praise_and_continue IMMEDIATELY.\n\n'
-                f'SUB-QUESTION HANDLING (IMPORTANT):\n'
-                f'If you previously asked a sub-question (like "2 times minus 3 kya hota hai?") '
-                f'and the student answered THAT sub-question correctly (e.g., "minus 6"), '
-                f'you MUST acknowledge it ("Haan, sahi hai!") and MOVE FORWARD to the next step. '
-                f'Do NOT re-ask the same sub-question. Do NOT ignore their correct sub-answer.\n\n'
+                f'SUB-QUESTION HANDLING (CRITICAL - READ YOUR LAST RESPONSE ABOVE):\n'
+                f'If YOUR LAST RESPONSE asked the student a specific calculation like:\n'
+                f'  - "2 times minus 3 kya hoga?" and student says "minus 6" → CORRECT sub-answer!\n'
+                f'  - "minus 3 plus 2 kya hoga?" and student says "minus 1" → CORRECT sub-answer!\n'
+                f'For correct sub-answers: use guide_partial_answer with correct_part describing what they got right.\n'
+                f'Do NOT re-ask the same sub-question. MOVE FORWARD to the next step.\n\n'
                 f'DECISION RULES:\n'
-                f'- Answer matches answer key → praise_and_continue\n'
-                f'- Answer is CLOSE but incomplete (e.g. said numerator only, forgot denominator) → guide_partial_answer\n'
+                f'- Answer matches FINAL answer key → praise_and_continue\n'
+                f'- Answer is correct for a SUB-QUESTION you asked → guide_partial_answer (acknowledge + next step)\n'
+                f'- Answer is CLOSE but incomplete → guide_partial_answer\n'
                 f'- Answer is WRONG → give_hint\n'
                 f'- Student says IDK or is confused → encourage_attempt\n'
-                f'- NEVER ask student to explain their thinking or process.'
+                f'- NEVER ask student to explain their thinking. NEVER repeat the same sub-question.'
             )
 
             # v4.2: Add warning if student is repeating
@@ -586,6 +613,72 @@ class AgenticTutor:
         # Normalize and compare
         from answer_checker import normalize_answer
         return normalize_answer(last_two[0]) == normalize_answer(last_two[1])
+
+    def _check_sub_question_answer(self, didi_response: str, student_input: str) -> bool:
+        """
+        Check if student correctly answered a sub-question from Didi's last response.
+        Returns True if student's answer matches the expected sub-answer.
+        """
+        if not didi_response:
+            return False
+
+        import re
+        from answer_checker import normalize_answer
+
+        didi_lower = didi_response.lower()
+        student_norm = normalize_answer(student_input)
+
+        # Pattern 1: "X multiplied by Y" or "X times Y" or "X ko Y se multiply"
+        # Expected answer: X * Y
+        mult_patterns = [
+            r'(\d+)\s*(?:multiplied by|times|ko)\s*(?:minus\s*)?(\d+)',
+            r'(\d+)\s*(?:multiply|mul)\s*(?:minus\s*)?(\d+)',
+            r'(\d+)\s*(?:ko|aur)\s*(?:minus\s*)?(\d+)\s*(?:se\s*)?(?:multiply|mul)',
+        ]
+        for pattern in mult_patterns:
+            match = re.search(pattern, didi_lower)
+            if match:
+                a, b = int(match.group(1)), int(match.group(2))
+                # Check if "minus" appears before the second number
+                if 'minus' in didi_lower[max(0, match.start()-20):match.end()]:
+                    b = -b
+                expected = a * b
+                # Check if student answer matches
+                if student_norm == str(expected) or student_norm == f"-{abs(expected)}" or normalize_answer(f"minus {abs(expected)}") == student_norm:
+                    return True
+
+        # Pattern 2: "minus X plus Y" or "X plus minus Y" etc.
+        # Use capturing groups for signs
+        add_pattern = r'(minus\s*)?(\d+)\s*(?:plus|aur|and)\s*(minus\s*)?(\d+)'
+        match = re.search(add_pattern, didi_lower)
+        if match:
+            a_neg = match.group(1) is not None  # "minus" before first number
+            a = int(match.group(2))
+            b_neg = match.group(3) is not None  # "minus" before second number
+            b = int(match.group(4))
+            if a_neg:
+                a = -a
+            if b_neg:
+                b = -b
+            expected = a + b
+            # Check multiple formats
+            if student_norm in [str(expected), f"-{abs(expected)}", f"minus{abs(expected)}"]:
+                return True
+            if expected < 0 and normalize_answer(f"minus {abs(expected)}") == student_norm:
+                return True
+
+        # Pattern 3: Direct number check - "kya hoga/aayega" with numbers
+        # If Didi asked "2 times minus 3 kya hoga" and student says "-6"
+        if re.search(r'kya\s*(?:hoga|aayega|hota)', didi_lower):
+            # Look for "2 times minus 3" pattern more specifically
+            m = re.search(r'(\d+)\s*(?:times|multiplied by|multiply|mul|ko)\s*minus\s*(\d+)', didi_lower)
+            if m:
+                a, b = int(m.group(1)), -int(m.group(2))
+                expected = a * b
+                if student_norm in [str(expected), f"minus{abs(expected)}", f"-{abs(expected)}"]:
+                    return True
+
+        return False
 
     def _count_action_in_history(self, tool_name: str) -> int:
         """Count how many times an LLM tool has been used for the current question.

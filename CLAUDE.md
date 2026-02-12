@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v4.1 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v4.4 — CLAUDE CODE RULES
 
 ## FILE STRUCTURE (6 files)
 
@@ -23,6 +23,10 @@ tutor_states.get_transition(state, category) → action + next_state
 [IF ANSWER] answer_checker.check_answer() → True/None/False
   - True  → CORRECT, bypass LLM, force praise_and_continue
   - None  → PARTIAL, bypass LLM, force guide_partial_answer
+  - False → Check sub-question answer (v4.4)
+    ↓
+[IF WRONG] _check_sub_question_answer() → True/False  (v4.4)
+  - True  → SUB-ANSWER CORRECT, acknowledge + guide to next step
   - False → WRONG, pass to LLM for hint selection
     ↓
 tutor_brain enriches:
@@ -50,6 +54,24 @@ Handles spoken math:
 - "minus one over seven" → "-1/7"
 - "x = 5" → "5"
 - Numeric equivalence: "0.5" matches "1/2"
+
+## SUB-QUESTION DETECTION (v4.4)
+
+Deterministic check for scaffolding sub-question answers. Prevents infinite loops.
+
+```python
+_check_sub_question_answer(didi_response, student_input) → True/False
+```
+
+Detects when student correctly answers a sub-question Didi asked:
+- "minus 3 plus 2 kya hoga?" + "minus 1" → True (acknowledged, move to next step)
+- "2 times minus 3 kya hoga?" + "minus six" → True
+- "minus 3 aur 2 ka addition?" + "minus one" → True
+
+Patterns recognized:
+- Addition: "X plus Y", "X aur Y ka addition"
+- Multiplication: "X times Y", "X multiplied by Y"
+- Hindi question markers: "kya hoga", "kya hota hai", "batao"
 
 ## BRAIN INTEGRATION POINTS
 
@@ -111,7 +133,10 @@ web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.
 | Correct: "-1/7" | Same as above |
 | Partial: "-1" (for -1/7) | "Numerator correct, add denominator" |
 | Wrong: "5" | LLM selects hint level |
+| Sub-answer: "minus 1" after "minus 3 plus 2?" | "Haan sahi!" + guide to next step (v4.4) |
+| Sub-answer: "minus six" after "2 times minus 3?" | "Haan sahi!" + guide forward (v4.4) |
 | "how can I use in daily life" | Classified as IDK, encouragement |
+| "nahi aata" (Hindi IDK) | Classified as IDK, encouragement (v4.3) |
 | "stop" | Session ends gracefully |
 
 ## HISTORY TRACKING
