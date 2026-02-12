@@ -111,6 +111,37 @@ def normalize_answer_key(key: str) -> list[str]:
     return list(variants)
 
 
+def extract_math_from_sentence(text: str) -> list[str]:
+    """
+    Extract potential math answers from a longer sentence.
+    e.g., "7. The answer is minus 1 by 7" → ["minus 1 by 7", "7"]
+    """
+    candidates = []
+    text_lower = text.lower().strip()
+
+    # Pattern 1: After "answer is", "is", "equals"
+    after_match = re.search(r'(?:the\s+)?(?:answer\s+)?(?:is|equals?)\s+(.+?)\.?$', text_lower)
+    if after_match:
+        candidates.append(after_match.group(1).strip())
+
+    # Pattern 2: Fraction patterns (minus X by/over Y)
+    frac_match = re.search(r'((?:minus\s+|negative\s+)?-?\d+\s*(?:by|over|upon)\s*\d+)', text_lower)
+    if frac_match:
+        candidates.append(frac_match.group(1).strip())
+
+    # Pattern 3: Simple "minus X" at end
+    minus_match = re.search(r'((?:minus|negative)\s+\d+)\s*\.?$', text_lower)
+    if minus_match:
+        candidates.append(minus_match.group(1).strip())
+
+    # Pattern 4: Numeric fraction X/Y
+    slash_match = re.search(r'(-?\d+\s*/\s*\d+)', text_lower)
+    if slash_match:
+        candidates.append(slash_match.group(1).strip())
+
+    return candidates
+
+
 def check_answer(
     student_input: str,
     answer_key: str,
@@ -129,6 +160,9 @@ def check_answer(
 
     student_norm = normalize_answer(student_input)
 
+    # Also try extracting math from longer sentences
+    extracted_candidates = extract_math_from_sentence(student_input)
+
     # Build all acceptable variants
     key_variants = normalize_answer_key(answer_key)
 
@@ -140,6 +174,19 @@ def check_answer(
     # --- Check 1: Exact string match (after normalization) ---
     if student_norm in key_variants:
         return True
+
+    # --- Check 1b: Try extracted math from longer sentences ---
+    for candidate in extracted_candidates:
+        cand_norm = normalize_answer(candidate)
+        if cand_norm in key_variants:
+            return True
+        # Also check numeric equivalence for extracted candidate
+        cand_val = _numeric_value(cand_norm)
+        if cand_val is not None:
+            for variant in key_variants:
+                key_val = _numeric_value(variant)
+                if key_val is not None and abs(cand_val - key_val) < 0.0001:
+                    return True
 
     # --- Check 2: Numeric equivalence ---
     student_val = _numeric_value(student_norm)
