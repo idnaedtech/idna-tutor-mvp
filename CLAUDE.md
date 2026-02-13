@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v6.1.0 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.2.0 — CLAUDE CODE RULES
 
 ## TTS ENGINE (v6.0.6)
 
@@ -25,22 +25,30 @@ tutor_brain.py        → Pure Python. Student model + teaching plans. NO LLM.
 didi_voice.py         → ALL LLM calls. Speech generation + hint selection.
 ```
 
-## DATA FLOW (v6.0.1)
+## DATA FLOW (v6.2.0)
 
 ```
-SESSION START (v6.0.1 — two-turn flow)
+SESSION START (v6.2.0 — conversational flow)
     ↓
-start_session() → Template-based greeting (NO LLM)
-  - "Namaste {name}! Aaj hum {chapter} padhenge."
-  - Teach concept with real-life example (from teaching_examples dict)
+start_session() → LLM-generated warm greeting (NOT template)
+  - "Hi {name}! Kaisi ho? School kaisa raha aaj?"
+  - State: GREETING
+    ↓
+GREETING PHASE (1-2 casual exchanges)
+    ↓
+[Student responds] → Didi responds naturally, transitions toward teaching
+[After 2 turns] → Move to TEACHING state
+    ↓
+TEACHING PHASE
+    ↓
+Didi teaches ONE concept with real-life example
+  - "Accha, chalo aaj kuch interesting karte hain..."
   - End with "Samajh aaya?"
-  - Set needs_first_question = True
+  - State: TEACHING
     ↓
-Student responds to "Samajh aaya?"
-    ↓
-[IF ACK] → "Bahut accha! Ab ek question try karte hain: {question}"
-[IF IDK] → Re-teach with different wording, keep needs_first_question = True
-[IF STOP/TROLL] → Fall through to normal flow
+[IF ACK] → "Bahut accha! Ab ek question try karte hain: {question}" → WAITING_ANSWER
+[IF IDK] → Re-teach with DIFFERENT example, stay in TEACHING
+[IF COMFORT/OFFTOPIC] → Handle and stay in TEACHING
     ↓
 NORMAL QUESTION FLOW
     ↓
@@ -84,6 +92,26 @@ tutor_brain.observe_interaction() → updates student model
     ↓
 Response spoken to student
 ```
+
+## NEW IN v6.2.0
+
+### Conversational Session Flow (v6.2)
+- **GREETING state**: Didi says warm casual hello (LLM-generated, not template)
+- **1-2 casual exchanges** before transitioning to teaching
+- **TEACHING state**: Teach concept with real-life example, ask "Samajh aaya?"
+- **No "Namaste"** — be casual, not formal
+- **Re-teach with different example** if student doesn't understand
+- Flow: GREETING → TEACHING → WAITING_ANSWER
+
+### TTS Improvements (v6.2)
+- **Speaker**: simran (warmer than priya)
+- **clean_for_tts()** expanded: parentheses, abbreviations, math symbols
+- Ch.1 → Chapter 1, × → times, = → equals, etc.
+
+### Verdict Rules (v6.2)
+- Stronger anti-hallucination rules for praise
+- Must verify: (1) student gave math answer, (2) answer is correct
+- If EITHER is false → DO NOT praise
 
 ## NEW IN v6.1.0
 
