@@ -161,6 +161,49 @@ def clean_for_tts(text: str) -> str:
     return text
 
 
+def enforce_word_limit(text: str, context: str = "default") -> str:
+    """v6.2: Hard-enforce word limit on LLM output before sending to TTS.
+
+    Cuts at the last complete sentence within the word limit.
+    This is a SAFETY NET — the prompt should keep it within limits,
+    but LLMs sometimes ignore instructions.
+    """
+    LIMITS = {
+        "greeting":  22,   # 20 + small buffer
+        "question":  22,
+        "hint":      33,
+        "comfort":   28,
+        "teach":     65,
+        "solution":  65,
+        "reteach":   55,
+        "substep":   35,
+        "correct":   28,
+        "clarify":   22,
+        "repeat":    18,
+        "default":   50,
+    }
+
+    max_words = LIMITS.get(context, LIMITS["default"])
+    words = text.split()
+
+    if len(words) <= max_words:
+        return text
+
+    # Find the last sentence boundary within limit
+    truncated = ' '.join(words[:max_words])
+    last_boundary = max(
+        truncated.rfind('.'),
+        truncated.rfind('?'),
+        truncated.rfind('!'),
+        truncated.rfind('।'),
+    )
+
+    if last_boundary > len(truncated) // 3:
+        return truncated[:last_boundary + 1]
+
+    return truncated + "..."
+
+
 def sarvam_tts(text: str) -> bytes:
     """Generate speech using Sarvam Bulbul v3 TTS.
 
