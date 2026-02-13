@@ -200,7 +200,9 @@ def build_explain_instruction(question_ctx: str, next_question: str = "") -> str
     return (
         f"Explain the full solution step by step. Be kind — they struggled.\n\n"
         f"{question_ctx}"
-        f"{transition}"
+        f"{transition}\n\n"
+        f"CRITICAL: Keep your explanation under 5 sentences. Do NOT write a long paragraph. "
+        f"Short sentences, clear math steps. The student needs to HEAR each step clearly."
     )
 
 
@@ -210,7 +212,8 @@ def build_encourage_instruction(question_ctx: str, student_input: str) -> str:
         f"Break the problem into a smaller piece. Ask for just the first step.\n"
         f"Don't repeat the full question — just ask one small thing.\n\n"
         f"{question_ctx}\n\n"
-        f"Student said: \"{student_input}\""
+        f"Student said: \"{student_input}\"\n\n"
+        f"CRITICAL: Maximum 3-4 sentences. One small step only."
     )
 
 

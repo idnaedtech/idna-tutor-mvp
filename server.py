@@ -87,19 +87,19 @@ groq_client = OpenAI(
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"
 SARVAM_SPEAKER = "priya"   # Warm Indian female voice — test priya/kavya/neha on dashboard.sarvam.ai
-SARVAM_PACE = 0.85         # Slightly slower for teaching (range: 0.5 - 2.0)
+SARVAM_PACE = 0.90         # Natural teaching pace (was 0.85, too slow)
 
 
 def sarvam_tts(text: str) -> bytes:
     """Generate speech using Sarvam Bulbul v3 TTS.
 
-    Returns MP3 audio bytes. Falls back to OpenAI TTS on error.
-    Sarvam handles Hinglish code-mixing, number normalization, and
-    natural Hindi prosody natively — no preprocessing needed.
+    Returns MP3 audio bytes.
+    NEVER falls back to a different TTS engine — that would change Didi's voice mid-session.
+    If Sarvam fails, we retry with shorter text. If still fails, raise an error.
     """
-    # Sarvam v3 REST limit: 2500 chars
-    if len(text) > 2400:
-        truncated = text[:2400]
+    # Sarvam v3 REST limit: 2500 chars — truncate aggressively to avoid hitting it
+    if len(text) > 2000:
+        truncated = text[:2000]
         last_period = max(truncated.rfind('.'), truncated.rfind('?'), truncated.rfind('!'))
         if last_period > 500:
             text = truncated[:last_period + 1]
@@ -107,7 +107,7 @@ def sarvam_tts(text: str) -> bytes:
 
     payload = {
         "inputs": [text],
-        "target_language_code": "hi-IN",
+        "target_language_code": "en-IN",
         "speaker": SARVAM_SPEAKER,
         "model": "bulbul:v3",
         "pace": SARVAM_PACE,
@@ -131,21 +131,53 @@ def sarvam_tts(text: str) -> bytes:
         response.raise_for_status()
         data = response.json()
 
-        # Response format: {"request_id": "...", "audios": ["base64_encoded_mp3"]}
         audio_base64 = data["audios"][0]
         audio_bytes = base64.b64decode(audio_base64)
-        print(f"[Sarvam TTS] Generated {len(audio_bytes)} bytes, speaker={SARVAM_SPEAKER}")
+        print(f"[Sarvam TTS] OK: {len(audio_bytes)} bytes, {len(text)} chars, speaker={SARVAM_SPEAKER}")
         return audio_bytes
 
     except Exception as e:
-        print(f"[Sarvam TTS] Error: {e}, falling back to OpenAI TTS")
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="nova",
-            speed=0.95,
-            input=text
-        )
-        return response.content
+        print(f"[Sarvam TTS] First attempt failed: {e}")
+
+        # RETRY with shorter text — do NOT switch to a different voice
+        if len(text) > 500:
+            short_text = text[:500]
+            last_period = max(short_text.rfind('.'), short_text.rfind('?'), short_text.rfind('!'))
+            if last_period > 100:
+                short_text = short_text[:last_period + 1]
+
+            try:
+                payload["inputs"] = [short_text]
+                response = http_requests.post(
+                    SARVAM_TTS_URL,
+                    json=payload,
+                    headers=headers,
+                    timeout=15
+                )
+                response.raise_for_status()
+                data = response.json()
+                audio_bytes = base64.b64decode(data["audios"][0])
+                print(f"[Sarvam TTS] Retry OK: {len(audio_bytes)} bytes, truncated to {len(short_text)} chars")
+                return audio_bytes
+            except Exception as retry_error:
+                print(f"[Sarvam TTS] Retry also failed: {retry_error}")
+
+        # Last resort: generate a short error message in Sarvam voice
+        try:
+            error_text = "Ek minute beta, thoda technical problem aa raha hai. Ek baar phir try karte hain."
+            payload["inputs"] = [error_text]
+            response = http_requests.post(
+                SARVAM_TTS_URL,
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+            return base64.b64decode(data["audios"][0])
+        except Exception:
+            # Absolute last resort — raise error, don't switch voice
+            raise Exception(f"Sarvam TTS failed after retries: {e}")
 
 
 def estimate_stt_confidence(text: str, segments: list = None) -> dict:
@@ -302,18 +334,8 @@ async def text_to_speech(request: TextToSpeechRequest):
     """Convert text to speech using Sarvam Bulbul v3."""
     try:
         with Timer() as tts_timer:
-            if SARVAM_API_KEY:
-                audio_content = sarvam_tts(text=request.text)
-                audio_base64 = base64.b64encode(audio_content).decode('utf-8')
-            else:
-                # Fallback to OpenAI TTS if no Sarvam key configured
-                response = client.audio.speech.create(
-                    model="tts-1",
-                    voice=request.voice,
-                    speed=0.95,
-                    input=request.text
-                )
-                audio_base64 = base64.b64encode(response.content).decode('utf-8')
+            audio_content = sarvam_tts(text=request.text)
+            audio_base64 = base64.b64encode(audio_content).decode('utf-8')
 
         print(f"TTS completed in {tts_timer.elapsed_ms}ms")
         return {"audio": audio_base64, "format": "mp3"}

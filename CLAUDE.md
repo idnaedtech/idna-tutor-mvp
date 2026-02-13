@@ -1,17 +1,17 @@
-# IDNA Tutor Architecture v6.0.3 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.0.4 — CLAUDE CODE RULES
 
-## TTS ENGINE (v6.0.3)
+## TTS ENGINE (v6.0.4)
 
 - **Engine:** Sarvam Bulbul v3 (api.sarvam.ai)
 - **Voice:** priya (warm Indian female — configurable via SARVAM_SPEAKER)
-- **Pace:** 0.85 (slightly slower for teaching)
-- **Language:** hi-IN (native Hinglish code-mixing)
-- **No preprocessing needed** — Sarvam handles numbers, dates, mixed text natively
-- **Fallback:** OpenAI TTS (tts-1, nova voice) if SARVAM_API_KEY not set
+- **Pace:** 0.90 (natural teaching pace)
+- **Language:** en-IN (reads numbers in English, handles Hindi words natively)
+- **No preprocessing needed** — Sarvam handles code-mixed Hinglish natively
+- **NO FALLBACK** — never switch voice mid-session; retry with shorter text instead
 - **API:** POST https://api.sarvam.ai/text-to-speech
 - **Auth:** api-subscription-key header
 - **Response:** base64 MP3 in {"audios": ["..."]}
-- **Char limit:** 2500 (we truncate at 2400 at sentence boundary)
+- **Char limit:** 2000 (truncate at sentence boundary to avoid hitting 2500 limit)
 
 ## FILE STRUCTURE (6 files)
 

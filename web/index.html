@@ -717,12 +717,9 @@
                 endBtn.style.display = 'block';
                 hideTyping();
 
-                // Show the greeting + question
-                addMessage(data.speech, 'tutor');
+                // Show the greeting + question (synced with audio)
                 updateScore(data.state);
-
-                // Speak it
-                speak(data.speech, { autoListen: true });
+                speakWithText(data.speech, { autoListen: true });
 
                 answerInput.focus();
 
@@ -752,16 +749,14 @@
 
                 // Check if session ended
                 if (data.state && data.state.session_ended) {
-                    addMessage(data.speech, 'tutor');
-                    speak(data.speech, {});
+                    speakWithText(data.speech, {});
                     inputArea.style.display = 'none';
                     endBtn.style.display = 'none';
                     return;
                 }
 
-                // Show tutor response
-                addMessage(data.speech, 'tutor');
-                speak(data.speech, { autoListen: true });
+                // Show tutor response (synced with audio)
+                speakWithText(data.speech, { autoListen: true });
 
             } catch (e) {
                 hideTyping();
@@ -822,6 +817,61 @@
                 }
             } catch (e) {
                 console.error('TTS error:', e);
+                setStatus('');
+                if (onComplete) onComplete();
+            }
+        }
+
+        // Speak with synchronized text display (v6.0.4)
+        // Pre-fetches audio BEFORE showing text so they appear together
+        async function speakWithText(text, options = {}) {
+            const { onComplete, autoListen } = options;
+            stopTTS();
+
+            try {
+                setStatus('Didi soch rahi hai...', 'speaking');
+
+                // Fetch audio first
+                const data = await api('/api/text-to-speech', 'POST', { text });
+
+                if (!data.audio) {
+                    // No audio — just show text
+                    addMessage(text, 'tutor');
+                    setStatus('');
+                    return;
+                }
+
+                // Audio ready — NOW show text and play simultaneously
+                addMessage(text, 'tutor');
+
+                currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
+                setStatus('Speaking...', 'speaking');
+
+                currentAudio.onerror = (e) => {
+                    console.error('Audio playback error:', e);
+                    setStatus('');
+                    if (onComplete) onComplete();
+                };
+
+                currentAudio.onended = () => {
+                    setStatus('');
+                    currentAudio = null;
+                    if (onComplete) setTimeout(onComplete, 300);
+                    if (autoListen && !isListening) setTimeout(() => startRecording(), 300);
+                };
+
+                const playPromise = currentAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.error('Audio play failed:', error);
+                        setStatus('');
+                        if (onComplete) onComplete();
+                    });
+                }
+            } catch (e) {
+                console.error('TTS error:', e);
+                // On error, still show text
+                addMessage(text, 'tutor');
                 setStatus('');
                 if (onComplete) onComplete();
             }
