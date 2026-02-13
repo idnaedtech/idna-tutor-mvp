@@ -11,6 +11,7 @@ import json
 import time
 import base64
 import random
+import re
 import tempfile
 from typing import Optional
 
@@ -159,6 +160,28 @@ def clean_for_tts(text: str) -> str:
     text = re_mod.sub(r'\s+', ' ', text).strip()
 
     return text
+
+
+# v6.1.1: Sentence splitter for chunked TTS
+SENTENCE_DELIMITERS = re.compile(r'(?<=[.?!।])\s+')
+MIN_SENTENCE_LENGTH = 10
+
+
+def split_into_sentences(text: str) -> list:
+    """Split text into sentences for chunked TTS."""
+    parts = SENTENCE_DELIMITERS.split(text)
+    sentences = []
+
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        if len(part) < MIN_SENTENCE_LENGTH and sentences:
+            sentences[-1] += " " + part
+        else:
+            sentences.append(part)
+
+    return sentences if sentences else [text.strip()]
 
 
 def enforce_word_limit(text: str, context: str = "default") -> str:
@@ -340,6 +363,36 @@ def estimate_stt_confidence(text: str, segments: list = None) -> dict:
         "reason": reason if confidence < 0.5 else None
     }
 
+
+# v6.1.1: Transcription reliability check — catches Whisper hallucinations
+def is_transcription_reliable(text: str, confidence: float, threshold: float = 0.4) -> bool:
+    """
+    Returns False if transcription is garbage → trigger "phir se boliye".
+    Catches low confidence, Whisper hallucinations, and noise.
+    """
+    if confidence < threshold:
+        return False
+
+    text = text.strip()
+
+    # Known Whisper hallucination patterns
+    hallucination_patterns = [
+        r'^(Thank you|Thanks for watching|Subscribe|Like and subscribe)',
+        r'^(Music|Applause|\[.*\]|\(.*\))',
+        r'^\W+$',
+        r'^(you|the|a|an|is|it)\s*$',
+        # Common Hindi Whisper garbage
+        r'^(विदेश|foreign|well period)',
+    ]
+    for pattern in hallucination_patterns:
+        if re.match(pattern, text, re.IGNORECASE):
+            return False
+
+    if len(text) < 2:
+        return False
+
+    return True
+
 app = FastAPI(title="IDNA EdTech Tutor")
 
 # Active sessions (in-memory for now)
@@ -455,16 +508,35 @@ class TextToSpeechRequest(BaseModel):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech using Sarvam Bulbul v3."""
+    """Convert text to speech using Sarvam Bulbul v3.
+    v6.1.1: Uses chunked generation for faster TTS on longer texts.
+    """
     try:
         # v6.2: Enforce word limit before TTS
         text = enforce_word_limit(request.text, context=request.context or "default")
 
+        # v6.1.1: Chunked TTS for multi-sentence responses
+        sentences = split_into_sentences(text)
+
         with Timer() as tts_timer:
-            audio_content = sarvam_tts(text=text)
+            if len(sentences) == 1:
+                # Short response — just do it normally
+                audio_content = sarvam_tts(text=text)
+            else:
+                # Multiple sentences — generate each, concatenate
+                all_audio = b""
+                for sentence in sentences:
+                    try:
+                        audio = sarvam_tts(text=sentence)
+                        all_audio += audio
+                    except Exception as chunk_err:
+                        print(f"[TTS] Chunk failed: {chunk_err}, skipping")
+                        continue
+                audio_content = all_audio if all_audio else sarvam_tts(text=text)
+
             audio_base64 = base64.b64encode(audio_content).decode('utf-8')
 
-        print(f"TTS completed in {tts_timer.elapsed_ms}ms")
+        print(f"TTS completed in {tts_timer.elapsed_ms}ms ({len(sentences)} chunks)")
         return {"audio": audio_base64, "format": "mp3"}
 
     except Exception as e:
@@ -494,13 +566,14 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
         def transcribe():
             with open(tmp_path, "rb") as f:
+                # v6.1.1: Force language="hi" for Hindi/Hinglish transcription
                 return groq_client.audio.transcriptions.create(
                     model="whisper-large-v3-turbo",
                     file=f,
+                    language="hi",
                     response_format="verbose_json"
                 )
 
-        # v4.8: Simple auto-detect (no language parameter)
         with Timer() as whisper_timer:
             transcript = await asyncio.to_thread(transcribe)
 
@@ -510,6 +583,25 @@ async def speech_to_text(audio: UploadFile = File(...)):
         confidence_result = estimate_stt_confidence(text, segments)
 
         print(f"STT completed in {whisper_timer.elapsed_ms}ms: '{text[:50]}...'")
+
+        # v6.1.1: Check for Whisper hallucinations
+        if not is_transcription_reliable(text, confidence_result["confidence"]):
+            print(f"[STT] Unreliable transcription detected: '{text}'")
+            repeat_speech = "Ek baar phir boliye? Sunai nahi diya."
+            try:
+                audio_bytes = sarvam_tts(repeat_speech)
+                audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+            except Exception:
+                audio_b64 = ""
+            return {
+                "text": "",
+                "speech": repeat_speech,
+                "audio": audio_b64,
+                "needs_repeat": True,
+                "confidence": confidence_result["confidence"],
+                "is_low_confidence": True,
+                "reason": "unreliable_transcription"
+            }
 
         response = {
             "text": text,

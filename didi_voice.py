@@ -192,6 +192,12 @@ Your response will be converted to speech via TTS:
 - Write equations on their own: -3 + 2 = -1
 - Use ... for natural pauses: "Dekhiye... -3 + 2... equals -1."
 
+CRITICAL RULE — NO FALSE PRAISE (v6.1.1):
+NEVER say "Bahut accha!", "Bilkul sahi!", "Correct!", or any praise
+UNLESS the student actually gave a correct answer in their last message.
+If the student said "I don't know", complained, asked for help, or gave
+a wrong answer, DO NOT praise them. Acknowledge what they actually said.
+
 {history_section}"""
 
 

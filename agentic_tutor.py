@@ -25,6 +25,7 @@ Public interface (unchanged):
 """
 
 import time
+from typing import Optional
 from questions import ALL_CHAPTERS, CHAPTER_NAMES
 
 import input_classifier as classifier
@@ -32,6 +33,76 @@ from tutor_states import State, Action, get_transition
 from tutor_brain import TutorBrain
 from answer_checker import check_answer
 import didi_voice as voice
+
+
+# v6.1.1: SubStepTracker — prevents repetition loop in multi-step problems
+class SubStepTracker:
+    """
+    Tracks completed sub-steps in multi-step math problems.
+    Prevents Didi from re-asking steps the student already answered.
+    """
+
+    def __init__(self):
+        self.steps: list = []
+        self.current_index: int = 0
+
+    def init_for_question(self, question_type: str, question_data: dict):
+        """Set up sub-steps based on question type."""
+        self.steps = []
+        self.current_index = 0
+
+        if question_type in ("fraction_multiply", "multiply", "multiplication"):
+            self.steps = [
+                {"desc": "Multiply numerators", "done": False, "answer": None},
+                {"desc": "Multiply denominators", "done": False, "answer": None},
+                {"desc": "Combine fraction", "done": False, "answer": None},
+                {"desc": "Simplify", "done": False, "answer": None},
+            ]
+        elif question_type in ("fraction_add", "fraction_add_same_denom", "add", "addition_same_denominator"):
+            self.steps = [
+                {"desc": "Add numerators", "done": False, "answer": None},
+                {"desc": "Keep denominator", "done": False, "answer": None},
+                {"desc": "Simplify", "done": False, "answer": None},
+            ]
+        elif question_type in ("additive_inverse",):
+            self.steps = [
+                {"desc": "Identify the number", "done": False, "answer": None},
+                {"desc": "Change the sign", "done": False, "answer": None},
+            ]
+        # Single-step questions don't need tracking
+
+    def mark_current_done(self, student_answer: str = ""):
+        """Mark current sub-step as completed. Advance to next."""
+        if self.current_index < len(self.steps):
+            self.steps[self.current_index]["done"] = True
+            self.steps[self.current_index]["answer"] = student_answer
+            self.current_index += 1
+
+    def get_current_step(self) -> Optional[dict]:
+        """Get the current incomplete step, or None if all done."""
+        if self.current_index >= len(self.steps):
+            return None
+        return {
+            "description": self.steps[self.current_index]["desc"],
+            "step_number": self.current_index + 1,
+            "total_steps": len(self.steps),
+            "completed": [
+                f"{s['desc']}: {s['answer']}"
+                for s in self.steps if s["done"]
+            ],
+        }
+
+    def is_active(self) -> bool:
+        """True if we have sub-steps and haven't finished them all."""
+        return len(self.steps) > 0 and self.current_index < len(self.steps)
+
+    def is_all_done(self) -> bool:
+        return len(self.steps) == 0 or self.current_index >= len(self.steps)
+
+    def get_completed_summary(self) -> str:
+        """Summary of what's been done, for LLM context."""
+        done = [f"Step {i+1} ({s['desc']}): {s['answer']}" for i, s in enumerate(self.steps) if s["done"]]
+        return "; ".join(done) if done else "No steps completed yet"
 
 
 class AgenticTutor:
@@ -79,7 +150,9 @@ class AgenticTutor:
             # v6.2: Greeting phase tracking
             "greeting_turns": 0,
             # v6.2: Tracks whether first question has been asked (set during GREETING→TEACHING)
-            "needs_first_question": False
+            "needs_first_question": False,
+            # v6.1.1: SubStepTracker for multi-step problems
+            "substep_tracker": SubStepTracker()
         }
 
     # ============================================================
@@ -94,6 +167,13 @@ class AgenticTutor:
         # Brain plans for first question (still needed for later)
         q = self.session["current_question"]
         self.brain.plan_for_question(q, self.session)
+
+        # v6.1.1: Initialize substep tracker for first question
+        tracker = self.session["substep_tracker"]
+        tracker.init_for_question(
+            question_type=q.get("topic", q.get("subtopic", "")),
+            question_data=q
+        )
 
         # v6.2: LLM generates a warm, human greeting
         name_part = name if name else "beta"
@@ -535,9 +615,22 @@ class AgenticTutor:
                     f'"{last_didi_response[-300:]}"\n'
                 )
 
+            # v6.1.1: Include substep tracker context
+            tracker = self.session["substep_tracker"]
+            substep_ctx = ""
+            if tracker.is_active():
+                substep_ctx = (
+                    f"\n\nSUB-STEP TRACKER (v6.1.1):\n"
+                    f"Steps already completed (DO NOT re-ask these): {tracker.get_completed_summary()}\n"
+                )
+                next_step = tracker.get_current_step()
+                if next_step:
+                    substep_ctx += f"Current step to work on: Step {next_step['step_number']}/{next_step['total_steps']} — {next_step['description']}\n"
+
             judge_input = (
                 q_ctx + f'\n\nStudent answered: "{student_input}"\n'
                 f'{sub_q_context}'
+                f'{substep_ctx}'
                 f'Check against answer key.\n\n'
                 f'SPOKEN MATH RULES (Indian English) — parse the FULL phrase before matching:\n'
                 f'- "minus X by Y" = -X/Y (e.g. "minus 1 by 7" = -1/7) ← FULL ANSWER\n'
@@ -600,6 +693,12 @@ class AgenticTutor:
                 self.session["state"] = State.HINTING
                 correct_part = args.get("correct_part", "")
                 missing_part = args.get("missing_part", "")
+
+                # v6.1.1: Mark substep as done if tracker is active
+                tracker = self.session["substep_tracker"]
+                if tracker.is_active():
+                    tracker.mark_current_done(student_input)
+
                 instr = (
                     f"Student's answer is PARTIALLY correct.\n"
                     f"What they got right: {correct_part}\n"
@@ -800,6 +899,13 @@ class AgenticTutor:
             self.session["current_question"] = self.session["questions"][
                 self.session["current_question_index"]
             ]
+            # v6.1.1: Initialize substep tracker for new question
+            q = self.session["current_question"]
+            tracker = self.session["substep_tracker"]
+            tracker.init_for_question(
+                question_type=q.get("topic", q.get("subtopic", "")),
+                question_data=q
+            )
         else:
             self.session["session_ended"] = True
 
