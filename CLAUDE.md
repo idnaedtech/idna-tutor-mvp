@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v6.0.6 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.1.0 — CLAUDE CODE RULES
 
 ## TTS ENGINE (v6.0.6)
 
@@ -44,7 +44,7 @@ Student responds to "Samajh aaya?"
     ↓
 NORMAL QUESTION FLOW
     ↓
-input_classifier.classify() → category (ANSWER, IDK, ACK, TROLL, CONCEPT_REQUEST, etc.)
+input_classifier.classify() → category (ANSWER, IDK, ACK, TROLL, COMFORT, CONCEPT_REQUEST, etc.)
     ↓
 tutor_states.get_transition(state, category) → action + next_state
     ↓
@@ -56,6 +56,12 @@ tutor_states.get_transition(state, category) → action + next_state
 [IF WRONG] _check_sub_question_answer() → True/False
   - True  → SUB-ANSWER CORRECT, acknowledge + guide to next step
   - False → WRONG, pass to LLM for hint selection
+    ↓
+[IF COMFORT] → comfort_response (v6.1)
+  - Student expressed discomfort or gave behavioral feedback
+  - Didi apologizes warmly, addresses feelings FIRST
+  - Asks if student is ready to continue
+  - Stays in current state (does NOT advance question)
     ↓
 [IF CONCEPT_REQUEST] → teach_concept tool (v5.0)
   - Pause current question
@@ -78,6 +84,23 @@ tutor_brain.observe_interaction() → updates student model
     ↓
 Response spoken to student
 ```
+
+## NEW IN v6.1.0
+
+### COMFORT Category (v6.1)
+- New input category for emotional/discomfort feedback (priority 5, after TROLL)
+- Detects: "you spoke roughly", "achha nahi lag raha", "too fast", "be gentle"
+- Supports English, Hindi Roman, and Devanagari phrases
+- COMFORT_RESPONSE action: Didi apologizes warmly, addresses feelings FIRST
+- Universal transition: works from ANY state, stays in current state
+- DIDI_PROMPT updated with EMOTIONAL AWARENESS section
+- No-praise-without-correct-answer rule added
+
+### Devanagari Support (v6.1)
+- Added Devanagari phrase detection for COMFORT, CONCEPT_REQUEST, and IDK
+- Uses raw text (not lowered) for Devanagari matching
+- Example: "मुझे अच्छा नहीं लग रहा" → COMFORT
+- Example: "मुझे rational number के बारे बताइए" → CONCEPT_REQUEST
 
 ## NEW IN v6.0.1
 
@@ -164,7 +187,7 @@ check_answer(student_input, answer_key, accept_also) → True/None/False
 - **TTS**: Sarvam Bulbul v3 `priya` voice (2400 char limit, sentence truncation)
 - **STT**: Groq Whisper `whisper-large-v3-turbo` with AUTO-DETECT
 
-### Test Suite (246 tests)
+### Test Suite (258 tests)
 - `test_answer_checker.py` — spoken math normalization, correct/partial/wrong detection
 - `test_input_classifier.py` — all input categories including CONCEPT_REQUEST
 - `test_tutor_states.py` — state machine transitions, circuit breakers
