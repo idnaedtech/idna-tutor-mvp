@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
-from google.cloud import texttospeech
+import requests as http_requests  # For Sarvam TTS API calls
 
 # Load environment variables
 load_dotenv()
@@ -76,133 +76,76 @@ groq_client = OpenAI(
     max_retries=2
 )
 
-_tts_client = None
-_tts_creds_file = None
 
 
-def get_google_tts_client():
-    """Get Google TTS client, creating credentials file from env var if needed"""
-    global _tts_client, _tts_creds_file
-
-    if _tts_client:
-        return _tts_client
-
-    creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-
-    if creds_json:
-        try:
-            json.loads(creds_json)  # Validate JSON
-            _tts_creds_file = tempfile.NamedTemporaryFile(
-                mode='w', suffix='.json', delete=False
-            )
-            _tts_creds_file.write(creds_json)
-            _tts_creds_file.close()
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tts_creds_file.name
-            print("Google Cloud TTS: Credentials loaded")
-        except Exception as e:
-            print(f"Google Cloud TTS: Error setting up credentials: {e}")
-            return None
-
-    try:
-        _tts_client = texttospeech.TextToSpeechClient()
-        print("Google Cloud TTS: ENABLED")
-        return _tts_client
-    except Exception as e:
-        print(f"Google Cloud TTS: DISABLED ({e})")
-        return None
 
 
-def preprocess_for_tts(text: str, lang: str = "hi-IN") -> str:
+# ============================================================
+# Sarvam TTS (Bulbul v3) — v6.0.3
+# ============================================================
+
+SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
+SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"
+SARVAM_SPEAKER = "priya"   # Warm Indian female voice — test priya/kavya/neha on dashboard.sarvam.ai
+SARVAM_PACE = 0.85         # Slightly slower for teaching (range: 0.5 - 2.0)
+
+
+def sarvam_tts(text: str) -> bytes:
+    """Generate speech using Sarvam Bulbul v3 TTS.
+
+    Returns MP3 audio bytes. Falls back to OpenAI TTS on error.
+    Sarvam handles Hinglish code-mixing, number normalization, and
+    natural Hindi prosody natively — no preprocessing needed.
     """
-    v5.0: Preprocess tutor response text for better TTS pronunciation.
-    Transliterates common English math terms to Hindi phonetic equivalents
-    so Google TTS hi-IN voice pronounces them correctly.
-    """
-    import re as re_mod
-
-    if "hi-IN" not in lang.lower():
-        return text
-
-    # Common math terms that Google TTS mispronounces in hi-IN
-    replacements = {
-        'denominator': 'डिनॉमिनेटर',
-        'numerator': 'न्यूमरेटर',
-        'fraction': 'फ़्रैक्शन',
-        'fractions': 'फ़्रैक्शन्स',
-        'equation': 'इक्वेशन',
-        'variable': 'वेरिएबल',
-        'integer': 'इंटीजर',
-        'rational': 'रैशनल',
-        'rational number': 'रैशनल नंबर',
-        'rational numbers': 'रैशनल नंबर्स',
-        'linear': 'लीनियर',
-        'algebraic': 'अलजेब्रिक',
-        'expression': 'एक्सप्रेशन',
-        'multiplication': 'मल्टिप्लिकेशन',
-        'addition': 'एडिशन',
-        'subtraction': 'सबट्रैक्शन',
-        'division': 'डिविज़न',
-        'percentage': 'परसेंटेज',
-        'perimeter': 'पेरीमीटर',
-        'area': 'एरिया',
-        'volume': 'वॉल्यूम',
-    }
-
-    # Case-insensitive replacement (preserve surrounding text)
-    # Sort by length descending to match longer phrases first
-    for eng, hindi in sorted(replacements.items(), key=lambda x: -len(x[0])):
-        text = re_mod.sub(re_mod.escape(eng), hindi, text, flags=re_mod.IGNORECASE)
-
-    return text
-
-
-def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
-    """Generate speech using Google Cloud TTS."""
-    tts_client = get_google_tts_client()
-    if tts_client is None:
-        raise Exception("Google Cloud TTS not configured")
-
-    # v6.0.1: Limit TTS text length to prevent Google TTS failures
-    # Google TTS has a 5000 byte limit for text input
-    if len(text) > 1500:
-        # Find the last sentence boundary before 1500 chars
-        truncated = text[:1500]
+    # Sarvam v3 REST limit: 2500 chars
+    if len(text) > 2400:
+        truncated = text[:2400]
         last_period = max(truncated.rfind('.'), truncated.rfind('?'), truncated.rfind('!'))
         if last_period > 500:
             text = truncated[:last_period + 1]
             print(f"[TTS] Text truncated to {len(text)} chars at sentence boundary")
 
-    if ssml:
-        synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
-    else:
-        synthesis_input = texttospeech.SynthesisInput(text=text)
+    payload = {
+        "inputs": [text],
+        "target_language_code": "hi-IN",
+        "speaker": SARVAM_SPEAKER,
+        "model": "bulbul:v3",
+        "pace": SARVAM_PACE,
+        "enable_preprocessing": True,
+        "audio_format": "mp3",
+        "sample_rate": 24000,
+    }
 
-    # v4.8: Reverted to en-IN-Journey-F (natural Indian English female)
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="en-IN",
-        name="en-IN-Journey-F",  # Natural conversational Indian female voice
-    )
-
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=0.95,  # Natural prosody
-    )
+    headers = {
+        "Content-Type": "application/json",
+        "api-subscription-key": SARVAM_API_KEY,
+    }
 
     try:
-        response = tts_client.synthesize_speech(
-            input=synthesis_input, voice=voice, audio_config=audio_config
+        response = http_requests.post(
+            SARVAM_TTS_URL,
+            json=payload,
+            headers=headers,
+            timeout=15
         )
-        return response.audio_content
+        response.raise_for_status()
+        data = response.json()
+
+        # Response format: {"request_id": "...", "audios": ["base64_encoded_mp3"]}
+        audio_base64 = data["audios"][0]
+        audio_bytes = base64.b64decode(audio_base64)
+        print(f"[Sarvam TTS] Generated {len(audio_bytes)} bytes, speaker={SARVAM_SPEAKER}")
+        return audio_bytes
+
     except Exception as e:
-        print(f"[TTS] Primary voice failed: {e}, trying fallback")
-        # Fallback to male Journey voice
-        voice = texttospeech.VoiceSelectionParams(
-            language_code="en-IN", name="en-IN-Journey-D"
+        print(f"[Sarvam TTS] Error: {e}, falling back to OpenAI TTS")
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="nova",
+            speed=0.95,
+            input=text
         )
-        response = tts_client.synthesize_speech(
-            input=synthesis_input, voice=voice, audio_config=audio_config
-        )
-        return response.audio_content
+        return response.content
 
 
 def estimate_stt_confidence(text: str, segments: list = None) -> dict:
@@ -356,17 +299,14 @@ class TextToSpeechRequest(BaseModel):
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech."""
+    """Convert text to speech using Sarvam Bulbul v3."""
     try:
-        # v5.0: Preprocess text for better Hindi pronunciation
-        processed_text = preprocess_for_tts(request.text, "en-IN")
-
         with Timer() as tts_timer:
-            if get_google_tts_client():
-                audio_content = google_tts(text=processed_text, ssml=request.ssml)
+            if SARVAM_API_KEY:
+                audio_content = sarvam_tts(text=request.text)
                 audio_base64 = base64.b64encode(audio_content).decode('utf-8')
             else:
-                # Fallback to OpenAI TTS
+                # Fallback to OpenAI TTS if no Sarvam key configured
                 response = client.audio.speech.create(
                     model="tts-1",
                     voice=request.voice,

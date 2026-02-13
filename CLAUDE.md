@@ -1,4 +1,17 @@
-# IDNA Tutor Architecture v6.0.1 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.0.3 — CLAUDE CODE RULES
+
+## TTS ENGINE (v6.0.3)
+
+- **Engine:** Sarvam Bulbul v3 (api.sarvam.ai)
+- **Voice:** priya (warm Indian female — configurable via SARVAM_SPEAKER)
+- **Pace:** 0.85 (slightly slower for teaching)
+- **Language:** hi-IN (native Hinglish code-mixing)
+- **No preprocessing needed** — Sarvam handles numbers, dates, mixed text natively
+- **Fallback:** OpenAI TTS (tts-1, nova voice) if SARVAM_API_KEY not set
+- **API:** POST https://api.sarvam.ai/text-to-speech
+- **Auth:** api-subscription-key header
+- **Response:** base64 MP3 in {"audios": ["..."]}
+- **Char limit:** 2500 (we truncate at 2400 at sentence boundary)
 
 ## FILE STRUCTURE (6 files)
 
@@ -147,7 +160,7 @@ check_answer(student_input, answer_key, accept_also) → True/None/False
 - `gpt-4o` for BOTH tool calling AND speech generation
 
 ### Voice Configuration:
-- **TTS**: Google Cloud `en-IN-Journey-F` (1500 char limit, sentence truncation)
+- **TTS**: Sarvam Bulbul v3 `priya` voice (2400 char limit, sentence truncation)
 - **STT**: Groq Whisper `whisper-large-v3-turbo` with AUTO-DETECT
 
 ### Test Suite (246 tests)
