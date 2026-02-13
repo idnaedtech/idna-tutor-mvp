@@ -715,7 +715,7 @@
                 chatArea.classList.add('active');
                 inputArea.style.display = 'block';
                 endBtn.style.display = 'block';
-                hideTyping();
+                // Don't hide typing here — speakWithText will hide it when audio is ready
 
                 // Show the greeting + question (synced with audio)
                 updateScore(data.state);
@@ -744,7 +744,7 @@
                     text: answer
                 });
 
-                hideTyping();
+                // Don't hide typing here — speakWithText will hide it when audio is ready
                 updateScore(data.state);
 
                 // Check if session ended
@@ -822,30 +822,33 @@
             }
         }
 
-        // Speak with synchronized text display (v6.0.4)
-        // Pre-fetches audio BEFORE showing text so they appear together
+        // Speak with synchronized text display (v6.0.5)
+        // Shows typing dots until audio is ready, then text + audio together
         async function speakWithText(text, options = {}) {
             const { onComplete, autoListen } = options;
             stopTTS();
 
             try {
-                setStatus('Didi soch rahi hai...', 'speaking');
+                // Keep typing indicator showing during TTS fetch
+                // (typing indicator was already shown during LLM call,
+                //  we just don't hide it until audio is ready)
+                showTyping();
 
-                // Fetch audio first
+                // Fetch audio
                 const data = await api('/api/text-to-speech', 'POST', { text });
 
+                // Audio ready — hide typing, show text, play audio simultaneously
+                hideTyping();
+
                 if (!data.audio) {
-                    // No audio — just show text
                     addMessage(text, 'tutor');
                     setStatus('');
                     return;
                 }
 
-                // Audio ready — NOW show text and play simultaneously
                 addMessage(text, 'tutor');
 
                 currentAudio = new Audio('data:audio/mp3;base64,' + data.audio);
-                setStatus('Speaking...', 'speaking');
 
                 currentAudio.onerror = (e) => {
                     console.error('Audio playback error:', e);
@@ -870,7 +873,7 @@
                 }
             } catch (e) {
                 console.error('TTS error:', e);
-                // On error, still show text
+                hideTyping();
                 addMessage(text, 'tutor');
                 setStatus('');
                 if (onComplete) onComplete();
