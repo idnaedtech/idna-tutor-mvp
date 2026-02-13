@@ -11,7 +11,7 @@ load_dotenv()
 from agentic_tutor import AgenticTutor
 
 
-async def test_tutor():
+async def _test_tutor_async():
     print("=" * 50)
     print("IDNA Agentic Tutor Test")
     print("=" * 50)
@@ -60,5 +60,10 @@ async def test_tutor():
     print("=" * 50)
 
 
+def test_tutor():
+    """Sync wrapper for pytest compatibility."""
+    asyncio.run(_test_tutor_async())
+
+
 if __name__ == "__main__":
-    asyncio.run(test_tutor())
+    asyncio.run(_test_tutor_async())

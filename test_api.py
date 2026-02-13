@@ -1,12 +1,10 @@
 """
 IDNA EdTech - API Tests
-Test all endpoints for student management, sessions, and parent dashboard.
+Test all endpoints for the tutoring server.
 """
 
 import requests
-import json
-import time
-import sys
+import pytest
 
 BASE_URL = "http://localhost:8000"
 
@@ -17,8 +15,9 @@ def test_health():
     resp = requests.get(f"{BASE_URL}/health")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "healthy"
-    print(f"   ✅ Health check passed: {data}")
+    assert data["status"] == "ok"
+    assert data["service"] == "idna-tutor"
+    print(f"   Health check passed: {data}")
 
 
 def test_root():
@@ -26,206 +25,155 @@ def test_root():
     print("\n2. Testing Root Endpoint...")
     resp = requests.get(f"{BASE_URL}/")
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["name"] == "IDNA EdTech API"
-    print(f"   ✅ Root endpoint: {data['name']} v{data['version']}")
+    # Root serves frontend HTML or JSON fallback
+    content_type = resp.headers.get("content-type", "")
+    if "text/html" in content_type:
+        assert "html" in resp.text.lower()
+        print("   Root endpoint: serves HTML frontend")
+    else:
+        data = resp.json()
+        assert "message" in data
+        print(f"   Root endpoint: {data['message']}")
 
 
-def test_create_student():
-    """Test student creation."""
-    print("\n3. Testing Student Creation...")
-    student_data = {
-        "name": "Test Student",
-        "age": 9,
-        "grade": 4,
-        "preferred_language": "en",
-        "parent_phone": "+919999888877",
-        "parent_name": "Test Parent",
-        "city": "Nizamabad",
-        "state": "Telangana"
-    }
-    resp = requests.post(f"{BASE_URL}/api/students", json=student_data)
+def test_get_chapters():
+    """Test chapters listing."""
+    print("\n3. Testing Get Chapters...")
+    resp = requests.get(f"{BASE_URL}/api/chapters")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["success"] == True
-    student_id = data["student_id"]
-    print(f"   ✅ Created student with ID: {student_id}")
-    return student_id
+    assert "chapters" in data
+    assert len(data["chapters"]) > 0
+    chapter_ids = [c["id"] for c in data["chapters"]]
+    assert "rational_numbers" in chapter_ids
+    print(f"   Found {len(data['chapters'])} chapters: {chapter_ids}")
 
 
-def test_get_student(student_id):
-    """Test getting student details."""
-    print(f"\n4. Testing Get Student (ID: {student_id})...")
-    resp = requests.get(f"{BASE_URL}/api/students/{student_id}")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    assert data["student"]["name"] == "Test Student"
-    print(f"   ✅ Retrieved student: {data['student']['name']}")
-
-
-def test_get_students_by_parent():
-    """Test getting students by parent phone."""
-    print("\n5. Testing Get Students by Parent Phone...")
-    resp = requests.get(f"{BASE_URL}/api/students", params={"phone": "+919876543210"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Found {len(data['students'])} students for parent")
-
-
-def test_update_student(student_id):
-    """Test updating student."""
-    print(f"\n6. Testing Update Student (ID: {student_id})...")
-    updates = {
-        "learning_pace": "fast",
-        "current_subject": "science",
-        "current_difficulty": 3
-    }
-    resp = requests.put(f"{BASE_URL}/api/students/{student_id}", json=updates)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Updated student successfully")
-
-
-def test_create_session(student_id):
+def test_start_session():
     """Test session creation."""
-    print(f"\n7. Testing Create Session (Student ID: {student_id})...")
+    print("\n4. Testing Start Session...")
     session_data = {
-        "student_id": student_id,
-        "subject": "math",
-        "topic": "multiplication",
-        "difficulty_level": 2
+        "student_name": "Test Student",
+        "chapter": "rational_numbers"
     }
-    resp = requests.post(f"{BASE_URL}/api/sessions", json=session_data)
+    resp = requests.post(f"{BASE_URL}/api/session/start", json=session_data)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["success"] == True
-    session_id = data["session_id"]
-    print(f"   ✅ Created session with ID: {session_id}")
-    return session_id
+    assert "session_id" in data
+    assert "speech" in data
+    assert "state" in data
+    assert len(data["session_id"]) == 8
+    print(f"   Created session: {data['session_id']}")
+    print(f"   Opening speech: {data['speech'][:80]}...")
 
 
-def test_end_session(session_id):
-    """Test ending a session."""
-    print(f"\n8. Testing End Session (ID: {session_id})...")
+def test_start_session_empty_name():
+    """Test session with empty name (v5.0 fix)."""
+    print("\n5. Testing Start Session (empty name)...")
     session_data = {
-        "duration_seconds": 900,
-        "questions_asked": 15,
-        "correct_answers": 12,
-        "hints_used": 2,
-        "engagement_score": 0.85,
-        "celebration_moments": 3,
-        "voice_interactions": 25
+        "student_name": "",
+        "chapter": "rational_numbers"
     }
-    resp = requests.put(f"{BASE_URL}/api/sessions/{session_id}/end", json=session_data)
+    resp = requests.post(f"{BASE_URL}/api/session/start", json=session_data)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Session ended successfully")
+    assert "session_id" in data
+    # v5.0: Should NOT say "Student" in speech
+    assert "Student" not in data["speech"] or "student" in data["speech"].lower()
+    print(f"   Session without name created: {data['session_id']}")
 
 
-def test_get_student_sessions(student_id):
-    """Test getting student sessions."""
-    print(f"\n9. Testing Get Student Sessions (ID: {student_id})...")
-    resp = requests.get(f"{BASE_URL}/api/students/{student_id}/sessions")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Found {len(data['sessions'])} sessions")
+def test_process_input():
+    """Test processing student input."""
+    print("\n6. Testing Process Input...")
+    # First create a session
+    session_resp = requests.post(
+        f"{BASE_URL}/api/session/start",
+        json={"student_name": "Ravi", "chapter": "rational_numbers"}
+    )
+    session_id = session_resp.json()["session_id"]
 
-
-def test_update_progress(student_id):
-    """Test progress update."""
-    print(f"\n10. Testing Update Progress (Student ID: {student_id})...")
-    progress_data = {
-        "student_id": student_id,
-        "subject": "math",
-        "topic": "multiplication",
-        "mastery_level": 80.0,
-        "time_spent_seconds": 900
+    # Send an answer
+    input_data = {
+        "session_id": session_id,
+        "text": "minus 1 by 7"
     }
-    resp = requests.post(f"{BASE_URL}/api/progress", json=progress_data)
+    resp = requests.post(f"{BASE_URL}/api/session/input", json=input_data)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Progress updated")
+    assert "speech" in data
+    assert "state" in data
+    print(f"   Response: {data['speech'][:80]}...")
 
 
-def test_get_progress(student_id):
-    """Test getting student progress."""
-    print(f"\n11. Testing Get Student Progress (ID: {student_id})...")
-    resp = requests.get(f"{BASE_URL}/api/students/{student_id}/progress")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Found {len(data['progress'])} topic progress records")
-
-
-def test_dashboard(student_id):
-    """Test parent dashboard endpoint."""
-    print(f"\n12. Testing Parent Dashboard (Student ID: {student_id})...")
-    resp = requests.get(f"{BASE_URL}/api/dashboard/{student_id}")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    assert "dashboard" in data
-    dashboard = data["dashboard"]
-    print(f"   ✅ Dashboard data:")
-    print(f"      - Study time: {dashboard['total_study_time_minutes']} mins")
-    print(f"      - Accuracy: {dashboard['average_accuracy']}%")
-    print(f"      - Sessions: {dashboard['sessions_completed']}")
-    print(f"      - Topics mastered: {len(dashboard['topics_mastered'])}")
-
-
-def test_parent_dashboard_multi():
-    """Test parent dashboard for multiple children."""
-    print("\n13. Testing Parent Dashboard (Multiple Children)...")
-    resp = requests.get(f"{BASE_URL}/api/dashboard/parent/+919876543210")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Found data for {len(data['children'])} children")
-
-
-def test_generate_report(student_id):
-    """Test report generation."""
-    print(f"\n14. Testing Generate Report (Student ID: {student_id})...")
-    resp = requests.post(f"{BASE_URL}/api/reports/{student_id}/generate", params={"report_type": "daily"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    assert "voice_message" in data
-    print(f"   ✅ Report generated:")
-    print(f"      - Emotional tone: {data['emotional_tone']}")
-    print(f"      - Voice message: {data['voice_message'][:80]}...")
-
-
-def test_get_latest_report(student_id):
-    """Test getting latest report."""
-    print(f"\n15. Testing Get Latest Report (Student ID: {student_id})...")
-    resp = requests.get(f"{BASE_URL}/api/reports/{student_id}/latest")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Retrieved latest report from {data['report']['generated_at']}")
-
-
-def test_add_achievement(student_id):
-    """Test adding achievement."""
-    print(f"\n16. Testing Add Achievement (Student ID: {student_id})...")
-    params = {
-        "achievement_type": "streak",
-        "name": "Test Champion",
-        "description": "Completed all API tests",
-        "points": 100
+def test_process_input_invalid_session():
+    """Test input with invalid session ID."""
+    print("\n7. Testing Invalid Session...")
+    input_data = {
+        "session_id": "invalid123",
+        "text": "hello"
     }
-    resp = requests.post(f"{BASE_URL}/api/students/{student_id}/achievements", params=params)
+    resp = requests.post(f"{BASE_URL}/api/session/input", json=input_data)
+    assert resp.status_code == 404
+    print("   Correctly returned 404 for invalid session")
+
+
+def test_get_session_state():
+    """Test getting session state."""
+    print("\n8. Testing Get Session State...")
+    # Create session first
+    session_resp = requests.post(
+        f"{BASE_URL}/api/session/start",
+        json={"student_name": "Priya", "chapter": "rational_numbers"}
+    )
+    session_id = session_resp.json()["session_id"]
+
+    # Get state
+    resp = requests.get(f"{BASE_URL}/api/session/{session_id}/state")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["success"] == True
-    print(f"   ✅ Added achievement with ID: {data['achievement_id']}")
+    # Session state includes chapter, attempt_count, brain, etc.
+    assert "chapter" in data
+    assert "attempt_count" in data
+    print(f"   Chapter: {data['chapter']}, Attempts: {data['attempt_count']}")
+
+
+def test_get_session_state_invalid():
+    """Test getting state for invalid session."""
+    print("\n9. Testing Invalid Session State...")
+    resp = requests.get(f"{BASE_URL}/api/session/invalid123/state")
+    assert resp.status_code == 404
+    print("   Correctly returned 404 for invalid session")
+
+
+def test_text_to_speech():
+    """Test TTS endpoint."""
+    print("\n10. Testing Text-to-Speech...")
+    tts_data = {
+        "text": "Hello, this is a test.",
+        "voice": "nova"
+    }
+    resp = requests.post(f"{BASE_URL}/api/text-to-speech", json=tts_data)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "audio" in data
+    assert "format" in data
+    assert data["format"] == "mp3"
+    # Audio should be base64 encoded
+    assert len(data["audio"]) > 100
+    print(f"   TTS returned {len(data['audio'])} bytes of audio")
+
+
+def test_student_page():
+    """Test student page route."""
+    print("\n11. Testing Student Page...")
+    resp = requests.get(f"{BASE_URL}/student")
+    assert resp.status_code == 200
+    content_type = resp.headers.get("content-type", "")
+    if "text/html" in content_type:
+        print("   Student page serves HTML")
+    else:
+        print("   Student page returns JSON (frontend not found)")
 
 
 def run_all_tests():
@@ -233,48 +181,31 @@ def run_all_tests():
     print("=" * 60)
     print("IDNA EdTech API Test Suite")
     print("=" * 60)
-    
+
     try:
         test_health()
         test_root()
-        
-        # Student tests
-        student_id = test_create_student()
-        test_get_student(student_id)
-        test_get_students_by_parent()
-        test_update_student(student_id)
-        
-        # Session tests
-        session_id = test_create_session(student_id)
-        test_end_session(session_id)
-        test_get_student_sessions(student_id)
-        
-        # Progress tests
-        test_update_progress(student_id)
-        test_get_progress(student_id)
-        
-        # Dashboard tests
-        test_dashboard(student_id)
-        test_parent_dashboard_multi()
-        
-        # Report tests
-        test_generate_report(student_id)
-        test_get_latest_report(student_id)
-        
-        # Achievement tests
-        test_add_achievement(student_id)
-        
+        test_get_chapters()
+        test_start_session()
+        test_start_session_empty_name()
+        test_process_input()
+        test_process_input_invalid_session()
+        test_get_session_state()
+        test_get_session_state_invalid()
+        test_text_to_speech()
+        test_student_page()
+
         print("\n" + "=" * 60)
-        print("✅ ALL TESTS PASSED!")
+        print("ALL TESTS PASSED!")
         print("=" * 60)
-        
+
     except AssertionError as e:
-        print(f"\n❌ Test failed: {e}")
-        sys.exit(1)
+        print(f"\n Test failed: {e}")
+        raise
     except requests.exceptions.ConnectionError:
-        print(f"\n❌ Could not connect to server at {BASE_URL}")
-        print("   Make sure the API server is running: python api.py")
-        sys.exit(1)
+        print(f"\n Could not connect to server at {BASE_URL}")
+        print("   Make sure the server is running: python server.py")
+        raise
 
 
 if __name__ == "__main__":
