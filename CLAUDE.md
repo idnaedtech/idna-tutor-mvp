@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v5.0 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.0.1 — CLAUDE CODE RULES
 
 ## FILE STRUCTURE (6 files)
 
@@ -11,10 +11,24 @@ tutor_brain.py        → Pure Python. Student model + teaching plans. NO LLM.
 didi_voice.py         → ALL LLM calls. Speech generation + hint selection.
 ```
 
-## DATA FLOW (v5.0)
+## DATA FLOW (v6.0.1)
 
 ```
-Student speaks
+SESSION START (v6.0.1 — two-turn flow)
+    ↓
+start_session() → Template-based greeting (NO LLM)
+  - "Namaste {name}! Aaj hum {chapter} padhenge."
+  - Teach concept with real-life example (from teaching_examples dict)
+  - End with "Samajh aaya?"
+  - Set needs_first_question = True
+    ↓
+Student responds to "Samajh aaya?"
+    ↓
+[IF ACK] → "Bahut accha! Ab ek question try karte hain: {question}"
+[IF IDK] → Re-teach with different wording, keep needs_first_question = True
+[IF STOP/TROLL] → Fall through to normal flow
+    ↓
+NORMAL QUESTION FLOW
     ↓
 input_classifier.classify() → category (ANSWER, IDK, ACK, TROLL, CONCEPT_REQUEST, etc.)
     ↓
@@ -40,37 +54,45 @@ tutor_brain enriches:
   - get_pre_teach_instruction() → pre-teach before question if needed
   - get_enhanced_hint() → better hint based on student model
     ↓
-didi_voice generates speech with brain's context + CONVERSATION HISTORY (v5.0)
+didi_voice generates speech with brain's context + CONVERSATION HISTORY
     ↓
 tutor_brain.observe_interaction() → updates student model
     ↓
-[TTS PREPROCESSING] preprocess_for_tts() → transliterate English terms to Hindi (v5.0)
+[TTS PREPROCESSING] preprocess_for_tts() → transliterate English terms to Hindi
+    ↓
+[TTS LENGTH LIMIT] Truncate at 1500 chars (sentence boundary) for Google TTS
     ↓
 Response spoken to student
 ```
 
-## NEW IN v5.0
+## NEW IN v6.0.1
 
-### teach_concept tool
-- Triggered by CONCEPT_REQUEST classification
-- Student asks "what are rational numbers?", "samjhao kya hota hai"
-- Pauses current question, teaches the concept, bridges back
-- NEVER ignore a student asking about a concept. ALWAYS teach it.
+### Teach-First Flow (v6.0)
+- Didi ALWAYS teaches the concept BEFORE asking the first question
+- Uses template-based greeting (no LLM) to ensure predictable output
+- Teaching examples stored in `teaching_examples` dict by skill
+- DIDI_PROMPT updated with "TEACHER, not quiz machine" philosophy
 
-### Conversation history in all LLM calls
-- EVERY call to didi_voice includes last 4 turns of conversation history
-- This ensures Didi connects to what the student has been saying
-- If student asked something twice, Didi should notice and address it
+### Two-Turn Session Start (v6.0.1)
+- **Turn 1**: Greeting + teach concept + "Samajh aaya?"
+- **Turn 2**: If ACK → read question. If IDK → re-teach.
+- `needs_first_question` flag tracks state between turns
+- Direct returns (no LLM) for ACK/IDK to prevent LLM modification
 
-### TTS preprocessing
-- preprocess_for_tts() transliterates English math terms to Hindi Devanagari
-- Only runs for `hi-IN` voice (not en-IN English voice)
-- Runs BEFORE Google TTS call
+### TTS Length Limit (v6.0.1)
+- Google TTS has 5000 byte limit
+- Text truncated at 1500 chars (sentence boundary) before TTS call
+- Prevents TTS failures on long v6.0 greetings
 
-### Student name fix
-- NEVER default to "Student"
-- Empty name → omit name entirely
-- Real name → use 2-3 times per session
+### Warm Chapter Intros (v6.0)
+- CHAPTER_INTROS replaced with warm Hindi teaching intros
+- Example: "Aaj hum rational numbers padhenge. Ye wo numbers hain jo aap p over q mein likh sakte hain..."
+
+### Updated DIDI_PROMPT (v6.0)
+- Emphasizes teaching philosophy: "TEACHER, not quiz machine"
+- Real-life Indian examples: pocket money, roti, cricket, auto-rickshaw
+- Warm corrections: "Hmm, yahan thoda dhyan dein" (never "Wrong")
+- Max 5 sentences per turn
 
 ## ANSWER CHECKER (v4.1 — unchanged)
 
@@ -82,7 +104,12 @@ check_answer(student_input, answer_key, accept_also) → True/None/False
 
 ## KEY BEHAVIORS
 
-### teach_concept (v5.0 — NEW)
+### Session Start (v6.0.1)
+1. `start_session()` returns template-based greeting + teaching
+2. First `process_input()` checks `needs_first_question` flag
+3. ACK → read question, IDK → re-teach, STOP → end session
+
+### teach_concept (v5.0)
 - Triggered when student asks about a concept (CONCEPT_REQUEST category)
 - Uses teach_concept tool in LLM
 - Teaches with real-life example, not just definition
@@ -119,8 +146,8 @@ check_answer(student_input, answer_key, accept_also) → True/None/False
 ### Models:
 - `gpt-4o` for BOTH tool calling AND speech generation
 
-### Voice Configuration (v5.0):
-- **TTS**: Google Cloud `en-IN-Journey-F` (preprocess_for_tts only for hi-IN)
+### Voice Configuration:
+- **TTS**: Google Cloud `en-IN-Journey-F` (1500 char limit, sentence truncation)
 - **STT**: Groq Whisper `whisper-large-v3-turbo` with AUTO-DETECT
 
 ### Test Suite (246 tests)
@@ -128,23 +155,24 @@ check_answer(student_input, answer_key, accept_also) → True/None/False
 - `test_input_classifier.py` — all input categories including CONCEPT_REQUEST
 - `test_tutor_states.py` — state machine transitions, circuit breakers
 - `test_regression_live.py` — real session scenarios, full chain tests
+- `test_api.py` — API endpoint tests (health, chapters, session, TTS)
 - Run: `python -m pytest test_*.py -v`
 
 ### Dead code (do NOT import):
 web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.py, guardrails.py
 
-## VERIFIED TEST FLOWS (v5.0)
+## VERIFIED TEST FLOWS (v6.0.1)
 
-| Input | Expected Response |
-|-------|-------------------|
-| Correct: "minus 1 by 7" | "Bilkul sahi!" + next question (deterministic) |
-| Partial: "-1" (for -1/7) | "Numerator correct, add denominator" |
-| Wrong: "5" | LLM selects hint level |
-| Sub-answer: "minus 1" after "minus 3 plus 2?" | "Haan sahi!" + guide forward |
-| "what are rational numbers?" | TEACH the concept + bridge to question (v5.0) |
-| "samjhao kya hota hai" | TEACH the concept (v5.0) |
-| "you should explain to me" | TEACH the concept (v5.0) |
-| Noise: "me", "x", "." | Re-ask current question |
-| 3x consecutive noise | Force explain + advance |
-| "stop" | Session ends gracefully |
-| Empty name / "Student" | Omit name, don't say "Student" |
+| Turn | Input | Expected Response |
+|------|-------|-------------------|
+| Start | — | "Namaste {name}! Aaj hum {chapter}... {teaching}... Samajh aaya?" |
+| 2 | "haan" / ACK | "Bahut accha! Ab ek question try karte hain: {question}" |
+| 2 | "nahi samjha" / IDK | "Koi baat nahi, let me explain again... Ab samjhe?" |
+| 3+ | Correct: "minus 1 by 7" | "Bilkul sahi!" + next question (deterministic) |
+| 3+ | Partial: "-1" (for -1/7) | "Numerator correct, add denominator" |
+| 3+ | Wrong: "5" | LLM selects hint level |
+| 3+ | Sub-answer: "minus 1" after "minus 3 plus 2?" | "Haan sahi!" + guide forward |
+| Any | "what are rational numbers?" | TEACH the concept + bridge to question |
+| Any | Noise: "me", "x", "." | Re-ask current question |
+| Any | 3x consecutive noise | Force explain + advance |
+| Any | "stop" | Session ends gracefully |
