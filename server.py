@@ -450,14 +450,18 @@ class TextToSpeechRequest(BaseModel):
     text: str
     voice: str = "nova"
     ssml: Optional[str] = None
+    context: Optional[str] = "default"  # v6.2: word limit context
 
 
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TextToSpeechRequest):
     """Convert text to speech using Sarvam Bulbul v3."""
     try:
+        # v6.2: Enforce word limit before TTS
+        text = enforce_word_limit(request.text, context=request.context or "default")
+
         with Timer() as tts_timer:
-            audio_content = sarvam_tts(text=request.text)
+            audio_content = sarvam_tts(text=text)
             audio_base64 = base64.b64encode(audio_content).decode('utf-8')
 
         print(f"TTS completed in {tts_timer.elapsed_ms}ms")
