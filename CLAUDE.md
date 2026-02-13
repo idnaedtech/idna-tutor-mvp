@@ -1,13 +1,13 @@
-# IDNA Tutor Architecture v6.0.5 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.0.6 — CLAUDE CODE RULES
 
-## TTS ENGINE (v6.0.5)
+## TTS ENGINE (v6.0.6)
 
 - **Engine:** Sarvam Bulbul v3 (api.sarvam.ai)
 - **Voice:** priya (warm Indian female — test kavya, shreya, simran for warmth)
 - **Pace:** 0.90 (natural teaching pace)
 - **Temperature:** 0.7 (more expressive than default 0.6)
-- **Language:** Dynamic — `hi-IN` if hindi_ratio > 0.25, else `en-IN`
-- **No preprocessing needed** — Sarvam handles code-mixed Hinglish natively
+- **Language:** LOCKED to `hi-IN` — switching causes voice to sound different
+- **Text cleaning:** `clean_for_tts()` converts "-3/7" to "minus 3 over 7"
 - **NO FALLBACK** — never switch voice mid-session; retry with shorter text instead
 - **API:** POST https://api.sarvam.ai/text-to-speech
 - **Auth:** api-subscription-key header

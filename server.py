@@ -98,41 +98,44 @@ SARVAM_SPEAKER = "priya"   # CHANGE after testing — try kavya, shreya, simran
 SARVAM_PACE = 0.90
 
 
-def detect_hindi_ratio(text: str) -> float:
-    """Detect what fraction of text is Hindi/Devanagari vs English.
-    Returns 0.0 (all English) to 1.0 (all Hindi).
+def clean_for_tts(text: str) -> str:
+    """Clean LLM output for TTS consumption.
+
+    Converts fraction symbols to spoken words and removes
+    markdown/formatting that TTS engines can't speak.
     """
     import re as re_mod
 
-    if not text:
-        return 0.0
+    # Convert fraction patterns like -3/7, 5/8, 2/3 to spoken form
+    def fraction_to_words(match):
+        full = match.group(0)
+        negative = full.startswith('-')
+        nums = re_mod.findall(r'\d+', full)
+        if len(nums) == 2:
+            prefix = "minus " if negative else ""
+            return f"{prefix}{nums[0]} over {nums[1]}"
+        return full
 
-    # Count Devanagari characters (Unicode range 0900-097F)
-    devanagari_chars = len(re_mod.findall(r'[\u0900-\u097F]', text))
+    # Match fractions: -3/7, 5/8, -1/2, etc.
+    text = re_mod.sub(r'-?\d+\s*/\s*\d+', fraction_to_words, text)
 
-    # Count common Hindi words written in Roman script (Hinglish)
-    hindi_roman_words = [
-        'aap', 'hain', 'hai', 'toh', 'kya', 'nahi', 'aur', 'yeh', 'woh',
-        'mein', 'ke', 'ka', 'ki', 'ko', 'se', 'par', 'bhi', 'hum',
-        'karo', 'karte', 'hota', 'dekho', 'dekhiye', 'sochiye', 'bataiye',
-        'accha', 'theek', 'bilkul', 'sahi', 'samajh', 'samjha', 'samjho',
-        'chaliye', 'kariye', 'suniye', 'padhenge', 'seekhte', 'beta',
-        'bahut', 'agar', 'jaise', 'matlab', 'kyunki', 'isliye',
-        'namaste', 'dhyan', 'galti', 'jawab', 'sawal',
-    ]
-    words = text.lower().split()
-    if not words:
-        return 0.0
+    # Remove markdown formatting
+    text = text.replace('**', '')
+    text = text.replace('*', '')
+    text = text.replace('`', '')
+    text = text.replace('#', '')
 
-    hindi_word_count = sum(1 for w in words if w.strip('.,!?') in hindi_roman_words)
+    # Remove numbered list markers at start of lines: "1. ", "2. "
+    text = re_mod.sub(r'^\d+\.\s+', '', text, flags=re_mod.MULTILINE)
 
-    # If any Devanagari, it's definitely Hindi-heavy
-    if devanagari_chars > 5:
-        return 0.8
+    # Remove bullet markers
+    text = text.replace('• ', '')
+    text = text.replace('- ', '', 1) if text.startswith('- ') else text
 
-    # Ratio of Hindi words to total words
-    ratio = hindi_word_count / len(words)
-    return min(ratio * 2.0, 1.0)  # Scale up since many content words are English in Hinglish
+    # Clean up multiple spaces
+    text = re_mod.sub(r'\s+', ' ', text).strip()
+
+    return text
 
 
 def sarvam_tts(text: str) -> bytes:
@@ -150,9 +153,13 @@ def sarvam_tts(text: str) -> bytes:
             text = truncated[:last_period + 1]
             print(f"[TTS] Text truncated to {len(text)} chars at sentence boundary")
 
-    # Detect language to set correct prosody
-    hindi_ratio = detect_hindi_ratio(text)
-    lang_code = "hi-IN" if hindi_ratio > 0.25 else "en-IN"
+    # Clean fraction symbols and formatting for TTS
+    text = clean_for_tts(text)
+
+    # v6.0.6: Always use hi-IN for consistent voice
+    # Sarvam hi-IN handles English words in Hinglish text natively
+    # Switching between hi-IN and en-IN mid-session makes the voice sound different
+    lang_code = "hi-IN"
 
     payload = {
         "inputs": [text],
@@ -183,7 +190,7 @@ def sarvam_tts(text: str) -> bytes:
 
         audio_base64 = data["audios"][0]
         audio_bytes = base64.b64decode(audio_base64)
-        print(f"[Sarvam TTS] OK: {len(audio_bytes)} bytes, {len(text)} chars, speaker={SARVAM_SPEAKER}, lang={lang_code}, hindi={hindi_ratio:.2f}")
+        print(f"[Sarvam TTS] OK: {len(audio_bytes)} bytes, {len(text)} chars, speaker={SARVAM_SPEAKER}, lang={lang_code}")
         return audio_bytes
 
     except Exception as e:
