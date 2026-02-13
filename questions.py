@@ -48,23 +48,23 @@ TODO: Add NCERT exercise references (e.g., "Ex 1.1 Q3")
 # ============================================================
 
 CHAPTER_INTROS = {
-    # Math chapters - SHORT, like a real teacher would say
-    "rational_numbers": "Rational numbers. Let's go.",
-    "linear_equations": "Equations. Find x.",
-    "quadrilaterals": "Shapes with four sides.",
-    "data_handling": "Graphs and averages.",
-    "squares_roots": "Squares and roots.",
-    "cubes_roots": "Cubes and cube roots.",
-    "comparing_quantities": "Ratios and percentages.",
-    "algebraic_expressions": "Algebra. Simplify expressions.",
-    "mensuration": "Areas and volumes.",
-    "exponents": "Powers and exponents.",
+    # Math chapters - v6.0: Warm teaching intros, not cold one-liners
+    "rational_numbers": "Aaj hum rational numbers padhenge. Ye wo numbers hain jo aap p over q mein likh sakte hain. Fractions jaise 3 over 4, negative numbers jaise minus 2, sab rational numbers hain.",
+    "linear_equations": "Aaj hum linear equations padhenge. Jab hum kehte hain 2x plus 3 equals 7, toh humein pata karna hai ki x ki value kya hai. Ek detective ki tarah — clues se answer dhoondhna.",
+    "quadrilaterals": "Aaj hum quadrilaterals padhenge. Ye shapes hain jinke chaar sides hote hain. Square, rectangle, parallelogram — sab quadrilaterals hain.",
+    "data_handling": "Aaj hum data handling padhenge. Jaise aapki class ke marks ka average nikalna, ya graph banana — ye sab data handling hai.",
+    "squares_roots": "Aaj hum squares aur square roots padhenge. Jab 3 times 3 equals 9, toh 9 ka square root 3 hai. Simple hai!",
+    "cubes_roots": "Aaj hum cubes aur cube roots padhenge. Jab 2 times 2 times 2 equals 8, toh 8 ka cube root 2 hai.",
+    "comparing_quantities": "Aaj hum ratios aur percentages padhenge. Jaise 100 mein se 25 marks matlab 25 percent. Shopping mein discount calculate karna — yahi hai.",
+    "algebraic_expressions": "Aaj hum algebraic expressions padhenge. Jab hum likhte hain 2x plus 3, ye ek expression hai. X ki jagah number daalenge toh answer aa jayega.",
+    "mensuration": "Aaj hum areas aur volumes padhenge. Kamre ka area nikalna, ya tank mein kitna paani aayega — ye sab mensuration hai.",
+    "exponents": "Aaj hum exponents padhenge. Jab likhte hain 2 to the power 3, matlab 2 times 2 times 2 equals 8. Chhoti cheez se bada number!",
     # Science chapters
-    "science_matter": "Matter and materials.",
-    "science_life": "Life processes.",
-    "science_force": "Force and motion.",
-    "science_light": "Light and sound.",
-    "science_nature": "Natural resources.",
+    "science_matter": "Aaj hum matter padhenge. Solid, liquid, gas — sab matter hai. Paani, hawa, lakdi — sab kuch matter se bana hai.",
+    "science_life": "Aaj hum life processes padhenge. Plants kaise khana banate hain, hum kaise saans lete hain — ye sab life processes hain.",
+    "science_force": "Aaj hum force aur motion padhenge. Push karo, pull karo — ye force hai. Cheezein kyun move karti hain, ye samjhenge.",
+    "science_light": "Aaj hum light aur sound padhenge. Roshni kaise travel karti hai, awaaz kaise sunayi deti hai — ye samjhenge.",
+    "science_nature": "Aaj hum natural resources padhenge. Paani, hawa, mitti — ye sab nature ke gifts hain. Inhe bachana zaroori hai.",
 }
 
 CHAPTER_NAMES = {

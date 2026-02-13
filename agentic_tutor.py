@@ -91,22 +91,36 @@ class AgenticTutor:
         # Brain plans for first question
         plan = self.brain.plan_for_question(q, self.session)
 
+        # v6.0: ALWAYS teach before the first question
+        # Get the skill lesson for this question's target skill
+        from questions import SKILL_LESSONS
+        skill = q.get("target_skill", "")
+        skill_lesson = SKILL_LESSONS.get(skill, "")
+
+        # Build a teaching instruction
         if plan.should_pre_teach:
-            # Brain says: teach the concept before asking
             pre_teach = plan.pre_teach_instruction
-            instruction = (
-                f"{name} just sat down. You're doing {self.session['chapter_name']} today. "
-                f"Say hi warmly. Then: {pre_teach} "
-                f"After teaching the concept, read the first question: {q_text}"
+        elif skill_lesson:
+            pre_teach = (
+                f"Before asking the question, teach this concept simply with a real-life example "
+                f"that a 13-year-old in India would relate to: {skill_lesson}. "
+                f"Use an example with roti, pocket money, or sharing sweets. "
+                f"Then say 'Samajh aaya?' and wait."
             )
-            speech = voice.generate_speech(instruction, name, lang, "")
         else:
-            speech = voice.generate_greeting(
-                student_name=name,
-                chapter_name=self.session["chapter_name"],
-                question_text=q_text,
-                lang=lang
+            pre_teach = (
+                f"Before asking the question, briefly explain what the student needs to know "
+                f"to solve it. Use a real-life example. Then say 'Samajh aaya?' and wait."
             )
+
+        instruction = (
+            f"{name} just sat down for tutoring. You're doing {self.session['chapter_name']} today. "
+            f"Say namaste warmly — like a real Didi meeting her student. "
+            f"Ask them briefly what they already know about this topic. "
+            f"Then teach: {pre_teach} "
+            f"After teaching and checking understanding, read the first question: {q_text}"
+        )
+        speech = voice.generate_speech(instruction, name, lang, "")
 
         self.session["state"] = State.WAITING_ANSWER
         return speech
