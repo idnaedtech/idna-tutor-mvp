@@ -113,6 +113,13 @@ Response spoken to student
 - Must verify: (1) student gave math answer, (2) answer is correct
 - If EITHER is false → DO NOT praise
 
+### Word Limits (v6.2.1)
+- Strict word limits by context in DIDI_PROMPT
+- Greeting: 15-20, Question: 15-20, Hint: 20-30, Teach: 50-60
+- `enforce_word_limit()` safety net in TTS endpoint
+- Sub-step tracking guidance (don't re-ask completed steps)
+- Clarification handler (ask when confused, don't fabricate)
+
 ## NEW IN v6.1.0
 
 ### COMFORT Category (v6.1)
