@@ -23,6 +23,7 @@ from enum import Enum
 
 class State(str, Enum):
     GREETING = "GREETING"
+    TEACHING = "TEACHING"           # v6.2: Teaching phase before first question
     WAITING_ANSWER = "WAITING_ANSWER"
     HINTING = "HINTING"
     EXPLAINING = "EXPLAINING"

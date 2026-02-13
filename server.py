@@ -94,7 +94,7 @@ SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"
 # Try these speakers and pick the warmest:
 #   Female: priya, kavya, neha, pooja, shreya, ishita, simran, roopa, rupali, suhani
 #   Recommended to test: kavya (often warmer than priya), shreya (clear), simran (expressive)
-SARVAM_SPEAKER = "priya"   # CHANGE after testing — try kavya, shreya, simran
+SARVAM_SPEAKER = "simran"   # v6.2: Global change per founder request
 SARVAM_PACE = 0.90
 
 
@@ -106,10 +106,33 @@ def clean_for_tts(text: str) -> str:
     """
     import re as re_mod
 
+    # v6.2: Remove parentheses (TTS reads them as "open parenthesis, close parenthesis")
+    text = text.replace('(', '').replace(')', '')
+    text = text.replace('[', '').replace(']', '')
+
+    # v6.2: Expand common abbreviations
+    text = re_mod.sub(r'\bCh\.?\s*(\d+)', r'Chapter \1', text)  # Ch.1 → Chapter 1
+    text = re_mod.sub(r'\bEx\.?\s*(\d+)', r'Example \1', text)
+    text = re_mod.sub(r'\bNo\.?\s*(\d+)', r'Number \1', text)
+    text = re_mod.sub(r'\bQ\.?\s*(\d+)', r'Question \1', text)
+    text = re_mod.sub(r'\bvs\.?\b', 'versus', text)
+    text = re_mod.sub(r'\betc\.?\b', 'etcetera', text)
+    text = re_mod.sub(r'\be\.g\.?\b', 'for example', text)
+    text = re_mod.sub(r'\bi\.e\.?\b', 'that is', text)
+
+    # v6.2: Replace mathematical notation that TTS can't speak
+    text = text.replace('×', ' times ')
+    text = text.replace('÷', ' divided by ')
+    text = text.replace('=', ' equals ')
+    text = text.replace('+', ' plus ')
+    text = text.replace('−', ' minus ')  # Unicode minus
+    # Only replace '-' when it's a math negative before a digit (not in "hi-IN", "minus", etc.)
+    text = re_mod.sub(r'(?<!\w)-(\d)', r'minus \1', text)
+
     # Convert fraction patterns like -3/7, 5/8, 2/3 to spoken form
     def fraction_to_words(match):
         full = match.group(0)
-        negative = full.startswith('-')
+        negative = full.startswith('-') or full.startswith('minus')
         nums = re_mod.findall(r'\d+', full)
         if len(nums) == 2:
             prefix = "minus " if negative else ""

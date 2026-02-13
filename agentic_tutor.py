@@ -76,8 +76,10 @@ class AgenticTutor:
             "didi_repeat_count": 0,
             # v4.12: Track consecutive unclear inputs to break "samajh nahi aaya" loop
             "consecutive_unclear": 0,
-            # v6.0.1: Split teach and question into separate turns
-            "needs_first_question": True
+            # v6.2: Greeting phase tracking
+            "greeting_turns": 0,
+            # v6.2: Tracks whether first question has been asked (set during GREETING→TEACHING)
+            "needs_first_question": False
         }
 
     # ============================================================
@@ -85,61 +87,31 @@ class AgenticTutor:
     # ============================================================
 
     async def start_session(self) -> str:
-        q = self.session["current_question"]
-        q_text = q.get("text", q.get("question_text", ""))
+        """v6.2: LLM generates a warm, human greeting — NO teaching, NO questions."""
         name = self.session["student_name"]
         lang = self.session["language"]
 
-        # Brain plans for first question
-        plan = self.brain.plan_for_question(q, self.session)
+        # Brain plans for first question (still needed for later)
+        q = self.session["current_question"]
+        self.brain.plan_for_question(q, self.session)
 
-        # v6.0: ALWAYS teach before the first question
-        # Get the skill lesson for this question's target skill
-        from questions import SKILL_LESSONS
-        skill = q.get("target_skill", "")
-        skill_lesson = SKILL_LESSONS.get(skill, "")
+        # v6.2: LLM generates a warm, human greeting
+        name_part = name if name else "beta"
+        history = ""  # No history yet
 
-        # Build a teaching instruction
-        if plan.should_pre_teach:
-            concept_to_teach = plan.pre_teach_instruction
-        elif skill_lesson:
-            concept_to_teach = skill_lesson
-        else:
-            concept_to_teach = "adding fractions with the same denominator — just add the numerators, keep the denominator"
-
-        # v6.0.1: Fully template-based greeting - no LLM for first turn
-        # This ensures we don't accidentally ask the question
-        name_part = f" {name}" if name else ""
-
-        # Simple teaching examples by skill
-        teaching_examples = {
-            "rn_add_same_denom": (
-                "Jab fractions ka denominator same ho, toh sirf numerators add karo. "
-                "Jaise agar aapke paas 3 roti ke tukde hain aur 2 aur mil gaye, "
-                "toh total 5 tukde. Denominator same rehta hai."
-            ),
-            "rn_additive_inverse": (
-                "Additive inverse matlab wo number jo add karne pe zero aaye. "
-                "Jaise 5 ka additive inverse hai minus 5. 5 plus minus 5 equals 0."
-            ),
-            "rn_multiply": (
-                "Fractions multiply karna easy hai. Upar wale numbers ko multiply karo, "
-                "neeche wale numbers ko multiply karo. Simple!"
-            ),
-        }
-
-        example = teaching_examples.get(
-            skill,
-            "Fractions mein numerator upar hota hai, denominator neeche. "
-            "Same denominator ho toh sirf numerators add karo."
+        greeting_instruction = (
+            f"You are starting a new tutoring session with {name_part}. "
+            f"Say a warm, casual hello. Ask how they are or how their day was. "
+            f"Like a real tutor meeting a student — 'Hi {name_part}! Kaisi ho? School kaisa raha aaj?' "
+            f"DO NOT teach anything yet. DO NOT mention any chapter or topic. "
+            f"DO NOT ask any math question. DO NOT say 'Namaste'. "
+            f"Just be a warm human saying hello. 1-2 sentences max."
         )
+        speech = voice.generate_speech(greeting_instruction, name, lang, history)
 
-        speech = (
-            f"Namaste{name_part}! Aaj hum {self.session['chapter_name']} padhenge. "
-            f"{example} Samajh aaya?"
-        )
-
-        self.session["state"] = State.WAITING_ANSWER
+        # State: GREETING means we're in casual conversation, not yet teaching
+        self.session["state"] = State.GREETING
+        self.session["greeting_turns"] = 0
         return speech
 
     async def process_input(self, student_input: str) -> str:
@@ -150,35 +122,165 @@ class AgenticTutor:
             (time.time() - self.session["start_time"]) / 60
         )
 
-        # v6.0.1: Handle response to "Samajh aaya?" before first question
-        if self.session.get("needs_first_question"):
-            self.session["needs_first_question"] = False
+        # v6.2: GREETING phase — have a brief conversation before teaching
+        if self.session["state"] == State.GREETING:
+            self.session["greeting_turns"] = self.session.get("greeting_turns", 0) + 1
             category = classifier.classify(student_input)["category"]
-            if category in ("ACK", "ANSWER"):
-                # Student understood, now read the question (direct return, no LLM)
-                q_text = self._current_question_text()
-                return f"Bahut accha! Ab ek question try karte hain: {q_text}"
-            elif category in ("IDK", "CONCEPT_REQUEST"):
-                # Student needs more teaching — generate a FRESH explanation
+
+            # If student wants to stop, let them
+            if category == "STOP":
+                return self._end_speech("student_requested")
+
+            # After 1-2 casual exchanges, transition to teaching
+            if self.session["greeting_turns"] >= 2:
+                # Now transition to teaching the first concept
                 q = self.session["current_question"]
                 skill = q.get("target_skill", "")
                 from questions import SKILL_LESSONS
-                skill_lesson = SKILL_LESSONS.get(skill, "this concept")
+                skill_lesson = SKILL_LESSONS.get(skill, "")
+                chapter_name = self.session["chapter_name"]
+
+                teach_instruction = (
+                    f"The student just chatted with you casually. Now transition naturally to today's topic. "
+                    f"Say something like 'Accha, chalo aaj kuch interesting karte hain.' "
+                    f"Today's topic is: {chapter_name}. "
+                    f"Teach ONE simple concept: {skill_lesson if skill_lesson else 'adding fractions with same denominator'}. "
+                    f"Use a real-life example a 13-year-old in India would relate to. "
+                    f"Keep it to 3-4 sentences. End with 'Samajh aaya?' "
+                    f"DO NOT ask a math question yet. Just teach and check understanding."
+                )
                 speech = voice.generate_speech(
-                    f"The student did not understand the concept. They need a DIFFERENT explanation. "
-                    f"The concept is: {skill_lesson}. "
-                    f"Do NOT repeat what you just said. Use a COMPLETELY DIFFERENT real-life example. "
-                    f"If you used roti before, use pocket money now. If you used sweets, use cricket. "
-                    f"Keep it to 3-4 sentences. End with 'Samajh aaya?'. "
-                    f"IMPORTANT: Speak in Hinglish, not English.",
+                    teach_instruction,
                     self.session["student_name"],
                     self.session["language"],
                     self._build_history()
                 )
-                # Keep needs_first_question True so we stay in teaching mode
+                self.session["state"] = State.TEACHING
                 self.session["needs_first_question"] = True
+                self.session["history"].append({
+                    "student": student_input,
+                    "teacher": speech,
+                    "action": "teach_concept",
+                    "tool": "teach_concept",
+                    "category": category
+                })
                 return speech
-            # For STOP, TROLL etc, fall through to normal flow
+            else:
+                # Still in casual greeting — respond conversationally
+                greeting_response_instruction = (
+                    f"The student said: \"{student_input}\". "
+                    f"You're still in the casual greeting phase. Respond naturally and warmly, "
+                    f"like a tutor chatting before the lesson. "
+                    f"If they answered your question, react naturally. "
+                    f"Then gently start transitioning: 'Accha, chalo aaj thoda math karte hain?' "
+                    f"1-2 sentences max. Be human."
+                )
+                speech = voice.generate_speech(
+                    greeting_response_instruction,
+                    self.session["student_name"],
+                    self.session["language"],
+                    self._build_history()
+                )
+                self.session["history"].append({
+                    "student": student_input,
+                    "teacher": speech,
+                    "action": "greeting_chat",
+                    "tool": None,
+                    "category": category
+                })
+                return speech
+
+        # v6.2: TEACHING phase — concept was just taught, waiting for understanding check
+        if self.session["state"] == State.TEACHING:
+            category = classifier.classify(student_input)["category"]
+
+            if category == "STOP":
+                return self._end_speech("student_requested")
+
+            if category in ("ACK",):
+                # Student understood — now ask the first question
+                self.session["needs_first_question"] = False
+                q_text = self._current_question_text()
+                transition_instruction = (
+                    f"Good, the student understood your teaching. "
+                    f"Now give them a practice question. Say something brief like "
+                    f"'Bahut accha! Ab ek question try karte hain.' "
+                    f"Then read the question: {q_text}"
+                )
+                speech = voice.generate_speech(
+                    transition_instruction,
+                    self.session["student_name"],
+                    self.session["language"],
+                    self._build_history()
+                )
+                self.session["state"] = State.WAITING_ANSWER
+                self.session["history"].append({
+                    "student": student_input,
+                    "teacher": speech,
+                    "action": "first_question",
+                    "tool": None,
+                    "category": category
+                })
+                return speech
+
+            elif category in ("IDK", "CONCEPT_REQUEST", "ANSWER"):
+                # Student didn't understand or is asking more — re-teach with different example
+                q = self.session["current_question"]
+                skill = q.get("target_skill", "")
+                from questions import SKILL_LESSONS
+                skill_lesson = SKILL_LESSONS.get(skill, "this concept")
+
+                reteach_instruction = (
+                    f"The student said: \"{student_input}\". "
+                    f"They did NOT understand your explanation. "
+                    f"Acknowledge what they said first. If they're asking a question, answer it. "
+                    f"Then re-explain the concept using a COMPLETELY DIFFERENT real-life example. "
+                    f"If you used roti before, use pocket money now. If you used sweets, use cricket scores. "
+                    f"The concept is: {skill_lesson}. "
+                    f"Keep it to 3-4 sentences. End with 'Samajh aaya?' "
+                    f"DO NOT move to a question. Stay in teaching mode."
+                )
+                speech = voice.generate_speech(
+                    reteach_instruction,
+                    self.session["student_name"],
+                    self.session["language"],
+                    self._build_history()
+                )
+                # Stay in TEACHING state
+                self.session["history"].append({
+                    "student": student_input,
+                    "teacher": speech,
+                    "action": "reteach",
+                    "tool": "teach_concept",
+                    "category": category
+                })
+                return speech
+
+            else:
+                # Anything else (COMFORT, OFFTOPIC, TROLL) — handle and stay in TEACHING
+                response_instruction = (
+                    f"The student said: \"{student_input}\". "
+                    f"They said something unexpected during your teaching. "
+                    f"Acknowledge what they said briefly and warmly. "
+                    f"If they're upset, comfort them first. "
+                    f"If they're off-topic, gently bring back: 'Accha, chalo wapas aate hain.' "
+                    f"Then re-offer the teaching: 'Toh hum bol rahe the ki...' and briefly recap. "
+                    f"End with 'Samajh aaya?'"
+                )
+                speech = voice.generate_speech(
+                    response_instruction,
+                    self.session["student_name"],
+                    self.session["language"],
+                    self._build_history()
+                )
+                self.session["history"].append({
+                    "student": student_input,
+                    "teacher": speech,
+                    "action": "teaching_redirect",
+                    "tool": None,
+                    "category": classifier.classify(student_input)["category"]
+                })
+                return speech
 
         # 0. Filter nonsensical/ambient noise (TV, background chatter)
         # Do NOT penalize student for background noise
