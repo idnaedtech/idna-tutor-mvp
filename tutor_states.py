@@ -46,6 +46,7 @@ class Action(str, Enum):
     END_SESSION = "end_session"
     RE_ASK = "re_ask"                            # After hint ack, ask to try again
     TEACH_CONCEPT = "teach_concept"              # v5.0: teach prerequisite concept
+    COMFORT_RESPONSE = "comfort_response"        # v6.1: address student's emotional need
 
 
 def get_transition(state: State, category: str, session: dict) -> dict:
@@ -88,6 +89,14 @@ def get_transition(state: State, category: str, session: dict) -> dict:
             "action": Action.REJECT_LANGUAGE,
             "next_state": state,
             "meta": {}
+        }
+
+    # COMFORT — student is upset or uncomfortable (v6.1, any state)
+    if category == "COMFORT":
+        return {
+            "action": Action.COMFORT_RESPONSE,
+            "next_state": state,  # Stay in current state — don't advance
+            "meta": {"reason": "student_uncomfortable"}
         }
 
     # Time limit check (25 min)

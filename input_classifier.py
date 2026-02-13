@@ -9,12 +9,13 @@ Categories (priority order):
 2. LANGUAGE         → student wants to switch language
 3. LANG_UNSUPPORTED → student wants a language we don't support
 4. TROLL            → nonsense, spam, not engaging
-5. ACK              → acknowledgment (yeah, okay, got it)
-6. CONCEPT_REQUEST  → asks about a concept (v5.0)
-7. IDK              → doesn't know, wants help
-8. CONFIRM          → asks if previous answer was correct
-9. OFFTOPIC         → unrelated to math
-10. ANSWER          → an actual attempt at answering
+5. COMFORT          → student is upset or uncomfortable (v6.1)
+6. ACK              → acknowledgment (yeah, okay, got it)
+7. CONCEPT_REQUEST  → asks about a concept (v5.0)
+8. IDK              → doesn't know, wants help
+9. CONFIRM          → asks if previous answer was correct
+10. OFFTOPIC        → unrelated to math
+11. ANSWER          → an actual attempt at answering
 """
 
 import re
@@ -51,29 +52,33 @@ def classify(text: str) -> dict:
     if _is_troll(t):
         return {"category": "TROLL", "detail": "", "cleaned": raw}
 
-    # 5. ACK — only matters when short (≤6 words)
+    # 5. COMFORT — student is upset or uncomfortable (v6.1)
+    if _is_comfort_need(t, raw):
+        return {"category": "COMFORT", "detail": "", "cleaned": raw}
+
+    # 6. ACK — only matters when short (≤6 words)
     if _is_ack(t):
         return {"category": "ACK", "detail": "", "cleaned": raw}
 
-    # 6. CONCEPT_REQUEST — student asks about a concept (v5.0)
+    # 7. CONCEPT_REQUEST — student asks about a concept (v5.0)
     # Must run BEFORE IDK so "teach me about fractions" isn't caught by IDK's "teach me"
-    if _is_concept_request(t):
+    if _is_concept_request(t, raw):
         concept = _extract_concept(t)
         return {"category": "CONCEPT_REQUEST", "detail": concept, "cleaned": raw}
 
-    # 7. IDK — student doesn't know or wants explanation
-    if _is_idk(t):
+    # 8. IDK — student doesn't know or wants explanation
+    if _is_idk(t, raw):
         return {"category": "IDK", "detail": "", "cleaned": raw}
 
-    # 8. CONFIRMATION REQUEST — "was my answer correct?"
+    # 9. CONFIRMATION REQUEST — "was my answer correct?"
     if _is_confirm_request(t):
         return {"category": "CONFIRM", "detail": "", "cleaned": raw}
 
-    # 9. OFF-TOPIC
+    # 10. OFF-TOPIC
     if _is_offtopic(t):
         return {"category": "OFFTOPIC", "detail": "", "cleaned": raw}
 
-    # 10. ANSWER — everything else is treated as an answer attempt
+    # 11. ANSWER — everything else is treated as an answer attempt
     return {"category": "ANSWER", "detail": "", "cleaned": raw}
 
 
@@ -154,6 +159,53 @@ def _is_troll(t: str) -> bool:
     return False
 
 
+def _is_comfort_need(t: str, raw: str) -> bool:
+    """v6.1: Detect if student is expressing discomfort or giving behavioral feedback."""
+    comfort_phrases = [
+        # English
+        'rude', 'rough', 'roughly', 'harsh', 'scary', 'angry',
+        'being mean', 'so mean', 'very mean', 'too mean', 'are mean', "you're mean", 'youre mean',
+        "don't like", 'dont like', "didn't like", 'didnt like',
+        'not nice', 'too fast', 'too loud', 'confused', 'scared',
+        'slow down', 'be nice', 'be gentle', 'speak softly',
+        "i don't feel", 'i dont feel', 'uncomfortable',
+        'hold on', 'one second',
+        'you are being', "you're being", 'youre being',
+        'way you spoke', 'way you talk', 'how you speak',
+        'not good', 'feel bad', 'feeling bad',
+        # Hindi (Roman)
+        'achha nahi', 'accha nahi', 'acha nahi',
+        'achha nhi', 'accha nhi',
+        'bura laga', 'bura lag raha',
+        'dara rahi', 'dar lag raha',
+        'ruk', 'ruko', 'rukiye', 'ek minute', 'ek second',
+        'dhire', 'dhire bolo', 'dhire se',
+        'gussa', 'chilla', 'chillao mat',
+        'tarika theek nahi', 'tarika sahi nahi',
+        'mujhe pasand nahi',
+    ]
+
+    # Check Devanagari comfort phrases (use raw text)
+    devanagari_comfort = [
+        'अच्छा नहीं', 'बुरा लग', 'डर लग', 'रुक', 'रुकिए',
+        'धीरे', 'गुस्सा', 'चिल्ला', 'पसंद नहीं',
+        'तरीका ठीक नहीं', 'तरीका सही नहीं',
+        'मुझे अच्छा नहीं', 'ठीक नहीं लग',
+    ]
+
+    t_lower = t.lower()
+    for phrase in comfort_phrases:
+        if phrase in t_lower:
+            return True
+
+    # Check Devanagari (use raw, not lowered)
+    for phrase in devanagari_comfort:
+        if phrase in raw:
+            return True
+
+    return False
+
+
 def _is_ack(t: str) -> bool:
     """Short acknowledgment — student understood."""
     acks = [
@@ -173,7 +225,7 @@ def _is_ack(t: str) -> bool:
     return False
 
 
-def _is_idk(t: str) -> bool:
+def _is_idk(t: str, raw: str) -> bool:
     # Guard: "help me with homework" contains IDK substring "help me" but is
     # actually OFFTOPIC (student wants homework done, not asking for a hint).
     # Without this guard, _is_idk matches before _is_offtopic runs.
@@ -219,7 +271,22 @@ def _is_idk(t: str) -> bool:
         "ek baar aur", "ek aur baar", "again explain",
         "please explain again", "samjh nahi aaya phir se"
     ]
-    return any(p in t for p in phrases)
+    if any(p in t for p in phrases):
+        return True
+
+    # v6.1: Devanagari IDK phrases (use raw text)
+    devanagari_idk = [
+        'नहीं समझ', 'समझ नहीं', 'समझ में नहीं आया',
+        'पता नहीं', 'नहीं पता', 'मालूम नहीं',
+        'नहीं आता', 'नहीं आया',
+        'मुश्किल', 'कठिन',
+        'फिर से', 'दोबारा', 'फिर से समझाइए',
+    ]
+    for phrase in devanagari_idk:
+        if phrase in raw:
+            return True
+
+    return False
 
 
 def _is_offtopic(t: str) -> bool:
@@ -244,7 +311,7 @@ def _is_offtopic(t: str) -> bool:
     return any(p in t for p in phrases)
 
 
-def _is_concept_request(t: str) -> bool:
+def _is_concept_request(t: str, raw: str) -> bool:
     """Student asks about a concept, not just 'I don't know'."""
     concept_patterns = [
         r'\bwhat (?:is|are) (?:a |an )?(?:rational number|fraction|variable|integer|equation|linear equation|algebraic expression|denominator|numerator)',
@@ -266,6 +333,20 @@ def _is_concept_request(t: str) -> bool:
     for pattern in concept_patterns:
         if re.search(pattern, t, re.IGNORECASE):
             return True
+
+    # v6.1: Devanagari concept request phrases (use raw text)
+    devanagari_concept = [
+        'समझा', 'समझाइए', 'समझाओ', 'समझ में नहीं',
+        'बताइए', 'बताओ', 'बता दो',
+        'क्या है', 'क्या होता है', 'क्या होते हैं',
+        'मतलब क्या', 'मतलब बताइए',
+        'सिखाइए', 'सिखाओ', 'पढ़ाइए',
+        'के बारे', 'के बारे में',
+    ]
+    for phrase in devanagari_concept:
+        if phrase in raw:
+            return True
+
     return False
 
 

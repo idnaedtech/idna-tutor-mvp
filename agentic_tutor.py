@@ -658,6 +658,23 @@ class AgenticTutor:
             self.session["attempt_count"] = max(0, self.session["attempt_count"] - 1)
             return speech
 
+        # ---- COMFORT_RESPONSE (v6.1) ----
+        elif action == Action.COMFORT_RESPONSE:
+            self._last_tool = "comfort_response"
+            instr = (
+                f"The student just expressed that they are uncomfortable or unhappy with how you're speaking. "
+                f"They said: \"{student_input}\". "
+                f"STOP everything. Do NOT continue with the math question. "
+                f"Address their feelings FIRST. Apologize sincerely and warmly. "
+                f"Say something like: 'Beta, mujhe maaf kijiye. Main aapke saath dhyan se baat karungi.' "
+                f"Then ask if they're ready to continue, or if they want you to explain differently. "
+                f"Be genuinely warm. This is the most important moment in the session. "
+                f"If they said you're too fast, promise to go slower. "
+                f"If they said you're rude, soften your tone completely. "
+                f"Maximum 2-3 sentences. Short and caring."
+            )
+            return voice.generate_speech(instr, name, lang, history)
+
         # ---- END ----
         elif action == Action.END_SESSION:
             return self._end_speech(meta.get("reason", "unknown"))
