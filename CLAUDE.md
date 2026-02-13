@@ -1,6 +1,6 @@
-# IDNA Tutor Architecture v6.2.0 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.2.1 — CLAUDE CODE RULES
 
-## TTS ENGINE (v6.0.6)
+## TTS ENGINE (v6.1.1)
 
 - **Engine:** Sarvam Bulbul v3 (api.sarvam.ai)
 - **Voice:** priya (warm Indian female — test kavya, shreya, simran for warmth)
@@ -119,6 +119,27 @@ Response spoken to student
 - `enforce_word_limit()` safety net in TTS endpoint
 - Sub-step tracking guidance (don't re-ask completed steps)
 - Clarification handler (ask when confused, don't fabricate)
+
+## NEW IN v6.1.1
+
+### Whisper Transcription Fix (v6.1.1)
+- **language="hi"** forced for Groq Whisper — fixes Hindi/Hinglish garbage
+- `is_transcription_reliable()` — catches Whisper hallucinations
+- Returns "Ek baar phir boliye?" for garbage transcriptions
+
+### SubStepTracker (v6.1.1)
+- Tracks completed sub-steps in multi-step problems
+- Prevents Didi from re-asking steps student already answered
+- Context injected into LLM: "Steps already completed: {summary}"
+
+### No False Praise (v6.1.1)
+- NO_FALSE_PRAISE_RULE added to DIDI_PROMPT
+- Never say "Bahut accha!" unless student actually gave correct answer
+
+### Chunked TTS (v6.1.1)
+- `split_into_sentences()` for sentence-level TTS generation
+- Faster first-audio latency on multi-sentence responses
+- Each sentence processed independently (failures don't kill whole response)
 
 ## NEW IN v6.1.0
 
