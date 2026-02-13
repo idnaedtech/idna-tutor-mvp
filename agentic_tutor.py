@@ -159,14 +159,25 @@ class AgenticTutor:
                 q_text = self._current_question_text()
                 return f"Bahut accha! Ab ek question try karte hain: {q_text}"
             elif category in ("IDK", "CONCEPT_REQUEST"):
-                # Student needs more teaching (direct return, no LLM)
+                # Student needs more teaching — generate a FRESH explanation
                 q = self.session["current_question"]
                 skill = q.get("target_skill", "")
                 from questions import SKILL_LESSONS
                 skill_lesson = SKILL_LESSONS.get(skill, "this concept")
-                # Keep needs_first_question True so next ACK will show the question
+                speech = voice.generate_speech(
+                    f"The student did not understand the concept. They need a DIFFERENT explanation. "
+                    f"The concept is: {skill_lesson}. "
+                    f"Do NOT repeat what you just said. Use a COMPLETELY DIFFERENT real-life example. "
+                    f"If you used roti before, use pocket money now. If you used sweets, use cricket. "
+                    f"Keep it to 3-4 sentences. End with 'Samajh aaya?'. "
+                    f"IMPORTANT: Speak in Hinglish, not English.",
+                    self.session["student_name"],
+                    self.session["language"],
+                    self._build_history()
+                )
+                # Keep needs_first_question True so we stay in teaching mode
                 self.session["needs_first_question"] = True
-                return f"Koi baat nahi, let me explain again. {skill_lesson}. Ab samjhe?"
+                return speech
             # For STOP, TROLL etc, fall through to normal flow
 
         # 0. Filter nonsensical/ambient noise (TV, background chatter)

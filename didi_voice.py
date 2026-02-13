@@ -333,13 +333,16 @@ def _build_system(student_name: str, lang: str, history: str) -> str:
             "Still be warm and friendly, but polite — like talking to an older student, not a little kid."
         )
 
-    # v5.0: More explicit instruction to use conversation history
+    # v6.0.2: More explicit history attribution to prevent hallucination
     if history:
         history_section = (
             f"CONVERSATION SO FAR (last few turns):\n{history}\n\n"
-            "Use this to connect your response to what the student has been saying. "
-            "If they asked about something or said something, ADDRESS it. "
-            "Do not ignore what they just said."
+            "IMPORTANT: Read the conversation carefully. "
+            "The lines marked 'Student:' are what THE STUDENT actually said. "
+            "The lines marked 'Didi:' are what YOU said. "
+            "NEVER claim the student said something they didn't. "
+            "If the student says 'I didn't say that' or 'I didn't give an answer', BELIEVE THEM. "
+            "Apologize and correct yourself."
         )
     else:
         history_section = ""

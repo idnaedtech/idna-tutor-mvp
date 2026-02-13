@@ -209,7 +209,15 @@ def _is_idk(t: str) -> bool:
         "explain fraction", "explain fractions",
         "explain the fraction", "explain the fractions",
         "explain this topic", "explain the topic",
-        "what is this", "how to do this", "how do i do this"
+        "what is this", "how to do this", "how do i do this",
+        # v6.0.2: Example and explain-again phrases
+        "give me example", "give me examples", "give example",
+        "can you give me example", "can you give me examples",
+        "example do", "example dijiye", "udaharan do",
+        "explain more", "explain again", "explain it again",
+        "phir se explain", "phir se samjhao", "dobara samjhao",
+        "ek baar aur", "ek aur baar", "again explain",
+        "please explain again", "samjh nahi aaya phir se"
     ]
     return any(p in t for p in phrases)
 
@@ -250,6 +258,10 @@ def _is_concept_request(t: str) -> bool:
         r'\bI don\'?t (?:know|understand) (?:anything )?about\b',
         r'\bmujhe nahi (?:pata|samajh)\b.*(?:kya|what)\b',
         r'\b(?:pehle|first) (?:samjha|explain|teach|bata)\b',
+        # v6.0.2: Example and explain-again patterns
+        r'\bgive me (?:an? |some )?example',
+        r'\bexplain (?:it )?again',
+        r'\bphir se (?:explain|samjha|bata)',
     ]
     for pattern in concept_patterns:
         if re.search(pattern, t, re.IGNORECASE):

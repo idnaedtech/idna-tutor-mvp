@@ -94,43 +94,43 @@ CHAPTER_NAMES = {
 # ============================================================
 
 SKILL_LESSONS = {
-    # Rational Numbers
-    "rn_identify": "A rational number is any number you can write as p/q, where q is not zero.",
-    "rn_add_same_denom": "When adding fractions with the same denominator, keep the bottom number and just add the tops.",
-    "rn_add_diff_denom": "When denominators are different, first find the LCM to make them the same, then add.",
-    "rn_subtract": "Subtracting fractions works like adding, but you subtract the numerators instead.",
-    "rn_multiply": "To multiply fractions, multiply tops together and bottoms together. Then simplify.",
-    "rn_divide": "Dividing by a fraction means multiplying by its flip.",
-    "rn_multiplicative_inverse": "The multiplicative inverse is what you multiply a number by to get 1. Just flip the fraction.",
-    "rn_additive_inverse": "The additive inverse is what you add to a number to get zero. Just change the sign.",
-    "rn_simplify": "To simplify a fraction, divide top and bottom by their highest common factor.",
-    "rn_compare": "To compare fractions, convert them to the same denominator, then compare numerators.",
-    "rn_between": "To find a rational number between two fractions, you can take their average.",
-    "rn_word_problem": "Read carefully and figure out which operation the problem is asking for.",
-    # Linear Equations
-    "le_one_step": "To solve an equation, do the same thing to both sides to get x alone.",
-    "le_two_step": "Solve step by step: first move constants, then divide to isolate x.",
-    "le_variables_both_sides": "When x appears on both sides, move all x terms to one side first.",
-    "le_brackets": "First expand the brackets, then solve like a normal equation.",
-    "le_fractions": "Multiply both sides by the LCM of denominators to clear the fractions first.",
-    "le_word_problem": "Translate the words into an equation, then solve for the unknown.",
-    # Squares & Roots
-    "sq_perfect_squares": "A perfect square is a number you get by multiplying a whole number by itself.",
-    "sq_square_root": "Square root is the reverse of squaring. What number times itself gives this?",
-    "sq_estimate_root": "To estimate a square root, find which two perfect squares it falls between.",
-    # Algebraic Expressions
-    "ae_identify_terms": "Each part of an expression separated by plus or minus is called a term.",
-    "ae_add_subtract": "You can only add or subtract like terms, meaning same variable and same power.",
-    "ae_multiply_monomial": "When multiplying, multiply the numbers and add the powers of same variables.",
-    "ae_multiply_polynomial": "Multiply each term in the first bracket by each term in the second.",
-    "ae_identities": "Algebraic identities are shortcuts. Memorize them to expand or factor quickly.",
-    # Comparing Quantities
-    "cq_ratio": "A ratio compares two quantities. Write it as a fraction and simplify.",
-    "cq_percentage": "Percentage means per hundred. To find a percentage, divide and multiply by 100.",
-    "cq_profit_loss": "Profit is selling price minus cost price. Loss is the opposite.",
-    "cq_simple_interest": "Simple interest is Principal times Rate times Time, divided by 100.",
-    "cq_compound_interest": "Compound interest means you earn interest on the interest too.",
-    "cq_discount": "Discount is the reduction from marked price. Sale price = marked price minus discount.",
+    # Rational Numbers (v6.0.2: Hinglish)
+    "rn_identify": "Rational number wo hai jo aap p over q mein likh sakein, jahan q zero na ho. Jaise 3 over 4, minus 2 over 5, 7 yaani 7 over 1.",
+    "rn_add_same_denom": "Jab dono fractions ka denominator same ho, toh denominator wahi rakhiye aur sirf numerators ko add kariye. Jaise: 3 over 7 plus 2 over 7 mein denominator 7 same hai, toh sirf 3 plus 2 equals 5, answer 5 over 7.",
+    "rn_add_diff_denom": "Jab denominators alag hon, toh pehle LCM nikaaliye taaki denominator same ho jaye. Phir numerators add kariye.",
+    "rn_subtract": "Fractions subtract karna addition jaisa hi hai — denominator same rakhiye, numerators subtract kariye.",
+    "rn_multiply": "Fractions multiply karne ke liye numerator ko numerator se aur denominator ko denominator se multiply kariye. Phir simplify kariye.",
+    "rn_divide": "Fraction se divide karna matlab uske ulte se multiply karna. Fraction ko flip karke multiply kariye.",
+    "rn_multiplicative_inverse": "Multiplicative inverse wo number hai jisse multiply karne pe 1 aaye. Fraction ko ulta kar dijiye — 3 over 4 ka inverse 4 over 3.",
+    "rn_additive_inverse": "Additive inverse wo number hai jisse add karne pe zero aaye. Bas sign badal dijiye — 5 over 8 ka inverse minus 5 over 8.",
+    "rn_simplify": "Fraction simplify karne ke liye numerator aur denominator dono ko unke HCF se divide kariye.",
+    "rn_compare": "Fractions compare karne ke liye pehle denominator same kariye, phir numerators compare kariye.",
+    "rn_between": "Do fractions ke beech mein rational number dhoondhne ke liye dono ka average nikaaliye.",
+    "rn_word_problem": "Word problem dhyan se padhiye aur samjhiye ki kaunsa operation — addition, subtraction, multiplication ya division — use karna hai.",
+    # Linear Equations (v6.0.2: Hinglish)
+    "le_one_step": "Equation solve karne ke liye dono sides pe same cheez kariye taaki x akela reh jaye.",
+    "le_two_step": "Step by step solve kariye: pehle constants ko side mein kariye, phir divide karke x nikaaliye.",
+    "le_variables_both_sides": "Jab x dono sides pe ho, toh pehle saare x terms ko ek side mein le aayiye.",
+    "le_brackets": "Pehle brackets expand kariye, phir normal equation ki tarah solve kariye.",
+    "le_fractions": "Dono sides ko denominators ke LCM se multiply kariye taaki fractions clear ho jayein.",
+    "le_word_problem": "Words ko equation mein translate kariye, phir unknown ke liye solve kariye.",
+    # Squares & Roots (v6.0.2: Hinglish)
+    "sq_perfect_squares": "Perfect square wo number hai jo kisi whole number ko khud se multiply karne pe aata hai. Jaise 4, 9, 16, 25.",
+    "sq_square_root": "Square root squaring ka ulta hai. Kaunsa number khud se multiply hoke ye number deta hai?",
+    "sq_estimate_root": "Square root estimate karne ke liye dekhiye ki wo kaunse do perfect squares ke beech mein hai.",
+    # Algebraic Expressions (v6.0.2: Hinglish)
+    "ae_identify_terms": "Expression mein plus ya minus se alag kiye hue har part ko term kehte hain.",
+    "ae_add_subtract": "Sirf like terms — same variable aur same power wale — add ya subtract ho sakte hain.",
+    "ae_multiply_monomial": "Multiply karte waqt numbers ko multiply kariye aur same variables ki powers add kariye.",
+    "ae_multiply_polynomial": "Pehle bracket ke har term ko doosre bracket ke har term se multiply kariye.",
+    "ae_identities": "Algebraic identities shortcuts hain. Inhe yaad kariye taaki jaldi expand ya factor kar sakein.",
+    # Comparing Quantities (v6.0.2: Hinglish)
+    "cq_ratio": "Ratio do quantities ko compare karta hai. Isko fraction ki tarah likhiye aur simplify kariye.",
+    "cq_percentage": "Percentage matlab per hundred. Percentage nikalne ke liye divide karke 100 se multiply kariye.",
+    "cq_profit_loss": "Profit matlab selling price minus cost price. Loss iska ulta hai.",
+    "cq_simple_interest": "Simple interest equals Principal times Rate times Time, divided by 100.",
+    "cq_compound_interest": "Compound interest mein aap interest pe bhi interest kamate hain.",
+    "cq_discount": "Discount matlab marked price se kam. Sale price equals marked price minus discount.",
 }
 
 # ============================================================
