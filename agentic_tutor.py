@@ -101,29 +101,43 @@ class AgenticTutor:
 
         # Build a teaching instruction
         if plan.should_pre_teach:
-            pre_teach = plan.pre_teach_instruction
+            concept_to_teach = plan.pre_teach_instruction
         elif skill_lesson:
-            pre_teach = (
-                f"Before asking the question, teach this concept simply with a real-life example "
-                f"that a 13-year-old in India would relate to: {skill_lesson}. "
-                f"Use an example with roti, pocket money, or sharing sweets. "
-                f"Then say 'Samajh aaya?' and wait."
-            )
+            concept_to_teach = skill_lesson
         else:
-            pre_teach = (
-                f"Before asking the question, briefly explain what the student needs to know "
-                f"to solve it. Use a real-life example. Then say 'Samajh aaya?' and wait."
-            )
+            concept_to_teach = "adding fractions with the same denominator — just add the numerators, keep the denominator"
 
-        # v6.0.1: Only teach in first turn, question comes after student responds
-        instruction = (
-            f"{name} just sat down for tutoring. You're doing {self.session['chapter_name']} today. "
-            f"Say namaste warmly — one sentence only. "
-            f"Then teach this concept simply: {pre_teach} "
-            f"End with 'Samajh aaya?' and STOP. Do NOT read any question yet. "
-            f"Keep your total response under 5 sentences."
+        # v6.0.1: Fully template-based greeting - no LLM for first turn
+        # This ensures we don't accidentally ask the question
+        name_part = f" {name}" if name else ""
+
+        # Simple teaching examples by skill
+        teaching_examples = {
+            "rn_add_same_denom": (
+                "Jab fractions ka denominator same ho, toh sirf numerators add karo. "
+                "Jaise agar aapke paas 3 roti ke tukde hain aur 2 aur mil gaye, "
+                "toh total 5 tukde. Denominator same rehta hai."
+            ),
+            "rn_additive_inverse": (
+                "Additive inverse matlab wo number jo add karne pe zero aaye. "
+                "Jaise 5 ka additive inverse hai minus 5. 5 plus minus 5 equals 0."
+            ),
+            "rn_multiply": (
+                "Fractions multiply karna easy hai. Upar wale numbers ko multiply karo, "
+                "neeche wale numbers ko multiply karo. Simple!"
+            ),
+        }
+
+        example = teaching_examples.get(
+            skill,
+            "Fractions mein numerator upar hota hai, denominator neeche. "
+            "Same denominator ho toh sirf numerators add karo."
         )
-        speech = voice.generate_speech(instruction, name, lang, "")
+
+        speech = (
+            f"Namaste{name_part}! Aaj hum {self.session['chapter_name']} padhenge. "
+            f"{example} Samajh aaya?"
+        )
 
         self.session["state"] = State.WAITING_ANSWER
         return speech
@@ -141,31 +155,18 @@ class AgenticTutor:
             self.session["needs_first_question"] = False
             category = classifier.classify(student_input)["category"]
             if category in ("ACK", "ANSWER"):
-                # Student understood, now read the question
+                # Student understood, now read the question (direct return, no LLM)
                 q_text = self._current_question_text()
-                speech = voice.generate_speech(
-                    f"Bahut accha! Ab ek question try karte hain: {q_text}",
-                    self.session["student_name"],
-                    self.session["language"],
-                    self._build_history()
-                )
-                return speech
+                return f"Bahut accha! Ab ek question try karte hain: {q_text}"
             elif category in ("IDK", "CONCEPT_REQUEST"):
-                # Student needs more teaching
+                # Student needs more teaching (direct return, no LLM)
                 q = self.session["current_question"]
                 skill = q.get("target_skill", "")
                 from questions import SKILL_LESSONS
                 skill_lesson = SKILL_LESSONS.get(skill, "this concept")
-                speech = voice.generate_speech(
-                    f"Koi baat nahi. Let me explain differently: {skill_lesson}. "
-                    f"Use a different real-life example this time. End with 'Ab samjhe?'",
-                    self.session["student_name"],
-                    self.session["language"],
-                    self._build_history()
-                )
                 # Keep needs_first_question True so next ACK will show the question
                 self.session["needs_first_question"] = True
-                return speech
+                return f"Koi baat nahi, let me explain again. {skill_lesson}. Ab samjhe?"
             # For STOP, TROLL etc, fall through to normal flow
 
         # 0. Filter nonsensical/ambient noise (TV, background chatter)
