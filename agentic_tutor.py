@@ -75,7 +75,9 @@ class AgenticTutor:
             "last_didi_question": None,
             "didi_repeat_count": 0,
             # v4.12: Track consecutive unclear inputs to break "samajh nahi aaya" loop
-            "consecutive_unclear": 0
+            "consecutive_unclear": 0,
+            # v6.0.1: Split teach and question into separate turns
+            "needs_first_question": True
         }
 
     # ============================================================
@@ -113,12 +115,13 @@ class AgenticTutor:
                 f"to solve it. Use a real-life example. Then say 'Samajh aaya?' and wait."
             )
 
+        # v6.0.1: Only teach in first turn, question comes after student responds
         instruction = (
             f"{name} just sat down for tutoring. You're doing {self.session['chapter_name']} today. "
-            f"Say namaste warmly — like a real Didi meeting her student. "
-            f"Ask them briefly what they already know about this topic. "
-            f"Then teach: {pre_teach} "
-            f"After teaching and checking understanding, read the first question: {q_text}"
+            f"Say namaste warmly — one sentence only. "
+            f"Then teach this concept simply: {pre_teach} "
+            f"End with 'Samajh aaya?' and STOP. Do NOT read any question yet. "
+            f"Keep your total response under 5 sentences."
         )
         speech = voice.generate_speech(instruction, name, lang, "")
 
@@ -132,6 +135,38 @@ class AgenticTutor:
         self.session["duration_minutes"] = int(
             (time.time() - self.session["start_time"]) / 60
         )
+
+        # v6.0.1: Handle response to "Samajh aaya?" before first question
+        if self.session.get("needs_first_question"):
+            self.session["needs_first_question"] = False
+            category = classifier.classify(student_input)["category"]
+            if category in ("ACK", "ANSWER"):
+                # Student understood, now read the question
+                q_text = self._current_question_text()
+                speech = voice.generate_speech(
+                    f"Bahut accha! Ab ek question try karte hain: {q_text}",
+                    self.session["student_name"],
+                    self.session["language"],
+                    self._build_history()
+                )
+                return speech
+            elif category in ("IDK", "CONCEPT_REQUEST"):
+                # Student needs more teaching
+                q = self.session["current_question"]
+                skill = q.get("target_skill", "")
+                from questions import SKILL_LESSONS
+                skill_lesson = SKILL_LESSONS.get(skill, "this concept")
+                speech = voice.generate_speech(
+                    f"Koi baat nahi. Let me explain differently: {skill_lesson}. "
+                    f"Use a different real-life example this time. End with 'Ab samjhe?'",
+                    self.session["student_name"],
+                    self.session["language"],
+                    self._build_history()
+                )
+                # Keep needs_first_question True so next ACK will show the question
+                self.session["needs_first_question"] = True
+                return speech
+            # For STOP, TROLL etc, fall through to normal flow
 
         # 0. Filter nonsensical/ambient noise (TV, background chatter)
         # Do NOT penalize student for background noise

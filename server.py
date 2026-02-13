@@ -162,6 +162,16 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
     if tts_client is None:
         raise Exception("Google Cloud TTS not configured")
 
+    # v6.0.1: Limit TTS text length to prevent Google TTS failures
+    # Google TTS has a 5000 byte limit for text input
+    if len(text) > 1500:
+        # Find the last sentence boundary before 1500 chars
+        truncated = text[:1500]
+        last_period = max(truncated.rfind('.'), truncated.rfind('?'), truncated.rfind('!'))
+        if last_period > 500:
+            text = truncated[:last_period + 1]
+            print(f"[TTS] Text truncated to {len(text)} chars at sentence boundary")
+
     if ssml:
         synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
     else:
@@ -183,7 +193,8 @@ def google_tts(text: str, ssml: Optional[str] = None) -> bytes:
             input=synthesis_input, voice=voice, audio_config=audio_config
         )
         return response.audio_content
-    except Exception:
+    except Exception as e:
+        print(f"[TTS] Primary voice failed: {e}, trying fallback")
         # Fallback to male Journey voice
         voice = texttospeech.VoiceSelectionParams(
             language_code="en-IN", name="en-IN-Journey-D"
