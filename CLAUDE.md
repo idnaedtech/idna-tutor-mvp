@@ -1,9 +1,9 @@
-# IDNA Tutor Architecture v6.2.1 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v6.2.4 — CLAUDE CODE RULES
 
-## TTS ENGINE (v6.1.1)
+## TTS ENGINE (v6.2.4)
 
 - **Engine:** Sarvam Bulbul v3 (api.sarvam.ai)
-- **Voice:** priya (warm Indian female — test kavya, shreya, simran for warmth)
+- **Voice:** simran (warm Indian female)
 - **Pace:** 0.90 (natural teaching pace)
 - **Temperature:** 0.7 (more expressive than default 0.6)
 - **Language:** LOCKED to `hi-IN` — switching causes voice to sound different
@@ -12,7 +12,8 @@
 - **API:** POST https://api.sarvam.ai/text-to-speech
 - **Auth:** api-subscription-key header
 - **Response:** base64 MP3 in {"audios": ["..."]}
-- **Char limit:** 2000 (truncate at sentence boundary to avoid hitting 2500 limit)
+- **Char limit:** 2500 (Sarvam v3 native limit)
+- **SINGLE CALL** — send full text in one API call (no chunking)
 
 ## FILE STRUCTURE (6 files)
 
@@ -116,9 +117,20 @@ Response spoken to student
 ### Word Limits (v6.2.1)
 - Strict word limits by context in DIDI_PROMPT
 - Greeting: 15-20, Question: 15-20, Hint: 20-30, Teach: 50-60
-- `enforce_word_limit()` safety net in TTS endpoint
 - Sub-step tracking guidance (don't re-ask completed steps)
 - Clarification handler (ask when confused, don't fabricate)
+
+## NEW IN v6.2.4
+
+### TTS Single Call Fix (v6.2.4)
+- **REMOVED chunked TTS** — concatenating MP3 files created invalid audio
+- Browser played first chunk, then stopped at second MP3 header
+- Now sending full text to Sarvam in ONE call (handles up to 2500 chars)
+- **REMOVED `enforce_word_limit()`** — it was truncating responses before TTS
+
+### Claude Code Skill (v6.2.4)
+- Added `.claude/skills/idna-edtech-tutor/` with SKILL.md and references
+- Enables Claude Code to understand IDNA project context automatically
 
 ## NEW IN v6.1.1
 
@@ -136,10 +148,10 @@ Response spoken to student
 - NO_FALSE_PRAISE_RULE added to DIDI_PROMPT
 - Never say "Bahut accha!" unless student actually gave correct answer
 
-### Chunked TTS (v6.1.1)
-- `split_into_sentences()` for sentence-level TTS generation
-- Faster first-audio latency on multi-sentence responses
-- Each sentence processed independently (failures don't kill whole response)
+### Chunked TTS (v6.1.1) — REMOVED in v6.2.4
+- ~~`split_into_sentences()` for sentence-level TTS generation~~
+- **REMOVED**: Concatenating MP3 chunks created invalid audio
+- Now using single Sarvam call for full text
 
 ## NEW IN v6.1.0
 
@@ -240,7 +252,7 @@ check_answer(student_input, answer_key, accept_also) → True/None/False
 - `gpt-4o` for BOTH tool calling AND speech generation
 
 ### Voice Configuration:
-- **TTS**: Sarvam Bulbul v3 `priya` voice (2400 char limit, sentence truncation)
+- **TTS**: Sarvam Bulbul v3 `simran` voice (2500 char limit, single call)
 - **STT**: Groq Whisper `whisper-large-v3-turbo` with AUTO-DETECT
 
 ### Test Suite (258 tests)
