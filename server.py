@@ -512,11 +512,17 @@ async def text_to_speech(request: TextToSpeechRequest):
     v6.1.1: Uses chunked generation for faster TTS on longer texts.
     """
     try:
+        # DEBUG: Log input before processing
+        print(f"[TTS DEBUG] Input text length: {len(request.text)} chars")
+        print(f"[TTS DEBUG] Full text: {request.text}")
+
         # v6.2: Enforce word limit before TTS
         text = enforce_word_limit(request.text, context=request.context or "default")
+        print(f"[TTS DEBUG] After word limit: {len(text)} chars")
 
         # v6.1.1: Chunked TTS for multi-sentence responses
         sentences = split_into_sentences(text)
+        print(f"[TTS DEBUG] Split into {len(sentences)} sentences: {sentences}")
 
         with Timer() as tts_timer:
             if len(sentences) == 1:
@@ -537,6 +543,7 @@ async def text_to_speech(request: TextToSpeechRequest):
             audio_base64 = base64.b64encode(audio_content).decode('utf-8')
 
         print(f"TTS completed in {tts_timer.elapsed_ms}ms ({len(sentences)} chunks)")
+        print(f"[TTS DEBUG] Final audio size: {len(audio_content)} bytes, base64 length: {len(audio_base64)}")
         return {"audio": audio_base64, "format": "mp3"}
 
     except Exception as e:
