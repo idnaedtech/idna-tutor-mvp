@@ -512,39 +512,18 @@ async def text_to_speech(request: TextToSpeechRequest):
     v6.1.1: Uses chunked generation for faster TTS on longer texts.
     """
     try:
-        # DEBUG: Log input before processing
-        print(f"[TTS DEBUG] Input text length: {len(request.text)} chars")
-        print(f"[TTS DEBUG] Full text: {request.text}")
-
-        # v6.2.3: REMOVED enforce_word_limit() - it was truncating responses
-        # Sarvam v3 handles long text fine (up to 2500 chars)
+        # v6.2.4: Single TTS call - no chunking
+        # Chunked MP3 concatenation was broken (invalid MP3 = only first sentence plays)
+        # Sarvam v3 handles long text natively (up to 2500 chars)
         text = request.text
-        print(f"[TTS DEBUG] Text length: {len(text)} chars (no truncation)")
-
-        # v6.1.1: Chunked TTS for multi-sentence responses
-        sentences = split_into_sentences(text)
-        print(f"[TTS DEBUG] Split into {len(sentences)} sentences")
+        print(f"[TTS DEBUG] Text: {len(text)} chars")
 
         with Timer() as tts_timer:
-            if len(sentences) == 1:
-                # Short response — just do it normally
-                audio_content = sarvam_tts(text=text)
-            else:
-                # Multiple sentences — generate each, concatenate
-                all_audio = b""
-                for sentence in sentences:
-                    try:
-                        audio = sarvam_tts(text=sentence)
-                        all_audio += audio
-                    except Exception as chunk_err:
-                        print(f"[TTS] Chunk failed: {chunk_err}, skipping")
-                        continue
-                audio_content = all_audio if all_audio else sarvam_tts(text=text)
-
+            audio_content = sarvam_tts(text=text)
             audio_base64 = base64.b64encode(audio_content).decode('utf-8')
 
-        print(f"TTS completed in {tts_timer.elapsed_ms}ms ({len(sentences)} chunks)")
-        print(f"[TTS DEBUG] Final audio size: {len(audio_content)} bytes, base64 length: {len(audio_base64)}")
+        print(f"TTS completed in {tts_timer.elapsed_ms}ms (single call)")
+        print(f"[TTS DEBUG] Audio: {len(audio_content)} bytes")
         return {"audio": audio_base64, "format": "mp3"}
 
     except Exception as e:
