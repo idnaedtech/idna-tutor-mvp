@@ -1,283 +1,263 @@
-# IDNA Tutor Architecture v6.2.4 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v7.0 — CLAUDE CODE RULES
 
-## TTS ENGINE (v6.2.4)
+## OVERVIEW
 
-- **Engine:** Sarvam Bulbul v3 (api.sarvam.ai)
-- **Voice:** simran (warm Indian female)
-- **Pace:** 0.90 (natural teaching pace)
-- **Temperature:** 0.7 (more expressive than default 0.6)
-- **Language:** LOCKED to `hi-IN` — switching causes voice to sound different
-- **Text cleaning:** `clean_for_tts()` converts "-3/7" to "minus 3 over 7"
-- **NO FALLBACK** — never switch voice mid-session; retry with shorter text instead
-- **API:** POST https://api.sarvam.ai/text-to-speech
-- **Auth:** api-subscription-key header
-- **Response:** base64 MP3 in {"audios": ["..."]}
-- **Char limit:** 2500 (Sarvam v3 native limit)
-- **SINGLE CALL** — send full text in one API call (no chunking)
+Voice-first AI math tutor for CBSE Class 8 students (India). Full rewrite with deterministic state machine — Python decides flow, LLM only generates spoken words.
 
-## FILE STRUCTURE (6 files)
+**Entry point:** `uvicorn app.main:app --port 8000`
+**Tests:** `python -m pytest tests/test_core.py -v` (69 tests)
+**Production:** Railway auto-deploys from `main` branch
+
+## FILE STRUCTURE (v7.0)
 
 ```
-agentic_tutor.py      → Orchestrator. Session state + action executor.
-answer_checker.py     → Deterministic answer check BEFORE LLM. NO LLM.
-input_classifier.py   → Pure Python. Classifies student input. NO LLM.
-tutor_states.py       → Pure Python. State machine transitions. NO LLM.
-tutor_brain.py        → Pure Python. Student model + teaching plans. NO LLM.
-didi_voice.py         → ALL LLM calls. Speech generation + hint selection.
+app/
+├── main.py                 → FastAPI app, lifespan, question seeding
+├── config.py               → All env vars, provider selection, constants
+├── database.py             → SQLAlchemy engine, session factory
+├── models.py               → ORM: Student, Session, SessionTurn, Question, SkillMastery
+├── routers/
+│   ├── auth.py             → PIN login, JWT tokens, rate limiting
+│   └── student.py          → THE MAIN LOOP: STT → classify → FSM → check → LLM → enforce → TTS
+├── tutor/
+│   ├── state_machine.py    → 14-state FSM. DETERMINISTIC. No LLM.
+│   ├── input_classifier.py → Classify input: ACK, IDK, ANSWER, COMFORT, etc. No LLM.
+│   ├── answer_checker.py   → Math evaluation. Hindi/English numbers. No LLM.
+│   ├── instruction_builder.py → Build LLM prompts per state+action
+│   ├── enforcer.py         → 7 rules: word limits, no false praise, etc.
+│   ├── memory.py           → Skill mastery read/write, adaptive question selection
+│   └── llm.py              → OpenAI GPT-4o wrapper
+├── voice/
+│   ├── tts.py              → Sarvam Bulbul v3 (simran voice)
+│   ├── stt.py              → Groq Whisper
+│   └── clean_for_tts.py    → Convert fractions, symbols for speech
+├── content/
+│   └── seed_questions.py   → Question bank (10 questions, Ch1 Rational Numbers)
+├── ocr/                    → Homework photo extraction (scaffolded)
+└── parent_engine/          → Parent voice sessions (scaffolded)
+
+tests/
+└── test_core.py            → 69 tests: answer_checker, classifier, enforcer, clean_for_tts
+
+web/
+├── login.html              → PIN entry
+├── student.html            → Voice tutor UI
+└── parent.html             → Parent dashboard (scaffolded)
 ```
 
-## DATA FLOW (v6.2.0)
+## STATE MACHINE (14 States)
 
 ```
-SESSION START (v6.2.0 — conversational flow)
-    ↓
-start_session() → LLM-generated warm greeting (NOT template)
-  - "Hi {name}! Kaisi ho? School kaisa raha aaj?"
-  - State: GREETING
-    ↓
-GREETING PHASE (1-2 casual exchanges)
-    ↓
-[Student responds] → Didi responds naturally, transitions toward teaching
-[After 2 turns] → Move to TEACHING state
-    ↓
-TEACHING PHASE
-    ↓
-Didi teaches ONE concept with real-life example
-  - "Accha, chalo aaj kuch interesting karte hain..."
-  - End with "Samajh aaya?"
-  - State: TEACHING
-    ↓
-[IF ACK] → "Bahut accha! Ab ek question try karte hain: {question}" → WAITING_ANSWER
-[IF IDK] → Re-teach with DIFFERENT example, stay in TEACHING
-[IF COMFORT/OFFTOPIC] → Handle and stay in TEACHING
-    ↓
-NORMAL QUESTION FLOW
-    ↓
-input_classifier.classify() → category (ANSWER, IDK, ACK, TROLL, COMFORT, CONCEPT_REQUEST, etc.)
-    ↓
-tutor_states.get_transition(state, category) → action + next_state
-    ↓
-[IF ANSWER] answer_checker.check_answer() → True/None/False
-  - True  → CORRECT, bypass LLM, force praise_and_continue
-  - None  → PARTIAL, bypass LLM, force guide_partial_answer
-  - False → Check sub-question answer (v4.4)
-    ↓
-[IF WRONG] _check_sub_question_answer() → True/False
-  - True  → SUB-ANSWER CORRECT, acknowledge + guide to next step
-  - False → WRONG, pass to LLM for hint selection
-    ↓
-[IF COMFORT] → comfort_response (v6.1)
-  - Student expressed discomfort or gave behavioral feedback
-  - Didi apologizes warmly, addresses feelings FIRST
-  - Asks if student is ready to continue
-  - Stays in current state (does NOT advance question)
-    ↓
-[IF CONCEPT_REQUEST] → teach_concept tool (v5.0)
-  - Pause current question
-  - Teach prerequisite concept with real-life example
-  - Bridge back to current question
-  - Return to WAITING_ANSWER state
-    ↓
-tutor_brain enriches:
-  - get_context_packet() → injected into every LLM call
-  - get_pre_teach_instruction() → pre-teach before question if needed
-  - get_enhanced_hint() → better hint based on student model
-    ↓
-didi_voice generates speech with brain's context + CONVERSATION HISTORY
-    ↓
-tutor_brain.observe_interaction() → updates student model
-    ↓
-[TTS PREPROCESSING] preprocess_for_tts() → transliterate English terms to Hindi
-    ↓
-[TTS LENGTH LIMIT] Truncate at 1500 chars (sentence boundary) for Google TTS
-    ↓
-Response spoken to student
+GREETING            → Welcome (pre-generated)
+DISCOVERING_TOPIC   → "Aaj kya padha?"
+CHECKING_UNDERSTANDING → Probe question to assess level
+TEACHING            → Explain concept with Indian examples
+WAITING_ANSWER      → Student attempts question
+EVALUATING          → Check answer (transient state)
+HINT_1              → First hint after wrong
+HINT_2              → Second hint
+FULL_SOLUTION       → Walk through answer
+NEXT_QUESTION       → Advance to next question
+HOMEWORK_HELP       → Help with photographed homework
+COMFORT             → Student is frustrated
+SESSION_COMPLETE    → Wrap up and summarize
+DISPUTE_REPLAY      → Student challenges verdict
 ```
 
-## NEW IN v6.2.0
+### Universal Overrides (from ANY state)
+- `STOP` → SESSION_COMPLETE
+- `COMFORT` → COMFORT (stay in state, address feelings)
+- `REPEAT` → Re-ask current prompt
 
-### Conversational Session Flow (v6.2)
-- **GREETING state**: Didi says warm casual hello (LLM-generated, not template)
-- **1-2 casual exchanges** before transitioning to teaching
-- **TEACHING state**: Teach concept with real-life example, ask "Samajh aaya?"
-- **No "Namaste"** — be casual, not formal
-- **Re-teach with different example** if student doesn't understand
-- Flow: GREETING → TEACHING → WAITING_ANSWER
-
-### TTS Improvements (v6.2)
-- **Speaker**: simran (warmer than priya)
-- **clean_for_tts()** expanded: parentheses, abbreviations, math symbols
-- Ch.1 → Chapter 1, × → times, = → equals, etc.
-
-### Verdict Rules (v6.2)
-- Stronger anti-hallucination rules for praise
-- Must verify: (1) student gave math answer, (2) answer is correct
-- If EITHER is false → DO NOT praise
-
-### Word Limits (v6.2.1)
-- Strict word limits by context in DIDI_PROMPT
-- Greeting: 15-20, Question: 15-20, Hint: 20-30, Teach: 50-60
-- Sub-step tracking guidance (don't re-ask completed steps)
-- Clarification handler (ask when confused, don't fabricate)
-
-## NEW IN v6.2.4
-
-### TTS Single Call Fix (v6.2.4)
-- **REMOVED chunked TTS** — concatenating MP3 files created invalid audio
-- Browser played first chunk, then stopped at second MP3 header
-- Now sending full text to Sarvam in ONE call (handles up to 2500 chars)
-- **REMOVED `enforce_word_limit()`** — it was truncating responses before TTS
-
-### Claude Code Skill (v6.2.4)
-- Added `.claude/skills/idna-edtech-tutor/` with SKILL.md and references
-- Enables Claude Code to understand IDNA project context automatically
-
-## NEW IN v6.1.1
-
-### Whisper Transcription Fix (v6.1.1)
-- **language="hi"** forced for Groq Whisper — fixes Hindi/Hinglish garbage
-- `is_transcription_reliable()` — catches Whisper hallucinations
-- Returns "Ek baar phir boliye?" for garbage transcriptions
-
-### SubStepTracker (v6.1.1)
-- Tracks completed sub-steps in multi-step problems
-- Prevents Didi from re-asking steps student already answered
-- Context injected into LLM: "Steps already completed: {summary}"
-
-### No False Praise (v6.1.1)
-- NO_FALSE_PRAISE_RULE added to DIDI_PROMPT
-- Never say "Bahut accha!" unless student actually gave correct answer
-
-### Chunked TTS (v6.1.1) — REMOVED in v6.2.4
-- ~~`split_into_sentences()` for sentence-level TTS generation~~
-- **REMOVED**: Concatenating MP3 chunks created invalid audio
-- Now using single Sarvam call for full text
-
-## NEW IN v6.1.0
-
-### COMFORT Category (v6.1)
-- New input category for emotional/discomfort feedback (priority 5, after TROLL)
-- Detects: "you spoke roughly", "achha nahi lag raha", "too fast", "be gentle"
-- Supports English, Hindi Roman, and Devanagari phrases
-- COMFORT_RESPONSE action: Didi apologizes warmly, addresses feelings FIRST
-- Universal transition: works from ANY state, stays in current state
-- DIDI_PROMPT updated with EMOTIONAL AWARENESS section
-- No-praise-without-correct-answer rule added
-
-### Devanagari Support (v6.1)
-- Added Devanagari phrase detection for COMFORT, CONCEPT_REQUEST, and IDK
-- Uses raw text (not lowered) for Devanagari matching
-- Example: "मुझे अच्छा नहीं लग रहा" → COMFORT
-- Example: "मुझे rational number के बारे बताइए" → CONCEPT_REQUEST
-
-## NEW IN v6.0.1
-
-### Teach-First Flow (v6.0)
-- Didi ALWAYS teaches the concept BEFORE asking the first question
-- Uses template-based greeting (no LLM) to ensure predictable output
-- Teaching examples stored in `teaching_examples` dict by skill
-- DIDI_PROMPT updated with "TEACHER, not quiz machine" philosophy
-
-### Two-Turn Session Start (v6.0.1)
-- **Turn 1**: Greeting + teach concept + "Samajh aaya?"
-- **Turn 2**: If ACK → read question. If IDK → re-teach.
-- `needs_first_question` flag tracks state between turns
-- Direct returns (no LLM) for ACK/IDK to prevent LLM modification
-
-### TTS Length Limit (v6.0.1)
-- Google TTS has 5000 byte limit
-- Text truncated at 1500 chars (sentence boundary) before TTS call
-- Prevents TTS failures on long v6.0 greetings
-
-### Warm Chapter Intros (v6.0)
-- CHAPTER_INTROS replaced with warm Hindi teaching intros
-- Example: "Aaj hum rational numbers padhenge. Ye wo numbers hain jo aap p over q mein likh sakte hain..."
-
-### Updated DIDI_PROMPT (v6.0)
-- Emphasizes teaching philosophy: "TEACHER, not quiz machine"
-- Real-life Indian examples: pocket money, roti, cricket, auto-rickshaw
-- Warm corrections: "Hmm, yahan thoda dhyan dein" (never "Wrong")
-- Max 5 sentences per turn
-
-## ANSWER CHECKER (v4.1 — unchanged)
-
-Deterministic check runs BEFORE LLM to fix unreliable gpt-4o-mini judging.
-
-```python
-check_answer(student_input, answer_key, accept_also) → True/None/False
+### Main Flow
+```
+GREETING → DISCOVERING_TOPIC → CHECKING_UNDERSTANDING → TEACHING → WAITING_ANSWER
+                                                                        ↓
+                                                              answer_checker.check_math_answer()
+                                                                        ↓
+                                        [CORRECT] → NEXT_QUESTION → WAITING_ANSWER (loop)
+                                        [INCORRECT] → HINT_1 → HINT_2 → FULL_SOLUTION → NEXT_QUESTION
 ```
 
-## KEY BEHAVIORS
+## PIPELINE (student.py:process_message)
 
-### Session Start (v6.0.1)
-1. `start_session()` returns template-based greeting + teaching
-2. First `process_input()` checks `needs_first_question` flag
-3. ACK → read question, IDK → re-teach, STOP → end session
+```
+1. STT (Groq Whisper)           → student_text
+2. input_classifier             → category (ACK, IDK, ANSWER, COMFORT, STOP, etc.)
+3. state_machine.transition()   → (new_state, Action)
+4. answer_checker (if ANSWER)   → Verdict (CORRECT/INCORRECT + diagnostic)
+5. route_after_evaluation()     → decide HINT_1, HINT_2, or NEXT_QUESTION
+6. memory.pick_next_question()  → adaptive question selection
+7. instruction_builder          → LLM prompt for state+action
+8. llm.generate()               → raw Didi response
+9. enforcer.enforce()           → apply 7 rules, clean text
+10. clean_for_tts()             → convert fractions, symbols
+11. tts.synthesize()            → audio bytes
+12. Save SessionTurn            → log everything
+```
 
-### teach_concept (v5.0)
-- Triggered when student asks about a concept (CONCEPT_REQUEST category)
-- Uses teach_concept tool in LLM
-- Teaches with real-life example, not just definition
-- Bridges back to current question
-- Resets attempt count by 1 (teaching is not a failed attempt)
+## ANSWER CHECKER (Deterministic, No LLM)
 
-### ask_what_they_did Limit
-- First wrong answer: asks "Tell me, what did you do?"
-- Second wrong answer: gives hint (does NOT ask again)
+Handles all math answer formats:
+- Fractions: `-5/9`, `2/7`, `-3/9`
+- Spoken English: `minus one third`, `two over seven`
+- Spoken Hindi: `minus ek tihaayi`, `do baata saat`, `aadha`
+- Decimals: `0.5`, `-0.333`
+- With prefix: `the answer is 2/7`, `jawab hai minus 1 by 3`
+- Equivalence: `2/6` = `1/3` = `0.333...`
 
-### Noise Filter (v4.12)
-- After 3+ consecutive unclear inputs, forces explain and advances question
+**Diagnostic feedback:** Sign errors, wrong numerator/denominator, close but not exact.
 
-### Never Paraphrase (v4.11)
-- Use student's EXACT words when quoting them
+## ENFORCER (7 Rules)
 
-## CRITICAL RULES
+Every LLM response passes through enforcer BEFORE TTS:
 
-### Never modify these public interfaces:
-- `AgenticTutor.__init__(student_name, chapter)`
-- `AgenticTutor.start_session() → str`
-- `AgenticTutor.process_input(text) → str`
-- `AgenticTutor.get_session_state() → dict`
-- server.py import of AgenticTutor — do NOT break this
+1. **LENGTH** — Max 55 words, max 2 sentences
+2. **NO_FALSE_PRAISE** — No "shabash/bahut accha" unless verdict=CORRECT
+3. **SPECIFICITY** — Must reference student's answer when evaluating
+4. **NO_TEACH_AND_QUESTION** — Never teach AND ask in same turn
+5. **LANGUAGE_MATCH** — Response language matches session language
+6. **TTS_SAFETY** — No raw fractions, brackets that TTS reads literally
+7. **NO_REPETITION** — Don't repeat previous Didi response verbatim
 
-### Architecture rules:
-- `answer_checker.py` — ZERO imports except `re`. No LLM.
-- `input_classifier.py` — ZERO imports except `re`. No LLM.
-- `tutor_states.py` — ZERO external imports. No LLM.
-- `tutor_brain.py` — ZERO external imports. No LLM.
-- `didi_voice.py` — ONLY file that imports `openai`.
-- `agentic_tutor.py` — Orchestrates. checker → classifier → states → brain → voice.
+If enforcement fails 3x, returns safe fallback from `SAFE_FALLBACKS` dict.
 
-### Models:
-- `gpt-4o` for BOTH tool calling AND speech generation
+## INPUT CATEGORIES
 
-### Voice Configuration:
-- **TTS**: Sarvam Bulbul v3 `simran` voice (2500 char limit, single call)
-- **STT**: Groq Whisper `whisper-large-v3-turbo` with AUTO-DETECT
+| Category | Examples | Priority |
+|----------|----------|----------|
+| STOP | "bye", "band karo" | 1 (highest) |
+| COMFORT | "bahut mushkil", "I give up" | 2 |
+| DISPUTE | "maine sahi bola" | 3 |
+| REPEAT | "phir se bolo" | 4 |
+| HOMEWORK | "homework hai" | 5 |
+| SUBJECT | "math padha" (in DISCOVERING_TOPIC) | 6 |
+| IDK | "pata nahi", "nahi samjha" | 7 |
+| ACK | "haan", "samajh gaya" | 8 |
+| CONCEPT | "explain karo", "kya hai" | 9 |
+| ANSWER | numbers, fractions (in WAITING_ANSWER) | 10 |
+| TROLL | short off-topic | 11 (lowest) |
 
-### Test Suite (258 tests)
-- `test_answer_checker.py` — spoken math normalization, correct/partial/wrong detection
-- `test_input_classifier.py` — all input categories including CONCEPT_REQUEST
-- `test_tutor_states.py` — state machine transitions, circuit breakers
-- `test_regression_live.py` — real session scenarios, full chain tests
-- `test_api.py` — API endpoint tests (health, chapters, session, TTS)
-- Run: `python -m pytest test_*.py -v`
+## API ENDPOINTS
 
-### Dead code (do NOT import):
-web_server.py, tutor_intent.py, evaluator.py, context_builder.py, tutor_prompts.py, guardrails.py
+```
+POST /api/auth/student          → {pin} → {token, student_id, name}
+POST /api/student/session/start → Bearer token → {session_id, greeting_text, greeting_audio_b64}
+POST /api/student/session/message → {session_id, audio|text} → {didi_text, didi_audio_b64, state, verdict}
+POST /api/student/session/end   → {session_id} → {summary_text, questions_attempted, questions_correct}
+GET  /health                    → {status: "ok", version: "7.0.0"}
+```
 
-## VERIFIED TEST FLOWS (v6.0.1)
+## VOICE CONFIGURATION
 
-| Turn | Input | Expected Response |
-|------|-------|-------------------|
-| Start | — | "Namaste {name}! Aaj hum {chapter}... {teaching}... Samajh aaya?" |
-| 2 | "haan" / ACK | "Bahut accha! Ab ek question try karte hain: {question}" |
-| 2 | "nahi samjha" / IDK | "Koi baat nahi, let me explain again... Ab samjhe?" |
-| 3+ | Correct: "minus 1 by 7" | "Bilkul sahi!" + next question (deterministic) |
-| 3+ | Partial: "-1" (for -1/7) | "Numerator correct, add denominator" |
-| 3+ | Wrong: "5" | LLM selects hint level |
-| 3+ | Sub-answer: "minus 1" after "minus 3 plus 2?" | "Haan sahi!" + guide forward |
-| Any | "what are rational numbers?" | TEACH the concept + bridge to question |
-| Any | Noise: "me", "x", "." | Re-ask current question |
-| Any | 3x consecutive noise | Force explain + advance |
-| Any | "stop" | Session ends gracefully |
+### TTS (Sarvam Bulbul v3)
+- **Speaker:** simran (warm Indian female)
+- **Language:** hi-IN (LOCKED — never switch mid-session)
+- **Pace:** 0.90
+- **Char limit:** 2000 (truncate longer text)
+- **Single call** — no chunking (v6.2.4 lesson)
+
+### STT (Groq Whisper)
+- **Model:** whisper-large-v3-turbo
+- **Language:** hi (force Hindi to avoid English garbage)
+- **Confidence threshold:** 0.4
+
+### LLM (OpenAI)
+- **Model:** gpt-4o
+- **Max tokens:** 200
+- **Temperature:** 0.3
+
+## DATABASE MODELS
+
+```
+students        → id, name, pin, class_level, preferred_language
+sessions        → id, student_id, state, subject, chapter, questions_attempted, questions_correct
+session_turns   → id, session_id, turn_number, transcript, category, state_before, state_after, verdict
+skill_mastery   → id, student_id, skill_key, mastery_score, attempts, correct
+question_bank   → id, subject, chapter, question_text, question_voice, answer, answer_variants, hints
+```
+
+## ENVIRONMENT VARIABLES
+
+```bash
+# Required
+OPENAI_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
+SARVAM_API_KEY=sk_...
+
+# Database (default: SQLite)
+DATABASE_URL=sqlite:///idna.db
+
+# Provider selection
+STT_PROVIDER=groq_whisper    # or: sarvam_saarika
+TTS_PROVIDER=sarvam_bulbul   # or: mock (for testing)
+LLM_PROVIDER=openai_gpt4o
+
+# JWT
+JWT_SECRET=change-in-production
+```
+
+## ARCHITECTURE RULES
+
+### Module Boundaries (NO LLM except llm.py)
+- `state_machine.py` — Pure Python. Deterministic transitions.
+- `input_classifier.py` — Pure Python. Phrase matching only.
+- `answer_checker.py` — Pure Python. Fraction math, no external imports.
+- `enforcer.py` — Pure Python. Rule application.
+- `instruction_builder.py` — Builds prompts, doesn't call LLM.
+- `llm.py` — ONLY file that calls OpenAI.
+
+### Never Modify
+- `app/main.py` lifespan (startup/shutdown)
+- `app/routers/student.py` pipeline order
+- `app/tutor/state_machine.py` state names (frontend depends on them)
+
+## TEST SUITE (69 tests)
+
+```bash
+python -m pytest tests/test_core.py -v
+```
+
+| Test Class | Coverage |
+|------------|----------|
+| TestFractionParsing | 18 tests — Hindi/English numbers, fractions |
+| TestMathAnswerChecker | 27 tests — correct, incorrect, diagnostics |
+| TestInputClassifier | 15 tests — all categories |
+| TestEnforcer | 4 tests — rules enforcement |
+| TestCleanForTTS | 5 tests — fraction/symbol conversion |
+
+## VERIFIED FLOWS
+
+| Turn | Input | State Transition | Response |
+|------|-------|------------------|----------|
+| Start | — | GREETING → DISCOVERING_TOPIC | "Namaste {name}! Aaj school kaisa raha?" |
+| 1 | "math padha" | DISCOVERING_TOPIC → CHECKING_UNDERSTANDING | Probe question |
+| 2 | "haan" | CHECKING_UNDERSTANDING → WAITING_ANSWER | Read question |
+| 3 | "minus 5 by 9" (correct) | WAITING_ANSWER → NEXT_QUESTION | "Bilkul sahi!" + next |
+| 3 | "3" (wrong) | WAITING_ANSWER → HINT_1 | Diagnostic + hint |
+| 4 | "pata nahi" | HINT_1 → HINT_2 | Second hint |
+| 5 | "pata nahi" | HINT_2 → FULL_SOLUTION | Walk through solution |
+| Any | "bahut mushkil" | → COMFORT | "Koi baat nahi..." |
+| Any | "bye" | → SESSION_COMPLETE | Summary + goodbye |
+
+## LESSONS LEARNED (Preserved from v6)
+
+- Never concatenate MP3 files — browsers stop at second header
+- Lock hi-IN always — switching sounds like different person
+- Clean fractions before TTS — "-3/7" becomes garbled
+- Always address emotional feedback FIRST before continuing
+- Never say "Bahut accha!" unless student actually answered correctly
+- Include conversation history in ALL LLM calls
+- Real teachers ask "what did you do?" before correcting (but only once)
+- Keep LLM responses short (< 400 chars) for natural speech
+- Use Whisper AUTO-DETECT for STT, NOT forced language
+
+## GAP ANALYSIS (Phase 2 Features)
+
+See `GAP_ANALYSIS.md` for vision alignment. Key gaps for future:
+- P0: Silence handling (15s timeout → nudge)
+- P1: Full 8-step learning loop (activation, generalization, variation)
+- P1: Session modes (revision, exam practice)
+- P2: Student persona detection (beginner/average/advanced)
+- P2: Confidence calibration (hesitation, overconfidence)
+- P3: Regional behavior profiles (Hindi Belt, Telangana, etc.)
