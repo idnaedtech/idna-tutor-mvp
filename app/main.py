@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 
 from app.config import CORS_ORIGINS, LOG_LEVEL, BASE_DIR
 from app.database import init_db, SessionLocal
-from app.models import Question
+from app.models import Question, Student
 
 logger = logging.getLogger("idna")
 
@@ -44,6 +44,13 @@ async def lifespan(app: FastAPI):
             logger.info(f"Seeded {db.query(Question).count()} questions")
         else:
             logger.info(f"Question bank has {count} questions")
+
+        # Seed test student if none exist
+        student_count = db.query(Student).count()
+        if student_count == 0:
+            logger.info("Seeding test student...")
+            _seed_test_student(db)
+            logger.info("Test student created (PIN: 1234)")
     finally:
         db.close()
 
@@ -75,6 +82,20 @@ def _seed_questions(db):
             active=True,
         )
         db.add(q)
+    db.commit()
+
+
+def _seed_test_student(db):
+    """Create a test student for development/testing."""
+    import uuid
+    student = Student(
+        id=str(uuid.uuid4()),
+        name="Priya",
+        pin="1234",
+        class_level=8,
+        preferred_language="hi-IN",
+    )
+    db.add(student)
     db.commit()
 
 
