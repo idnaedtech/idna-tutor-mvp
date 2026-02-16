@@ -112,7 +112,7 @@ def start_session(
 
     # Pick first question (or weakest skill question for returning students)
     first_question = memory.pick_next_question(
-        db, student_id, "math", "ch1_rational_numbers", asked_ids=[]
+        db, student_id, "math", "ch1_rational_numbers", asked_question_ids=[]
     )
     if first_question:
         session.current_question_id = first_question["id"]
