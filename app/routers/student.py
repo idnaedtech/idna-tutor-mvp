@@ -97,7 +97,7 @@ def start_session(
         s.state = "SESSION_COMPLETE"
     db.commit()
 
-    # Create new session
+    # Create new session — MVP: Math only, skip topic discovery
     session = Session(
         student_id=student_id,
         session_type="student",
@@ -110,13 +110,26 @@ def start_session(
     db.commit()
     db.refresh(session)
 
-    # Generate greeting
-    greeting_text = f"Namaste {student.name}! Main Didi hoon. Aaj school kaisa raha? Kya padha aaj?"
+    # Pick first question (or weakest skill question for returning students)
+    first_question = memory.pick_next_question(
+        db, student_id, "math", "ch1_rational_numbers", asked_ids=[]
+    )
+    if first_question:
+        session.current_question_id = first_question["id"]
+
+    # Generate greeting with first question
+    if first_question:
+        greeting_text = (
+            f"Namaste {student.name}! Chalo math practice karte hain. "
+            f"Pehla sawaal: {first_question['question_voice']}"
+        )
+        session.state = "WAITING_ANSWER"
+    else:
+        greeting_text = f"Namaste {student.name}! Chalo math practice karte hain."
+        session.state = "SESSION_COMPLETE"  # No questions available
+
     tts = get_tts()
     tts_result = tts.synthesize(greeting_text, student.preferred_language)
-
-    # Transition to DISCOVERING_TOPIC
-    session.state = "DISCOVERING_TOPIC"
     db.commit()
 
     # Log greeting turn
@@ -126,8 +139,9 @@ def start_session(
         speaker="didi",
         transcript="",
         state_before="GREETING",
-        state_after="DISCOVERING_TOPIC",
+        state_after=session.state,
         didi_response=greeting_text,
+        question_id=session.current_question_id,
         tts_latency_ms=tts_result.latency_ms,
     )
     db.add(turn)
@@ -214,14 +228,7 @@ def process_message(
         )
 
     # ── Step 2: Classify input ────────────────────────────────────────────
-    # Detect subject if in discovery phase
-    detected_subject = None
-    if session.state == "DISCOVERING_TOPIC":
-        from app.tutor.input_classifier import _SUBJECT_PHRASES
-        for subj, phrases in _SUBJECT_PHRASES.items():
-            if any(p in student_text.lower() for p in phrases):
-                detected_subject = subj
-                break
+    # MVP: No topic discovery (math only). Subject detection removed.
 
     category = classify_student_input(
         student_text,
@@ -256,7 +263,6 @@ def process_message(
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
         "total_hints_used": session.total_hints_used,
-        "detected_subject": detected_subject,
     }
 
     state_before = session.state

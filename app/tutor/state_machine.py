@@ -3,9 +3,8 @@ IDNA EdTech v7.0 — Student Session State Machine
 THE BRAIN. Every state, every transition, deterministic.
 Python decides what happens. LLM only generates spoken words.
 
-States:
-    GREETING            → Welcome, pre-generated audio
-    DISCOVERING_TOPIC   → Find out what child studied today
+States (MVP flow — math only, no topic discovery):
+    GREETING            → Welcome + first question (session start goes directly to WAITING_ANSWER)
     CHECKING_UNDERSTANDING → Probe questions to assess current level
     TEACHING            → Explain concept with Indian examples
     WAITING_ANSWER      → Student attempts a practice question
@@ -33,11 +32,12 @@ from app.config import (
 # ─── State Set ────────────────────────────────────────────────────────────────
 
 STATES = frozenset({
-    "GREETING", "DISCOVERING_TOPIC", "CHECKING_UNDERSTANDING",
+    "GREETING", "CHECKING_UNDERSTANDING",
     "TEACHING", "WAITING_ANSWER", "EVALUATING",
     "HINT_1", "HINT_2", "FULL_SOLUTION", "NEXT_QUESTION",
     "HOMEWORK_HELP", "COMFORT", "SESSION_COMPLETE", "DISPUTE_REPLAY",
 })
+# Note: DISCOVERING_TOPIC removed for MVP (math only, topic selected at UI)
 
 
 # ─── Action (what instruction_builder should generate) ────────────────────────
@@ -98,36 +98,12 @@ def transition(
         return current_state, Action("ask_repeat", student_text=text)
 
     # ── GREETING ──────────────────────────────────────────────────────────
+    # MVP: Session starts directly in WAITING_ANSWER with first question.
+    # GREETING state only used if someone manually sets it.
 
     if current_state == "GREETING":
-        return "DISCOVERING_TOPIC", Action("ask_topic", student_text=text)
-
-    # ── DISCOVERING_TOPIC ─────────────────────────────────────────────────
-
-    if current_state == "DISCOVERING_TOPIC":
-        if category == "SUBJECT":
-            if det_subj and det_subj != "math":
-                return "DISCOVERING_TOPIC", Action(
-                    "apologize_no_subject",
-                    detected_subject=det_subj, student_text=text,
-                )
-            return "CHECKING_UNDERSTANDING", Action(
-                "probe_understanding",
-                detected_subject="math", student_text=text,
-            )
-        if category == "HOMEWORK":
-            return "HOMEWORK_HELP", Action(
-                "acknowledge_homework", student_text=text,
-            )
-        if category == "IDK":
-            return "TEACHING", Action(
-                "teach_concept", student_text=text,
-                extra={"source": "weak_area"},
-            )
-        return "DISCOVERING_TOPIC", Action(
-            "ask_topic", student_text=text,
-            extra={"retry": True},
-        )
+        # Go directly to waiting for answer (question already picked at session start)
+        return "WAITING_ANSWER", Action("read_question", student_text=text)
 
     # ── CHECKING_UNDERSTANDING ────────────────────────────────────────────
 

@@ -213,11 +213,12 @@ def classify_student_input(
     if _has_match(text, _HOMEWORK_PHRASES):
         return "HOMEWORK"
 
-    # 6. SUBJECT — student names a subject (during topic discovery)
-    if current_state in ("GREETING", "DISCOVERING_TOPIC"):
-        for subj, phrases in _SUBJECT_PHRASES.items():
-            if _has_match(text, phrases):
-                return "SUBJECT"
+    # 6. SUBJECT — student names a subject (not used in MVP, math only)
+    # Kept for future multi-subject support via UI selection
+    # if current_state in ("GREETING", "DISCOVERING_TOPIC"):
+    #     for subj, phrases in _SUBJECT_PHRASES.items():
+    #         if _has_match(text, phrases):
+    #             return "SUBJECT"
 
     # 7. IDK — student doesn't understand
     if _has_match(text, _IDK_PHRASES):
