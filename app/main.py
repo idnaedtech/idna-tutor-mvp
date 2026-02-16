@@ -107,8 +107,10 @@ app.include_router(student.router)
 
 # Serve web UI
 web_dir = BASE_DIR / "web"
+static_dir = web_dir / "static"
 if web_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(web_dir / "static")), name="static")
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @app.get("/")
     async def serve_login():
