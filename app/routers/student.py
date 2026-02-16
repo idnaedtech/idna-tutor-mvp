@@ -177,9 +177,8 @@ def process_message(
 
         try:
             stt = get_stt()
-            # Convert BCP-47 (hi-IN) to ISO 639-1 (hi) for Whisper
-            stt_lang = session.language.split("-")[0] if session.language else "hi"
-            stt_result = stt.transcribe(audio_bytes, stt_lang)
+            # Auto-detect language (better for Hinglish code-switching)
+            stt_result = stt.transcribe(audio_bytes)
             stt_latency = stt_result.latency_ms
             student_text = stt_result.text
         except Exception as e:

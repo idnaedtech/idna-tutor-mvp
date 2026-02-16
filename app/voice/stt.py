@@ -39,16 +39,19 @@ class STTProvider(Protocol):
 class GroqWhisperSTT:
     """Groq-hosted Whisper large-v3-turbo. Fast, good for MVP."""
 
-    def transcribe(self, audio: bytes, language: str = STT_DEFAULT_LANGUAGE) -> STTResult:
+    def transcribe(self, audio: bytes, language: str = None) -> STTResult:
         start = time.perf_counter()
         try:
             # Groq Whisper uses OpenAI-compatible API
+            # If language is None/empty, Whisper auto-detects (better for Hinglish)
             files = {
                 "file": ("audio.webm", io.BytesIO(audio), "audio/webm"),
                 "model": (None, GROQ_WHISPER_MODEL),
-                "language": (None, language),
                 "response_format": (None, "verbose_json"),
             }
+            # Only add language if explicitly specified (None = auto-detect)
+            if language:
+                files["language"] = (None, language)
             headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
 
             with httpx.Client(timeout=30.0) as client:
