@@ -167,10 +167,23 @@ def process_message(
     stt_latency = 0
     if audio:
         audio_bytes = audio.file.read()
-        stt = get_stt()
-        stt_result = stt.transcribe(audio_bytes, session.language)
-        stt_latency = stt_result.latency_ms
-        student_text = stt_result.text
+        logger.info(f"STT: received {len(audio_bytes)} bytes of audio")
+
+        try:
+            stt = get_stt()
+            # Convert BCP-47 (hi-IN) to ISO 639-1 (hi) for Whisper
+            stt_lang = session.language.split("-")[0] if session.language else "hi"
+            stt_result = stt.transcribe(audio_bytes, stt_lang)
+            stt_latency = stt_result.latency_ms
+            student_text = stt_result.text
+        except Exception as e:
+            logger.error(f"STT failed: {e}")
+            return _quick_response(
+                db, session,
+                "Voice samajh nahi aayi. Text type karo ya phir try karo.",
+                student_text="[stt error]",
+                stt_latency=0,
+            )
 
         # Low confidence → ask to repeat
         if is_low_confidence(stt_result):
