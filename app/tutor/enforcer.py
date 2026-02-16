@@ -46,7 +46,7 @@ ALL_PRAISE = PRAISE_WORDS_HINDI + PRAISE_WORDS_HINGLISH
 
 SAFE_FALLBACKS = {
     "GREETING": "Namaste! Aaj kya padhna hai?",
-    "DISCOVERING_TOPIC": "Aaj school mein kya padha? Batao toh.",
+    "DISCOVERING_TOPIC": "Chalo math se shuru karte hain. Rational numbers padhe hain?",
     "CHECKING_UNDERSTANDING": "Chalo dekhte hain kitna samajh aaya. Ek sawaal puchti hoon.",
     "TEACHING": "Isko samjhne ke liye ek example lete hain.",
     "WAITING_ANSWER": "Aapka answer sunne mein problem aayi. Ek baar phir boliye?",
@@ -248,12 +248,12 @@ def _check_no_repetition(
         fallback = SAFE_FALLBACKS.get(state, text)
         return False, fallback
 
-    # High overlap (>80% of words same)
+    # High overlap (>70% of words same)
     words_now = set(text.lower().split())
     words_prev = set(previous_response.lower().split())
     if len(words_now) > 0:
         overlap = len(words_now & words_prev) / len(words_now)
-        if overlap > 0.8:
+        if overlap > 0.7:
             # Return fallback instead of nearly-repeated text
             fallback = SAFE_FALLBACKS.get(state, text)
             return False, fallback

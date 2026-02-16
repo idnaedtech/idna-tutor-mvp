@@ -97,9 +97,14 @@ _HOMEWORK_PHRASES = [
 ]
 
 _SUBJECT_PHRASES = {
-    "math": ["math", "maths", "mathematics", "गणित", "ganit", "hisaab"],
-    "science": ["science", "विज्ञान", "vigyan"],
-    "hindi": ["hindi", "हिंदी"],
+    "math": [
+        "math", "maths", "mathematics", "गणित", "ganit", "hisaab",
+        # Whisper garbled versions
+        "मैथ", "मैथ्स", "मेथ", "मेथ्स", "मादस", "मेट्स", "मेठ",
+        "mathe", "mats", "meth", "meths",
+    ],
+    "science": ["science", "विज्ञान", "vigyan", "साइंस"],
+    "hindi": ["hindi", "हिंदी", "हिन्दी"],
 }
 
 # Parent-specific
