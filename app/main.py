@@ -125,7 +125,8 @@ if web_dir.exists():
         return FileResponse(str(web_dir / "parent.html"))
 
 
-# Health check
+# Health check (both /health and /healthz for Railway)
 @app.get("/health")
+@app.get("/healthz")
 async def health():
     return {"status": "ok", "version": "7.0.0"}
