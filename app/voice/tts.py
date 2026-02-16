@@ -93,12 +93,12 @@ class SarvamBulbulTTS:
                 "inputs": [text],
                 "target_language_code": language,
                 "speaker": speaker,
-                "pitch": 0,
-                "pace": TTS_PACE,
-                "loudness": 1.5,
-                "speech_sample_rate": TTS_SAMPLE_RATE,
-                "enable_preprocessing": True,
                 "model": TTS_MODEL,
+                "pace": TTS_PACE,
+                "temperature": TTS_TEMPERATURE,
+                "enable_preprocessing": True,
+                "audio_format": "mp3",
+                "sample_rate": TTS_SAMPLE_RATE,
             }
             headers = {
                 "api-subscription-key": SARVAM_API_KEY,

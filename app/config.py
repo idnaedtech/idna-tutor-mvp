@@ -53,7 +53,7 @@ MAX_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 15
 
 # ─── TTS Settings ────────────────────────────────────────────────────────────
-TTS_SPEAKER = os.getenv("TTS_SPEAKER", "meera")
+TTS_SPEAKER = os.getenv("TTS_SPEAKER", "simran")
 TTS_PACE = float(os.getenv("TTS_PACE", "0.90"))
 TTS_TEMPERATURE = float(os.getenv("TTS_TEMPERATURE", "0.6"))
 TTS_MODEL = os.getenv("TTS_MODEL", "bulbul:v3")
