@@ -578,12 +578,13 @@
             if (!resp.ok) throw new Error('Message failed');
 
             const data = await resp.json();
+            logLatency(data);
 
             // Update student bubble with actual transcript
             const studentMsgs = chatArea.querySelectorAll('.msg.student');
             const lastStudent = studentMsgs[studentMsgs.length - 1];
             if (lastStudent) {
-                lastStudent.querySelector('.text').textContent = 
+                lastStudent.querySelector('.text').textContent =
                     data.verdict ? `${getStudentText(data)} ${getVerdictEmoji(data.verdict)}` : getStudentText(data);
             }
 
@@ -635,6 +636,7 @@
             if (!resp.ok) throw new Error('Message failed');
 
             const data = await resp.json();
+            logLatency(data);
 
             addMessage('didi', data.didi_text, data.didi_audio_b64);
 
@@ -735,8 +737,18 @@
     }
 
     function getStudentText(data) {
-        // We don't have the transcript in the response, so show what was sent
-        return '🎤 (voice message)';
+        // Show what Whisper heard (student_transcript from API)
+        if (data.student_transcript) {
+            return data.student_transcript;
+        }
+        return '🎤 ...';
+    }
+
+    function logLatency(data) {
+        // Log latency for debugging (visible in browser console)
+        if (data.total_ms) {
+            console.log(`⏱️ Latency: STT=${data.stt_ms}ms LLM=${data.llm_ms}ms TTS=${data.tts_ms}ms Total=${data.total_ms}ms`);
+        }
     }
 
     function getVerdictEmoji(v) {

@@ -50,9 +50,15 @@ class MessageResponse(BaseModel):
     didi_text: str
     didi_audio_b64: str
     state: str
+    student_transcript: Optional[str] = None  # What Whisper heard
     question_id: Optional[str] = None
     verdict: Optional[str] = None
     diagnostic: Optional[str] = None
+    # Latency metrics (ms)
+    stt_ms: int = 0
+    llm_ms: int = 0
+    tts_ms: int = 0
+    total_ms: int = 0
 
 class SessionEndResponse(BaseModel):
     summary_text: str
@@ -411,9 +417,14 @@ def process_message(
         didi_text=didi_text,
         didi_audio_b64=audio_b64,
         state=new_state,
+        student_transcript=student_text,
         question_id=session.current_question_id,
         verdict=verdict_str,
         diagnostic=diagnostic,
+        stt_ms=stt_latency,
+        llm_ms=llm_result.latency_ms,
+        tts_ms=tts_latency,
+        total_ms=total_ms,
     )
 
 
