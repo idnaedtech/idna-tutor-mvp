@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Didi — Your AI Tutor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --warm-bg: #FFF8F0;
+            --primary: #FF6B35;
+            --primary-dark: #E85D2C;
+            --text: #2D2D2D;
+            --text-light: #6B6B6B;
+            --card-bg: #FFFFFF;
+            --error: #E53E3E;
+            --success: #38A169;
+            --shadow: 0 8px 32px rgba(255, 107, 53, 0.12);
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: var(--warm-bg);
+            color: var(--text);
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            overflow: hidden;
+        }
+
+        /* Warm gradient blob in background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -30%;
+            right: -20%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(255,107,53,0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -20%;
+            left: -15%;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(255,167,38,0.06) 0%, transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+        }
+
+        /* Didi avatar */
+        .avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF6B35, #FFA726);
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            box-shadow: 0 8px 24px rgba(255, 107, 53, 0.25);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: var(--text-light);
+            margin-bottom: 36px;
+            font-weight: 400;
+        }
+
+        /* Role toggle */
+        .role-toggle {
+            display: flex;
+            background: #F0E6DC;
+            border-radius: 14px;
+            padding: 4px;
+            margin-bottom: 28px;
+        }
+
+        .role-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 11px;
+            font-family: 'Nunito', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            background: transparent;
+            color: var(--text-light);
+        }
+
+        .role-btn.active {
+            background: var(--card-bg);
+            color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        /* PIN input */
+        .pin-section {
+            margin-bottom: 24px;
+        }
+
+        .pin-label {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .pin-dots {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .pin-dot {
+            width: 52px;
+            height: 58px;
+            border-radius: 14px;
+            border: 2px solid #E0D5CC;
+            background: var(--card-bg);
+            font-family: 'Nunito', sans-serif;
+            font-size: 24px;
+            font-weight: 800;
+            text-align: center;
+            color: var(--text);
+            outline: none;
+            transition: all 0.2s ease;
+            caret-color: var(--primary);
+        }
+
+        .pin-dot:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+        }
+
+        .pin-dot.filled {
+            border-color: var(--primary);
+            background: #FFF5F0;
+        }
+
+        /* Login button */
+        .login-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--primary), #FF8A50);
+            color: white;
+            font-family: 'Nunito', sans-serif;
+            font-size: 17px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(255, 107, 53, 0.2);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Loading spinner inside button */
+        .login-btn .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin: 0 auto;
+        }
+
+        .login-btn.loading .btn-text { display: none; }
+        .login-btn.loading .spinner { display: block; }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error message */
+        .error-msg {
+            color: var(--error);
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 12px;
+            min-height: 20px;
+            transition: opacity 0.2s;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            font-size: 12px;
+            color: #B0A090;
+        }
+
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="avatar">📚</div>
+        <h1>Didi दीदी</h1>
+        <p class="subtitle">Aapki apni AI tutor</p>
+
+        <!-- Role toggle -->
+        <div class="role-toggle">
+            <button class="role-btn active" data-role="student" onclick="setRole('student')">
+                🎒 Student
+            </button>
+            <button class="role-btn" data-role="parent" onclick="setRole('parent')">
+                👨‍👩‍👧 Parent
+            </button>
+        </div>
+
+        <!-- PIN entry -->
+        <div class="pin-section">
+            <div class="pin-label">PIN daalo</div>
+            <div class="pin-dots">
+                <input type="tel" class="pin-dot" maxlength="1" data-index="0" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" data-index="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" data-index="2" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" data-index="3" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+            </div>
+        </div>
+
+        <button class="login-btn" onclick="login()" id="loginBtn" disabled>
+            <span class="btn-text">Shuru karein →</span>
+            <div class="spinner"></div>
+        </button>
+
+        <div class="error-msg" id="errorMsg"></div>
+
+        <div class="footer">
+            IDNA EdTech &middot; <a href="#">Help</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentRole = 'student';
+        const dots = document.querySelectorAll('.pin-dot');
+        const loginBtn = document.getElementById('loginBtn');
+        const errorMsg = document.getElementById('errorMsg');
+
+        function setRole(role) {
+            currentRole = role;
+            document.querySelectorAll('.role-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.role === role);
+            });
+            errorMsg.textContent = '';
+        }
+
+        // PIN input handling — auto-advance, auto-backspace
+        dots.forEach((dot, i) => {
+            dot.addEventListener('input', (e) => {
+                const val = e.target.value.replace(/[^0-9]/g, '');
+                e.target.value = val.slice(-1);
+                if (val && i < 3) dots[i + 1].focus();
+                e.target.classList.toggle('filled', !!val);
+                updateLoginBtn();
+            });
+
+            dot.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !e.target.value && i > 0) {
+                    dots[i - 1].focus();
+                    dots[i - 1].value = '';
+                    dots[i - 1].classList.remove('filled');
+                    updateLoginBtn();
+                }
+                if (e.key === 'Enter') login();
+            });
+
+            dot.addEventListener('focus', () => e.target.select && dot.select());
+        });
+
+        function getPin() {
+            return Array.from(dots).map(d => d.value).join('');
+        }
+
+        function updateLoginBtn() {
+            loginBtn.disabled = getPin().length < 4;
+        }
+
+        async function login() {
+            const pin = getPin();
+            if (pin.length < 4) return;
+
+            errorMsg.textContent = '';
+            loginBtn.classList.add('loading');
+            loginBtn.disabled = true;
+
+            try {
+                const endpoint = currentRole === 'student'
+                    ? `${API_BASE}/api/auth/student`
+                    : `${API_BASE}/api/auth/parent`;
+
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin }),
+                });
+
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.detail || 'PIN galat hai');
+                }
+
+                const data = await resp.json();
+                localStorage.setItem('idna_token', data.token);
+                localStorage.setItem('idna_role', currentRole);
+                localStorage.setItem('idna_name', data.name);
+                localStorage.setItem('idna_student_id', data.student_id);
+
+                // Redirect
+                window.location.href = currentRole === 'student'
+                    ? '/student'
+                    : '/parent';
+
+            } catch (err) {
+                errorMsg.textContent = err.message || 'Kuch gadbad ho gayi';
+                // Shake animation
+                dots.forEach(d => { d.value = ''; d.classList.remove('filled'); });
+                dots[0].focus();
+                updateLoginBtn();
+            } finally {
+                loginBtn.classList.remove('loading');
+                loginBtn.disabled = getPin().length < 4;
+            }
+        }
+
+        // Auto-focus first dot
+        dots[0].focus();
+    </script>
+</body>
+</html>

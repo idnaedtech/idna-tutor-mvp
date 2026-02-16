@@ -1,12 +1,14 @@
-fastapi>=0.109.0
-uvicorn>=0.27.0
-pydantic>=2.5.0
-python-dotenv>=1.0.0
-openai>=1.0.0
-httpx>=0.25.0
-python-multipart>=0.0.6
-requests>=2.31.0
-# Database: Postgres for production, SQLite for dev
-psycopg2-binary>=2.9.9
-aiohttp>=3.9.0
-pytest>=8.0.0
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+pydantic==2.10.4
+python-multipart==0.0.19
+httpx==0.28.1
+openai==1.58.1
+PyJWT==2.10.1
+sympy==1.13.3
+alembic==1.14.1
+
+# Production
+psycopg2-binary==2.9.10
+gunicorn==23.0.0

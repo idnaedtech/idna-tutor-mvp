@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Didi — Parent Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --warm-bg: #FFF8F0;
+            --primary: #FF6B35;
+            --text: #2D2D2D;
+            --text-light: #6B6B6B;
+            --card-bg: #FFFFFF;
+            --border: #EDE5DC;
+        }
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: var(--warm-bg);
+            color: var(--text);
+            min-height: 100dvh;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .header-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF6B35, #FFA726);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        .header h1 { font-size: 22px; }
+        .header p { font-size: 13px; color: var(--text-light); }
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        }
+        .card h3 {
+            font-size: 14px;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .card .value {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+        }
+        .card .sub { font-size: 14px; color: var(--text-light); margin-top: 4px; }
+        .coming-soon {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+            font-size: 15px;
+        }
+        .coming-soon .emoji { font-size: 48px; margin-bottom: 12px; }
+        .back-btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 14px;
+            background: var(--primary);
+            color: white;
+            font-family: 'Nunito', sans-serif;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-avatar">👨‍👩‍👧</div>
+        <div>
+            <h1>Parent Dashboard</h1>
+            <p id="childName">Loading...</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Aaj ki padhai</h3>
+        <div class="value" id="todaySessions">—</div>
+        <div class="sub">sessions completed</div>
+    </div>
+
+    <div class="card">
+        <h3>Is hafte ka accuracy</h3>
+        <div class="value" id="weekAccuracy">—</div>
+        <div class="sub">sahi jawab percentage</div>
+    </div>
+
+    <div class="coming-soon">
+        <div class="emoji">🔊</div>
+        <p>Voice reports jaldi aa rahe hain!<br>Didi aapko Hindi/Telugu mein batayegi<br>aapke bachche ne kya padha.</p>
+    </div>
+
+    <button class="back-btn" onclick="window.location.href='/'">← Back to Login</button>
+
+    <script>
+        const name = localStorage.getItem('idna_name') || 'Child';
+        document.getElementById('childName').textContent = name + ' ki padhai';
+        
+        // TODO: Fetch actual data from parent API when ready
+        document.getElementById('todaySessions').textContent = '0';
+        document.getElementById('weekAccuracy').textContent = '—%';
+    </script>
+</body>
+</html>

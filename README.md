@@ -1,112 +1,125 @@
-# IDNA EdTech - Voice-First AI Tutor
+# IDNA Didi v7.0 — AI Voice Tutor
 
-Voice-based math tutoring system for CBSE Class 8 students.
+**Class 8 NCERT Math tutor. Voice-first. Hinglish. Runs on any smartphone.**
 
-## Features
+## Quick Start (Local)
 
-- ✅ **SQLite Persistence** - Sessions survive restart
-- ✅ **Explicit FSM** - 6 states with guards
-- ✅ **OpenAI TTS** - Natural voice output
-- ✅ **CBSE Class 8** - 10 chapters, 100 questions
-- ✅ **Parent Dashboard** - Voice-first reports
-- ✅ **Evaluator v2** - Handles fractions, words, units
+### 1. Prerequisites
+- Python 3.11+
+- Docker (for Postgres) OR just use SQLite for quick testing
+- API keys: OpenAI, Groq, Sarvam
 
-## Quick Deploy to Railway
-
-### Option 1: Railway CLI
-
+### 2. Setup
 ```bash
-# Install Railway CLI
-npm install -g @railway/cli
+cd idna-tutor-v7
 
-# Login
-railway login
+# Copy env template and fill in your API keys
+cp .env.example .env
+# Edit .env with your actual keys
 
-# Initialize project
-railway init
-
-# Set environment variable
-railway variables set OPENAI_API_KEY=sk-your-key-here
-
-# Deploy
-railway up
-```
-
-### Option 2: GitHub + Railway
-
-1. Push this folder to a GitHub repo
-2. Go to [railway.app](https://railway.app)
-3. Click "New Project" → "Deploy from GitHub repo"
-4. Select your repo
-5. Add `OPENAI_API_KEY` in Variables tab
-6. Deploy!
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key for TTS/STT |
-| `PORT` | No | Set automatically by Railway |
-
-## Local Development
-
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-
-# Install dependencies
+# Install Python deps
 pip install -r requirements.txt
 
-# Create .env file
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Run server
-python web_server.py
+# Run (SQLite mode — no Docker needed for testing)
+uvicorn app.main:app --reload --port 8000
 ```
 
-Open http://localhost:8000
+### 3. Open in browser
+- Login: http://localhost:8000
+- Student: http://localhost:8000/student (after login)
+- Parent: http://localhost:8000/parent (after login)
 
-## Project Structure
+### 4. Create test student
+```bash
+# Open Python shell
+python -c "
+from app.database import SessionLocal, init_db
+from app.models import Student, Parent
+init_db()
+db = SessionLocal()
 
-```
-idna-railway/
-├── web_server.py      # Main FastAPI app (FSM + API)
-├── questions.py       # CBSE Class 8 question bank
-├── evaluator.py       # Answer evaluation logic
-├── requirements.txt   # Python dependencies
-├── Procfile          # Railway/Heroku start command
-├── railway.json      # Railway config
-├── index.html        # Home page
-├── parent.html       # Parent dashboard
-└── web/
-    └── index.html    # Student learning interface
-```
+# Create student
+s = Student(name='Nandini', pin='1234', class_level=8, preferred_language='hi-IN')
+db.add(s)
+db.commit()
+db.refresh(s)
 
-## API Endpoints
+# Create parent
+p = Parent(student_id=s.id, name='Hemant', pin='5678', language='te-IN')
+db.add(p)
+db.commit()
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/chapters` | GET | List available chapters |
-| `/api/session/start` | POST | Start new session |
-| `/api/session/chapter` | POST | Select chapter |
-| `/api/session/question` | POST | Get next question |
-| `/api/session/answer` | POST | Submit answer |
-| `/api/session/end` | POST | End session |
-| `/api/dashboard/{id}` | GET | Get parent dashboard |
-| `/api/dashboard/{id}/voice-report` | POST | Generate voice report |
-| `/api/text-to-speech` | POST | Convert text to speech |
-| `/api/speech-to-text` | POST | Convert speech to text |
-| `/health` | GET | Health check |
-
-## FSM States
-
-```
-IDLE → CHAPTER_SELECTED → WAITING_ANSWER → SHOWING_HINT → SHOWING_ANSWER → COMPLETED
+print(f'Student PIN: 1234')
+print(f'Parent PIN: 5678')
+db.close()
+"
 ```
 
----
+### 5. Test
+- Open http://localhost:8000
+- Enter PIN: 1234
+- Tap mic and say "aaj math padha"
+- Didi will start teaching Rational Numbers
 
-Made with ❤️ for Indian Students by IDNA EdTech
+## Production (Docker)
+```bash
+docker-compose up --build
+```
+
+## Production (Railway)
+```bash
+# Push to GitHub, connect to Railway
+# Set env vars in Railway dashboard
+# Deploy
+```
+
+## Architecture
+
+```
+Student speaks → Groq Whisper (STT) → Input Classifier → State Machine
+→ Answer Checker → Instruction Builder → GPT-4o → Enforcer → Clean for TTS
+→ Sarvam Bulbul v3 (TTS) → Student hears Didi
+```
+
+## File Structure
+
+```
+app/
+├── config.py              # All env vars, constants
+├── database.py            # SQLAlchemy engine, sessions
+├── models.py              # ORM: Students, Parents, Sessions, Questions, Skills
+├── main.py                # FastAPI app, startup, seed data
+├── routers/
+│   ├── auth.py            # PIN login, JWT, rate limiting
+│   └── student.py         # THE MAIN LOOP: STT→classify→FSM→LLM→enforce→TTS
+├── tutor/
+│   ├── state_machine.py   # 14 states, deterministic transitions
+│   ├── input_classifier.py # Hindi/English/Hinglish intent detection
+│   ├── answer_checker.py  # Deterministic math checking, no LLM
+│   ├── instruction_builder.py # Didi's personality, prompt templates
+│   ├── enforcer.py        # 7 rules: word limit, no false praise, etc.
+│   ├── llm.py             # OpenAI abstraction (swappable)
+│   └── memory.py          # Skill mastery read/write, adaptive questions
+├── voice/
+│   ├── stt.py             # Groq Whisper / Sarvam Saarika / Saaras
+│   ├── tts.py             # Sarvam Bulbul v3, caching
+│   └── clean_for_tts.py   # Symbol→word conversion for TTS
+├── content/
+│   └── seed_questions.py  # 25 questions, Ch1 Rational Numbers
+web/
+├── login.html             # 4-digit PIN entry
+├── student.html           # WhatsApp-style voice chat
+└── parent.html            # Dashboard (basic)
+tests/
+└── test_core.py           # 69 tests for answer checker, classifier, enforcer
+```
+
+## Tests
+```bash
+pytest tests/ -v
+```
+
+## API Keys Needed
+- **OPENAI_API_KEY**: For GPT-4o (Didi's brain)
+- **GROQ_API_KEY**: For Whisper STT (speech recognition)
+- **SARVAM_API_KEY**: For Bulbul v3 TTS (Didi's voice)
