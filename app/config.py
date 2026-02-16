@@ -28,8 +28,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")
 
 # ─── Provider Selection (swap by changing these) ─────────────────────────────
-STT_PROVIDER = os.getenv("STT_PROVIDER", "groq_whisper")
-# Options: groq_whisper | sarvam_saarika | sarvam_saaras
+STT_PROVIDER = os.getenv("STT_PROVIDER", "sarvam_saarika")
+# Options: sarvam_saarika (default, handles Hindi-English code-mixing) | groq_whisper | sarvam_saaras
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "sarvam_bulbul")
 # Options: sarvam_bulbul (only option for now)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai_gpt4o")

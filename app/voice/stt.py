@@ -97,12 +97,16 @@ class GroqWhisperSTT:
 # ─── Sarvam Saarika (Phase 2) ────────────────────────────────────────────────
 
 class SarvamSaarikaSTT:
-    """Sarvam Saarika v2.5 — 11 Indian languages, code-mixed speech support."""
+    """
+    Sarvam Saarika v2.5 — 11 Indian languages, code-mixed speech support.
+    NATIVE Hindi-English code-mixing. No phonetic mapping needed.
+    """
 
     def transcribe(self, audio: bytes, language: str = "hi-IN") -> STTResult:
         start = time.perf_counter()
         try:
             # Sarvam REST API for STT
+            # Handles code-mixed Hindi-English natively
             files = {
                 "file": ("audio.webm", io.BytesIO(audio), "audio/webm"),
             }
@@ -113,10 +117,14 @@ class SarvamSaarikaSTT:
             }
             headers = {"api-subscription-key": SARVAM_API_KEY}
 
+            logger.info(f"STT [saarika]: sending {len(audio)} bytes to Sarvam")
+
             with httpx.Client(timeout=30.0) as client:
                 response = client.post(
                     SARVAM_STT_URL, files=files, data=data, headers=headers
                 )
+                if response.status_code != 200:
+                    logger.error(f"STT [saarika] HTTP {response.status_code}: {response.text}")
                 response.raise_for_status()
                 result = response.json()
 
@@ -124,11 +132,11 @@ class SarvamSaarikaSTT:
             text = result.get("transcript", "").strip()
             detected = result.get("language_code", language)
 
-            logger.info(f"STT [saarika]: {elapsed}ms, lang={detected}, text='{text[:50]}'")
+            logger.info(f"STT [saarika]: {elapsed}ms, lang={detected}, text='{text[:80]}'")
 
             return STTResult(
                 text=text,
-                confidence=0.7,  # Saarika doesn't return confidence; default
+                confidence=0.8,  # Saarika is good at code-mixed speech
                 language_detected=detected,
                 latency_ms=elapsed,
             )
