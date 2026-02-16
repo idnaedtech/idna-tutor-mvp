@@ -6,7 +6,8 @@ Voice-first AI math tutor for CBSE Class 8 students (India). Full rewrite with d
 
 **Entry point:** `uvicorn app.main:app --port 8000`
 **Tests:** `python -m pytest tests/test_core.py -v` (69 tests)
-**Production:** Railway auto-deploys from `main` branch
+**Production:** https://idna-tutor-mvp-production.up.railway.app
+**Test student:** PIN `1234` (name: Priya, class 8)
 
 ## FILE STRUCTURE (v7.0)
 
@@ -146,6 +147,7 @@ POST /api/student/session/start → Bearer token → {session_id, greeting_text,
 POST /api/student/session/message → {session_id, audio|text} → {didi_text, didi_audio_b64, state, verdict}
 POST /api/student/session/end   → {session_id} → {summary_text, questions_attempted, questions_correct}
 GET  /health                    → {status: "ok", version: "7.0.0"}
+GET  /healthz                   → same (Railway health check)
 ```
 
 ## VOICE CONFIGURATION
@@ -154,8 +156,10 @@ GET  /health                    → {status: "ok", version: "7.0.0"}
 - **Speaker:** simran (warm Indian female)
 - **Language:** hi-IN (LOCKED — never switch mid-session)
 - **Pace:** 0.90
+- **Temperature:** 0.6
 - **Char limit:** 2000 (truncate longer text)
 - **Single call** — no chunking (v6.2.4 lesson)
+- **Payload keys:** `sample_rate` (not speech_sample_rate), `audio_format: "mp3"`
 
 ### STT (Groq Whisper)
 - **Model:** whisper-large-v3-turbo
@@ -195,6 +199,9 @@ LLM_PROVIDER=openai_gpt4o
 
 # JWT
 JWT_SECRET=change-in-production
+
+# Database reset (use ONCE for schema migrations, then remove)
+RESET_DATABASE=true  # DANGER: drops all tables on startup
 ```
 
 ## ARCHITECTURE RULES
@@ -240,7 +247,7 @@ python -m pytest tests/test_core.py -v
 | Any | "bahut mushkil" | → COMFORT | "Koi baat nahi..." |
 | Any | "bye" | → SESSION_COMPLETE | Summary + goodbye |
 
-## LESSONS LEARNED (Preserved from v6)
+## LESSONS LEARNED (Preserved from v6 + v7 deployment)
 
 - Never concatenate MP3 files — browsers stop at second header
 - Lock hi-IN always — switching sounds like different person
@@ -251,6 +258,15 @@ python -m pytest tests/test_core.py -v
 - Real teachers ask "what did you do?" before correcting (but only once)
 - Keep LLM responses short (< 400 chars) for natural speech
 - Use Whisper AUTO-DETECT for STT, NOT forced language
+
+### v7.0 Deployment Lessons
+- Railway needs `/healthz` endpoint (not just `/health`)
+- Sarvam TTS payload: use `sample_rate` not `speech_sample_rate`
+- Sarvam TTS payload: include `audio_format: "mp3"` and `temperature`
+- PostgreSQL schema reset: use `DROP SCHEMA public CASCADE` (not drop_all)
+- railway.toml startCommand needs `sh -c '...'` for $PORT expansion
+- Procfile must match entry point: `uvicorn app.main:app`
+- Seed test student on fresh database for testing
 
 ## GAP ANALYSIS (Phase 2 Features)
 
