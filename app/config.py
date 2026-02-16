@@ -82,7 +82,7 @@ SILENCE_TIMEOUT_SECONDS = 15
 MAX_HINT_LEVELS = 3  # hint_1 → hint_2 → full_solution
 
 # ─── Response Enforcer Limits ────────────────────────────────────────────────
-MAX_RESPONSE_WORDS = 55
+MAX_RESPONSE_WORDS = 40  # Reduced from 55 for faster TTS
 MAX_RESPONSE_SENTENCES = 2
 MAX_ENFORCE_RETRIES = 3  # Re-prompt LLM this many times before falling back
 

@@ -177,10 +177,12 @@ def process_message(
 
         try:
             stt = get_stt()
-            # Auto-detect language (better for Hinglish code-switching)
-            stt_result = stt.transcribe(audio_bytes)
+            # Force Hindi - auto-detect garbles Hinglish worse
+            stt_result = stt.transcribe(audio_bytes, language="hi")
             stt_latency = stt_result.latency_ms
             student_text = stt_result.text
+            # Log raw transcript for debugging
+            logger.info(f"STT transcript: '{student_text}' (conf={stt_result.confidence:.2f}, {stt_latency}ms)")
         except Exception as e:
             logger.error(f"STT failed: {e}")
             return _quick_response(
@@ -227,6 +229,15 @@ def process_message(
         subject=session.subject or "math",
     )
     logger.info(f"Input: '{student_text[:50]}' → category={category}, state={session.state}")
+
+    # Handle SILENCE without LLM — just give a gentle nudge
+    if category == "SILENCE":
+        nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
+        return _quick_response(
+            db, session, nudge,
+            student_text="[silence]",
+            stt_latency=stt_latency,
+        )
 
     # ── Step 3: State machine transition ──────────────────────────────────
     # Build asked questions list for this session

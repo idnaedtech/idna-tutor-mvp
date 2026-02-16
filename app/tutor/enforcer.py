@@ -48,7 +48,7 @@ SAFE_FALLBACKS = {
     "GREETING": "Namaste! Aaj kya padhna hai?",
     "DISCOVERING_TOPIC": "Aaj school mein kya padha? Batao toh.",
     "CHECKING_UNDERSTANDING": "Chalo dekhte hain kitna samajh aaya. Ek sawaal puchti hoon.",
-    "TEACHING": "Chalo isko ek aur tarike se samajhte hain.",
+    "TEACHING": "Isko samjhne ke liye ek example lete hain.",
     "WAITING_ANSWER": "Aapka answer sunne mein problem aayi. Ek baar phir boliye?",
     "EVALUATING": "Mujhe check karne mein problem aayi. Ek baar phir try karo.",
     "HINT_1": "Sochiye — answer kya ho sakta hai?",
@@ -236,6 +236,7 @@ def _check_tts_safety(text: str) -> tuple[bool, str]:
 def _check_no_repetition(
     text: str,
     previous_response: Optional[str],
+    state: str = "",
 ) -> tuple[bool, str]:
     """Rule 7: Don't repeat the previous Didi turn verbatim."""
     if not previous_response:
@@ -243,7 +244,9 @@ def _check_no_repetition(
 
     # Exact match
     if text.strip().lower() == previous_response.strip().lower():
-        return False, text
+        # Return fallback instead of repeated text
+        fallback = SAFE_FALLBACKS.get(state, text)
+        return False, fallback
 
     # High overlap (>80% of words same)
     words_now = set(text.lower().split())
@@ -251,7 +254,9 @@ def _check_no_repetition(
     if len(words_now) > 0:
         overlap = len(words_now & words_prev) / len(words_now)
         if overlap > 0.8:
-            return False, text
+            # Return fallback instead of nearly-repeated text
+            fallback = SAFE_FALLBACKS.get(state, text)
+            return False, fallback
 
     return True, text
 
@@ -314,7 +319,7 @@ def enforce(
         violations.append("TTS_UNSAFE")
 
     # Rule 7: No repetition
-    passed, _ = _check_no_repetition(current_text, previous_response)
+    passed, current_text = _check_no_repetition(current_text, previous_response, state)
     if not passed:
         violations.append("REPETITION")
 

@@ -30,7 +30,7 @@ from typing import Literal
 
 StudentCategory = Literal[
     "ACK", "IDK", "ANSWER", "CONCEPT", "COMFORT", "STOP",
-    "TROLL", "REPEAT", "DISPUTE", "HOMEWORK", "SUBJECT"
+    "TROLL", "REPEAT", "DISPUTE", "HOMEWORK", "SUBJECT", "SILENCE"
 ]
 ParentCategory = Literal["PROGRESS", "INSTRUCTION", "CHITCHAT", "GOODBYE"]
 
@@ -183,6 +183,10 @@ def classify_student_input(
         return "REPEAT"  # Empty input = ask to repeat
 
     text_lower = text.lower().strip()
+
+    # 0. SILENCE — frontend silence timer (don't send through LLM)
+    if text_lower == "[silence]":
+        return "SILENCE"
 
     # 1. STOP — highest priority (student wants to leave)
     if _has_match(text, _STOP_PHRASES):
