@@ -76,8 +76,24 @@ def init_db():
     """Create all tables. Called once at startup."""
     if RESET_DATABASE:
         import logging
+        from sqlalchemy import text
         logger = logging.getLogger("idna")
         logger.warning("RESET_DATABASE=true — dropping all tables!")
-        Base.metadata.drop_all(bind=engine)
+
+        with engine.connect() as conn:
+            if _is_sqlite:
+                # SQLite: get all tables and drop them
+                tables = conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )).fetchall()
+                for (table_name,) in tables:
+                    conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            else:
+                # PostgreSQL: drop all tables in public schema with CASCADE
+                conn.execute(text("DROP SCHEMA public CASCADE"))
+                conn.execute(text("CREATE SCHEMA public"))
+                conn.execute(text("GRANT ALL ON SCHEMA public TO PUBLIC"))
+            conn.commit()
+
         logger.info("All tables dropped. Creating fresh schema...")
     Base.metadata.create_all(bind=engine)
