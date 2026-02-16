@@ -81,7 +81,40 @@ FRACTION_WORDS = {
 }
 
 # Negative indicators
-NEGATIVE_WORDS = {"minus", "negative", "neg", "-", "माइनस"}
+NEGATIVE_WORDS = {"minus", "negative", "neg", "-", "माइनस", "मिनस", "मैनस"}
+
+# Hindi phonetic spellings of English words (Whisper garbling)
+HINDI_PHONETIC_MAP = {
+    # Numbers (Devanagari phonetic of English)
+    "वन": "one", "वान": "one",
+    "टू": "two", "तू": "two",
+    "थ्री": "three", "थ्रे": "three",
+    "फोर": "four", "फ़ोर": "four",
+    "फाइव": "five", "फ़ाइव": "five",
+    "सिक्स": "six",
+    "सेवन": "seven", "सेव्हन": "seven",
+    "एट": "eight", "ऐट": "eight",
+    "नाइन": "nine", "नाईन": "nine",
+    "टेन": "ten",
+    # Math operators
+    "बाई": "by", "बाइ": "by", "बाय": "by",
+    "माइनस": "minus", "मिनस": "minus", "मैनस": "minus",
+    "प्लस": "plus",
+    "ओवर": "over",
+    "अपॉन": "upon",
+    # Common garbled patterns
+    "फ़ाइव बाई नाइन": "five by nine",
+    "माइनस फ़ाइव बाई नाइन": "minus five by nine",
+}
+
+
+def _normalize_hindi_phonetic(text: str) -> str:
+    """Convert Hindi phonetic spellings of English words back to English."""
+    result = text
+    # Sort by length (longest first) to avoid partial replacements
+    for hindi, english in sorted(HINDI_PHONETIC_MAP.items(), key=lambda x: -len(x[0])):
+        result = result.replace(hindi, english)
+    return result
 
 
 # ─── Parsing Functions ───────────────────────────────────────────────────────
@@ -168,12 +201,15 @@ def _extract_numeric_value(text: str) -> Optional[Fraction]:
     """
     Extract the first numeric/fraction value from text,
     ignoring surrounding words.
-    
+
     "the answer is 2/7" → Fraction(2, 7)
     "I think its minus 3" → Fraction(-3)
     "x equals 7" → Fraction(7)
+    "माइनस फ़ाइव बाई नाइन" → Fraction(-5, 9)
     """
     text = text.lower().strip()
+    # Normalize Hindi phonetic spellings to English
+    text = _normalize_hindi_phonetic(text)
 
     # Remove common prefixes
     for prefix in ["the answer is", "answer is", "i think its", "i think",

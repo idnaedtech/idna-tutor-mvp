@@ -191,12 +191,13 @@ def process_message(
 
         try:
             stt = get_stt()
-            # Force Hindi - auto-detect garbles Hinglish worse
-            stt_result = stt.transcribe(audio_bytes, language="hi")
+            # Auto-detect language - students speak Hinglish (English math terms)
+            # Forcing Hindi converts English words to garbage Devanagari
+            stt_result = stt.transcribe(audio_bytes)  # No language = auto-detect
             stt_latency = stt_result.latency_ms
             student_text = stt_result.text
             # Log raw transcript for debugging
-            logger.info(f"STT transcript: '{student_text}' (conf={stt_result.confidence:.2f}, {stt_latency}ms)")
+            logger.info(f"STT transcript: '{student_text}' (conf={stt_result.confidence:.2f}, lang={stt_result.language_detected}, {stt_latency}ms)")
         except Exception as e:
             logger.error(f"STT failed: {e}")
             return _quick_response(
