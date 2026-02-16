@@ -7,7 +7,11 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import StaticPool
 
+import os
 from app.config import DATABASE_URL
+
+# Set RESET_DATABASE=true to drop all tables and recreate (use for schema migrations)
+RESET_DATABASE = os.getenv("RESET_DATABASE", "false").lower() == "true"
 
 
 # ─── Engine Setup ────────────────────────────────────────────────────────────
@@ -70,4 +74,10 @@ def get_db():
 
 def init_db():
     """Create all tables. Called once at startup."""
+    if RESET_DATABASE:
+        import logging
+        logger = logging.getLogger("idna")
+        logger.warning("RESET_DATABASE=true — dropping all tables!")
+        Base.metadata.drop_all(bind=engine)
+        logger.info("All tables dropped. Creating fresh schema...")
     Base.metadata.create_all(bind=engine)
