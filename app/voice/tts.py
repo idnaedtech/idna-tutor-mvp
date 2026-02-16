@@ -107,6 +107,8 @@ class SarvamBulbulTTS:
 
             with httpx.Client(timeout=30.0) as client:
                 response = client.post(SARVAM_TTS_URL, json=payload, headers=headers)
+                if response.status_code != 200:
+                    logger.error(f"TTS [sarvam] HTTP {response.status_code}: {response.text}")
                 response.raise_for_status()
                 data = response.json()
 
