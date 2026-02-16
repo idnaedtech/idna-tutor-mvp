@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v7.0 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v7.0.1 — CLAUDE CODE RULES
 
 ## OVERVIEW
 
@@ -9,7 +9,7 @@ Voice-first AI math tutor for CBSE Class 8 students (India). Full rewrite with d
 **Production:** https://idna-tutor-mvp-production.up.railway.app
 **Test student:** PIN `1234` (name: Priya, class 8)
 
-## FILE STRUCTURE (v7.0)
+## FILE STRUCTURE (v7.0.1)
 
 ```
 app/
@@ -21,16 +21,16 @@ app/
 │   ├── auth.py             → PIN login, JWT tokens, rate limiting
 │   └── student.py          → THE MAIN LOOP: STT → classify → FSM → check → LLM → enforce → TTS
 ├── tutor/
-│   ├── state_machine.py    → 14-state FSM. DETERMINISTIC. No LLM.
-│   ├── input_classifier.py → Classify input: ACK, IDK, ANSWER, COMFORT, etc. No LLM.
-│   ├── answer_checker.py   → Math evaluation. Hindi/English numbers. No LLM.
+│   ├── state_machine.py    → 13-state FSM. DETERMINISTIC. No LLM. (DISCOVERING_TOPIC removed)
+│   ├── input_classifier.py → Classify input: ACK, IDK, ANSWER, COMFORT, SILENCE, etc. No LLM.
+│   ├── answer_checker.py   → Math evaluation. Hindi/English numbers. Hindi phonetic mappings. No LLM.
 │   ├── instruction_builder.py → Build LLM prompts per state+action
-│   ├── enforcer.py         → 7 rules: word limits, no false praise, etc.
+│   ├── enforcer.py         → 7 rules: word limits (40 max), no false praise, repetition check (70%)
 │   ├── memory.py           → Skill mastery read/write, adaptive question selection
 │   └── llm.py              → OpenAI GPT-4o wrapper
 ├── voice/
 │   ├── tts.py              → Sarvam Bulbul v3 (simran voice)
-│   ├── stt.py              → Groq Whisper
+│   ├── stt.py              → Sarvam Saarika v2.5 (handles Hindi-English code-mixing)
 │   └── clean_for_tts.py    → Convert fractions, symbols for speech
 ├── content/
 │   └── seed_questions.py   → Question bank (10 questions, Ch1 Rational Numbers)
@@ -42,15 +42,16 @@ tests/
 
 web/
 ├── login.html              → PIN entry
-├── student.html            → Voice tutor UI
+├── student.html            → Voice tutor UI (shows transcript, logs latency)
 └── parent.html             → Parent dashboard (scaffolded)
 ```
 
-## STATE MACHINE (14 States)
+## STATE MACHINE (13 States — MVP)
+
+**DISCOVERING_TOPIC removed for MVP.** Math only. Subject selection via UI buttons in future.
 
 ```
-GREETING            → Welcome (pre-generated)
-DISCOVERING_TOPIC   → "Aaj kya padha?"
+GREETING            → Welcome + first question (session starts in WAITING_ANSWER)
 CHECKING_UNDERSTANDING → Probe question to assess level
 TEACHING            → Explain concept with Indian examples
 WAITING_ANSWER      → Student attempts question
@@ -69,13 +70,14 @@ DISPUTE_REPLAY      → Student challenges verdict
 - `STOP` → SESSION_COMPLETE
 - `COMFORT` → COMFORT (stay in state, address feelings)
 - `REPEAT` → Re-ask current prompt
+- `SILENCE` → Gentle nudge (no LLM call)
 
-### Main Flow
+### MVP Flow (v7.0.1)
 ```
-GREETING → DISCOVERING_TOPIC → CHECKING_UNDERSTANDING → TEACHING → WAITING_ANSWER
-                                                                        ↓
-                                                              answer_checker.check_math_answer()
-                                                                        ↓
+Login → "Namaste {name}! Chalo math practice karte hain. Pehla sawaal: ..." → WAITING_ANSWER
+                                                                                    ↓
+                                                                  answer_checker.check_math_answer()
+                                                                                    ↓
                                         [CORRECT] → NEXT_QUESTION → WAITING_ANSWER (loop)
                                         [INCORRECT] → HINT_1 → HINT_2 → FULL_SOLUTION → NEXT_QUESTION
 ```
@@ -83,18 +85,19 @@ GREETING → DISCOVERING_TOPIC → CHECKING_UNDERSTANDING → TEACHING → WAITI
 ## PIPELINE (student.py:process_message)
 
 ```
-1. STT (Groq Whisper)           → student_text
-2. input_classifier             → category (ACK, IDK, ANSWER, COMFORT, STOP, etc.)
-3. state_machine.transition()   → (new_state, Action)
-4. answer_checker (if ANSWER)   → Verdict (CORRECT/INCORRECT + diagnostic)
-5. route_after_evaluation()     → decide HINT_1, HINT_2, or NEXT_QUESTION
-6. memory.pick_next_question()  → adaptive question selection
-7. instruction_builder          → LLM prompt for state+action
-8. llm.generate()               → raw Didi response
-9. enforcer.enforce()           → apply 7 rules, clean text
-10. clean_for_tts()             → convert fractions, symbols
-11. tts.synthesize()            → audio bytes
-12. Save SessionTurn            → log everything
+1. STT (Sarvam Saarika)         → student_text (handles Hindi-English code-mixing)
+2. input_classifier             → category (ACK, IDK, ANSWER, COMFORT, SILENCE, STOP, etc.)
+3. SILENCE check                → return nudge without LLM
+4. state_machine.transition()   → (new_state, Action)
+5. answer_checker (if ANSWER)   → Verdict (CORRECT/INCORRECT + diagnostic)
+6. route_after_evaluation()     → decide HINT_1, HINT_2, or NEXT_QUESTION
+7. memory.pick_next_question()  → adaptive question selection
+8. instruction_builder          → LLM prompt for state+action
+9. llm.generate()               → raw Didi response
+10. enforcer.enforce()          → apply 7 rules, clean text
+11. clean_for_tts()             → convert fractions, symbols
+12. tts.synthesize()            → audio bytes
+13. Save SessionTurn            → log everything
 ```
 
 ## ANSWER CHECKER (Deterministic, No LLM)
@@ -103,6 +106,7 @@ Handles all math answer formats:
 - Fractions: `-5/9`, `2/7`, `-3/9`
 - Spoken English: `minus one third`, `two over seven`
 - Spoken Hindi: `minus ek tihaayi`, `do baata saat`, `aadha`
+- **Hindi phonetic of English:** `नाइन` → nine, `फाइव` → five, `बाई` → by, `माइनस` → minus
 - Decimals: `0.5`, `-0.333`
 - With prefix: `the answer is 2/7`, `jawab hai minus 1 by 3`
 - Equivalence: `2/6` = `1/3` = `0.333...`
@@ -113,13 +117,13 @@ Handles all math answer formats:
 
 Every LLM response passes through enforcer BEFORE TTS:
 
-1. **LENGTH** — Max 55 words, max 2 sentences
+1. **LENGTH** — Max 40 words, max 2 sentences (reduced for faster TTS)
 2. **NO_FALSE_PRAISE** — No "shabash/bahut accha" unless verdict=CORRECT
 3. **SPECIFICITY** — Must reference student's answer when evaluating
 4. **NO_TEACH_AND_QUESTION** — Never teach AND ask in same turn
 5. **LANGUAGE_MATCH** — Response language matches session language
 6. **TTS_SAFETY** — No raw fractions, brackets that TTS reads literally
-7. **NO_REPETITION** — Don't repeat previous Didi response verbatim
+7. **NO_REPETITION** — Don't repeat previous response (70% word overlap threshold)
 
 If enforcement fails 3x, returns safe fallback from `SAFE_FALLBACKS` dict.
 
@@ -127,24 +131,31 @@ If enforcement fails 3x, returns safe fallback from `SAFE_FALLBACKS` dict.
 
 | Category | Examples | Priority |
 |----------|----------|----------|
+| SILENCE | "[silence]" (from frontend timer) | 0 (handled without LLM) |
 | STOP | "bye", "band karo" | 1 (highest) |
 | COMFORT | "bahut mushkil", "I give up" | 2 |
 | DISPUTE | "maine sahi bola" | 3 |
 | REPEAT | "phir se bolo" | 4 |
 | HOMEWORK | "homework hai" | 5 |
-| SUBJECT | "math padha" (in DISCOVERING_TOPIC) | 6 |
-| IDK | "pata nahi", "nahi samjha" | 7 |
-| ACK | "haan", "samajh gaya" | 8 |
-| CONCEPT | "explain karo", "kya hai" | 9 |
-| ANSWER | numbers, fractions (in WAITING_ANSWER) | 10 |
-| TROLL | short off-topic | 11 (lowest) |
+| IDK | "pata nahi", "nahi samjha" | 6 |
+| ACK | "haan", "samajh gaya" | 7 |
+| CONCEPT | "explain karo", "kya hai" | 8 |
+| ANSWER | numbers, fractions (in WAITING_ANSWER) | 9 |
+| TROLL | short off-topic | 10 (lowest) |
+
+**Note:** SUBJECT category disabled for MVP (math only).
 
 ## API ENDPOINTS
 
 ```
 POST /api/auth/student          → {pin} → {token, student_id, name}
-POST /api/student/session/start → Bearer token → {session_id, greeting_text, greeting_audio_b64}
-POST /api/student/session/message → {session_id, audio|text} → {didi_text, didi_audio_b64, state, verdict}
+POST /api/student/session/start → Bearer token → {session_id, greeting_text, greeting_audio_b64, state}
+POST /api/student/session/message → {session_id, audio|text} → {
+    didi_text, didi_audio_b64, state,
+    student_transcript,  # What STT heard
+    verdict, diagnostic,
+    stt_ms, llm_ms, tts_ms, total_ms  # Latency metrics
+}
 POST /api/student/session/end   → {session_id} → {summary_text, questions_attempted, questions_correct}
 GET  /health                    → {status: "ok", version: "7.0.0"}
 GET  /healthz                   → same (Railway health check)
@@ -152,19 +163,21 @@ GET  /healthz                   → same (Railway health check)
 
 ## VOICE CONFIGURATION
 
+### STT (Sarvam Saarika v2.5) — DEFAULT
+- **Model:** saarika:v2.5
+- **API:** https://api.sarvam.ai/speech-to-text
+- **Language:** hi-IN (handles Hindi-English code-mixing natively)
+- **Key feature:** Native code-mixed speech support — no phonetic mapping needed
+- **Fallback:** Set `STT_PROVIDER=groq_whisper` if Sarvam has issues
+
 ### TTS (Sarvam Bulbul v3)
-- **Speaker:** simran (warm Indian female)
+- **Speaker:** simran (warm Indian female) — DO NOT CHANGE
 - **Language:** hi-IN (LOCKED — never switch mid-session)
 - **Pace:** 0.90
 - **Temperature:** 0.6
 - **Char limit:** 2000 (truncate longer text)
 - **Single call** — no chunking (v6.2.4 lesson)
 - **Payload keys:** `sample_rate` (not speech_sample_rate), `audio_format: "mp3"`
-
-### STT (Groq Whisper)
-- **Model:** whisper-large-v3-turbo
-- **Language:** hi (force Hindi to avoid English garbage)
-- **Confidence threshold:** 0.4
 
 ### LLM (OpenAI)
 - **Model:** gpt-4o
@@ -186,15 +199,17 @@ question_bank   → id, subject, chapter, question_text, question_voice, answer,
 ```bash
 # Required
 OPENAI_API_KEY=sk-...
-GROQ_API_KEY=gsk_...
-SARVAM_API_KEY=sk_...
+SARVAM_API_KEY=sk_...      # Used for BOTH TTS and STT
+
+# Optional (has defaults)
+GROQ_API_KEY=gsk_...       # Only if using groq_whisper STT
 
 # Database (default: SQLite)
 DATABASE_URL=sqlite:///idna.db
 
 # Provider selection
-STT_PROVIDER=groq_whisper    # or: sarvam_saarika
-TTS_PROVIDER=sarvam_bulbul   # or: mock (for testing)
+STT_PROVIDER=sarvam_saarika  # DEFAULT. Options: sarvam_saarika | groq_whisper | sarvam_saaras
+TTS_PROVIDER=sarvam_bulbul   # Options: sarvam_bulbul | mock (for testing)
 LLM_PROVIDER=openai_gpt4o
 
 # JWT
@@ -209,7 +224,7 @@ RESET_DATABASE=true  # DANGER: drops all tables on startup
 ### Module Boundaries (NO LLM except llm.py)
 - `state_machine.py` — Pure Python. Deterministic transitions.
 - `input_classifier.py` — Pure Python. Phrase matching only.
-- `answer_checker.py` — Pure Python. Fraction math, no external imports.
+- `answer_checker.py` — Pure Python. Fraction math + Hindi phonetic mappings.
 - `enforcer.py` — Pure Python. Rule application.
 - `instruction_builder.py` — Builds prompts, doesn't call LLM.
 - `llm.py` — ONLY file that calls OpenAI.
@@ -217,7 +232,7 @@ RESET_DATABASE=true  # DANGER: drops all tables on startup
 ### Never Modify
 - `app/main.py` lifespan (startup/shutdown)
 - `app/routers/student.py` pipeline order
-- `app/tutor/state_machine.py` state names (frontend depends on them)
+- TTS speaker (simran) — user requirement
 
 ## TEST SUITE (69 tests)
 
@@ -233,33 +248,30 @@ python -m pytest tests/test_core.py -v
 | TestEnforcer | 4 tests — rules enforcement |
 | TestCleanForTTS | 5 tests — fraction/symbol conversion |
 
-## VERIFIED FLOWS
+## VERIFIED FLOWS (v7.0.1 MVP)
 
 | Turn | Input | State Transition | Response |
 |------|-------|------------------|----------|
-| Start | — | GREETING → DISCOVERING_TOPIC | "Namaste {name}! Aaj school kaisa raha?" |
-| 1 | "math padha" | DISCOVERING_TOPIC → CHECKING_UNDERSTANDING | Probe question |
-| 2 | "haan" | CHECKING_UNDERSTANDING → WAITING_ANSWER | Read question |
-| 3 | "minus 5 by 9" (correct) | WAITING_ANSWER → NEXT_QUESTION | "Bilkul sahi!" + next |
-| 3 | "3" (wrong) | WAITING_ANSWER → HINT_1 | Diagnostic + hint |
-| 4 | "pata nahi" | HINT_1 → HINT_2 | Second hint |
-| 5 | "pata nahi" | HINT_2 → FULL_SOLUTION | Walk through solution |
+| Start | — | GREETING → WAITING_ANSWER | "Namaste {name}! Chalo math practice. Pehla sawaal: ..." |
+| 1 | "minus 5 by 9" (correct) | WAITING_ANSWER → NEXT_QUESTION | "Bilkul sahi!" + next question |
+| 1 | "3" (wrong) | WAITING_ANSWER → HINT_1 | Diagnostic + hint |
+| 2 | "pata nahi" | HINT_1 → HINT_2 | Second hint |
+| 3 | "pata nahi" | HINT_2 → FULL_SOLUTION | Walk through solution |
 | Any | "bahut mushkil" | → COMFORT | "Koi baat nahi..." |
 | Any | "bye" | → SESSION_COMPLETE | Summary + goodbye |
+| 15s silence | "[silence]" | Stay in state | "Aap wahan ho?" (no LLM) |
 
-## LESSONS LEARNED (Preserved from v6 + v7 deployment)
+## LESSONS LEARNED
 
+### Core Principles
 - Never concatenate MP3 files — browsers stop at second header
 - Lock hi-IN always — switching sounds like different person
 - Clean fractions before TTS — "-3/7" becomes garbled
 - Always address emotional feedback FIRST before continuing
 - Never say "Bahut accha!" unless student actually answered correctly
-- Include conversation history in ALL LLM calls
-- Real teachers ask "what did you do?" before correcting (but only once)
-- Keep LLM responses short (< 400 chars) for natural speech
-- Use Whisper AUTO-DETECT for STT, NOT forced language
+- Keep LLM responses short (< 40 words) for faster TTS
 
-### v7.0 Deployment Lessons
+### v7.0 Deployment (Feb 16, 2026)
 - Railway needs `/healthz` endpoint (not just `/health`)
 - Sarvam TTS payload: use `sample_rate` not `speech_sample_rate`
 - Sarvam TTS payload: include `audio_format: "mp3"` and `temperature`
@@ -268,10 +280,22 @@ python -m pytest tests/test_core.py -v
 - Procfile must match entry point: `uvicorn app.main:app`
 - Seed test student on fresh database for testing
 
+### v7.0.1 STT Fix (Feb 16, 2026)
+- **Whisper can't handle Hinglish** — forces everything to one language
+- **Sarvam Saarika handles code-mixed speech natively** — permanent fix
+- "minus five by nine" transcribes correctly without phonetic mapping
+- Keep Groq Whisper as fallback option
+
+### v7.0.1 MVP Simplification (Feb 16, 2026)
+- **Removed DISCOVERING_TOPIC** — MVP has only math, no need to ask
+- Session starts directly with first question → faster time-to-value
+- Subject selection will be UI buttons when Science/Hindi added
+- Voice-based subject detection unreliable with Hindi/Devanagari
+
 ## GAP ANALYSIS (Phase 2 Features)
 
 See `GAP_ANALYSIS.md` for vision alignment. Key gaps for future:
-- P0: Silence handling (15s timeout → nudge)
+- P0: ~~Silence handling~~ ✅ Done (SILENCE category)
 - P1: Full 8-step learning loop (activation, generalization, variation)
 - P1: Session modes (revision, exam practice)
 - P2: Student persona detection (beginner/average/advanced)
