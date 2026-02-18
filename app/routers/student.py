@@ -102,7 +102,7 @@ def start_session(
         student_id=student_id,
         session_type="student",
         subject="math",
-        chapter="ch1_rational_numbers",
+        chapter="ch1_square_and_cube",
         state="GREETING",
         language=student.preferred_language,
     )
@@ -112,7 +112,7 @@ def start_session(
 
     # Pick first question (or weakest skill question for returning students)
     first_question = memory.pick_next_question(
-        db, student_id, "math", "ch1_rational_numbers", asked_question_ids=[]
+        db, student_id, "math", "ch1_square_and_cube", asked_question_ids=[]
     )
     if first_question:
         session.current_question_id = first_question["id"]
@@ -151,7 +151,7 @@ def start_session(
         session_id=session.id,
         greeting_text=greeting_text,
         greeting_audio_b64=base64.b64encode(tts_result.audio_bytes).decode(),
-        state="DISCOVERING_TOPIC",
+        state=session.state,
     )
 
 
@@ -257,7 +257,7 @@ def process_message(
     ctx = {
         "student_text": student_text,
         "subject": session.subject or "math",
-        "chapter": session.chapter or "ch1_rational_numbers",
+        "chapter": session.chapter or "ch1_square_and_cube",
         "current_question_id": session.current_question_id,
         "current_hint_level": session.current_hint_level,
         "current_reteach_count": session.current_reteach_count,
@@ -329,7 +329,7 @@ def process_message(
             q = memory.pick_next_question(
                 db, session.student_id,
                 session.subject or "math",
-                session.chapter or "ch1_rational_numbers",
+                session.chapter or "ch1_square_and_cube",
                 asked_ids,
                 difficulty_preference=action.extra.get("difficulty"),
             )

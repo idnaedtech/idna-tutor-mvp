@@ -228,6 +228,14 @@ class TestInputClassifier:
     def test_answer_fraction(self):
         assert self.classify("2 by 7", current_state="WAITING_ANSWER") == "ANSWER"
 
+    def test_haan_during_waiting_answer_is_answer(self):
+        """Yes/no answers like 'haan' should be ANSWER during WAITING_ANSWER state."""
+        assert self.classify("haan", current_state="WAITING_ANSWER") == "ANSWER"
+
+    def test_yes_during_waiting_answer_is_answer(self):
+        """Yes/no answers like 'yes' should be ANSWER during WAITING_ANSWER state."""
+        assert self.classify("yes", current_state="WAITING_ANSWER") == "ANSWER"
+
     # test_subject_math removed — SUBJECT category disabled for MVP (math only)
 
     def test_homework(self):

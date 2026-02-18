@@ -226,14 +226,10 @@ def classify_student_input(
 
     # 8. ACK — student acknowledges understanding
     if _has_match(text, _ACK_PHRASES):
-        # But: if we're WAITING_ANSWER and student says "haan"
-        # they might mean "yes, that's my answer" — context matters
+        # In WAITING_ANSWER state, "haan"/"yes" could be actual answers
+        # to yes/no questions (e.g., "Kya 49 ek perfect square hai?")
         if current_state == "WAITING_ANSWER":
-            # Short ACK during answer phase = probably ACK, not answer
-            if len(text_lower.split()) <= 2:
-                return "ACK"
-            # Longer text during answer phase = treat as answer
-            return "ANSWER"
+            return "ANSWER"  # Let answer_checker evaluate it
         return "ACK"
 
     # 9. CONCEPT — student asks for explanation

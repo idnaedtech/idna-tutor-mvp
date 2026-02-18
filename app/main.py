@@ -62,23 +62,32 @@ async def lifespan(app: FastAPI):
 def _seed_questions(db):
     """Load seed questions into the database."""
     from app.content.seed_questions import QUESTIONS
+
+    # Map difficulty strings to integers
+    diff_map = {"easy": 1, "medium": 2, "hard": 3}
+
     for q_data in QUESTIONS:
+        # Handle both old format (rational numbers) and new format (square/cube)
+        difficulty = q_data.get("difficulty", 1)
+        if isinstance(difficulty, str):
+            difficulty = diff_map.get(difficulty, 2)
+
         q = Question(
             id=q_data["id"],
-            subject=q_data["subject"],
+            subject=q_data.get("subject", "math"),
             chapter=q_data["chapter"],
-            class_level=q_data["class_level"],
-            question_type=q_data["question_type"],
-            question_text=q_data["question_text"],
-            question_voice=q_data["question_voice"],
+            class_level=q_data.get("class_level", 8),
+            question_type=q_data.get("question_type") or q_data.get("type", "direct"),
+            question_text=q_data.get("question_text") or q_data.get("question_en") or q_data.get("question"),
+            question_voice=q_data.get("question_voice") or q_data.get("question"),
             answer=q_data["answer"],
-            answer_variants=q_data.get("answer_variants"),
+            answer_variants=q_data.get("answer_variants") or q_data.get("accept_patterns"),
             key_concepts=q_data.get("key_concepts"),
             eval_method=q_data.get("eval_method", "exact"),
             hints=q_data.get("hints"),
-            solution=q_data.get("solution"),
+            solution=q_data.get("solution") or q_data.get("explanation"),
             target_skill=q_data["target_skill"],
-            difficulty=q_data.get("difficulty", 1),
+            difficulty=difficulty,
             active=True,
         )
         db.add(q)

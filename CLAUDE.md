@@ -1,11 +1,11 @@
-# IDNA Tutor Architecture v7.0.2 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v7.0.3 — CLAUDE CODE RULES
 
 ## OVERVIEW
 
 Voice-first AI math tutor for CBSE Class 8 students (India). Full rewrite with deterministic state machine — Python decides flow, LLM only generates spoken words.
 
 **Entry point:** `uvicorn app.main:app --port 8000`
-**Tests:** `python -m pytest tests/ -v` (80 tests)
+**Tests:** `python -m pytest tests/ -v` (82 tests)
 **Production:** https://idna-tutor-mvp-production.up.railway.app
 **Test student:** PIN `1234` (name: Priya, class 8)
 
@@ -39,7 +39,7 @@ app/
 └── parent_engine/          → Parent voice sessions (scaffolded)
 
 tests/
-├── test_core.py            → 68 tests: answer_checker, classifier, enforcer, clean_for_tts
+├── test_core.py            → 70 tests: answer_checker, classifier, enforcer, clean_for_tts
 └── test_ch1_square_cube.py → 12 tests: new chapter question bank validation
 
 web/
@@ -309,6 +309,13 @@ python -m pytest tests/ -v
 - Added Hindi number words: ekkees (21), baees (22), tees (30), sau (100), hazaar (1000)
 - TTS now handles √ (square root), ∛ (cube root), ² (ka square), ³ (ka cube)
 - Total questions: 60 (10 rational numbers + 50 squares/cubes)
+
+### v7.0.3 Yes/No Question Fix (Feb 18, 2026)
+- **Fixed yes/no answer classification** — "haan"/"yes" in WAITING_ANSWER now classified as ANSWER, not ACK
+- Yes/no questions (e.g., "Kya 49 ek perfect square hai?") now work correctly
+- Session start returns actual state (WAITING_ANSWER) instead of hardcoded DISCOVERING_TOPIC
+- Added 2 new classifier tests for yes/no during answer phase
+- 82 tests total
 
 ## GAP ANALYSIS (Phase 2 Features)
 
