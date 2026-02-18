@@ -322,6 +322,11 @@ python -m pytest tests/ -v
 
 **Lesson:** SessionTurn stores both student input AND didi response in one row. The `speaker` field is always "student". To get prev_response, use `session.turns[-1].didi_response` — don't filter by speaker.
 
+### v7.0.4 Chapter Switch (Feb 18, 2026)
+- **Default chapter changed** — `ch1_square_and_cube` (50 questions) instead of `ch1_rational_numbers` (10 questions)
+- ch1_rational_numbers questions retained, just not default
+- Verified: 50 questions, 28 SKILL_TEACHING entries, pre_teach + hints present
+
 ## GAP ANALYSIS (Phase 2 Features)
 
 See `GAP_ANALYSIS.md` for vision alignment. Key gaps for future:
