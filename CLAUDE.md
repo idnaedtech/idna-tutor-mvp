@@ -327,6 +327,23 @@ python -m pytest tests/ -v
 - ch1_rational_numbers questions retained, just not default
 - Verified: 50 questions, 28 SKILL_TEACHING entries, pre_teach + hints present
 
+### v7.1.0 VAD Auto-Recording (Feb 18, 2026)
+- **Removed mic button** — replaced with voice status indicator (green/yellow/blue dots)
+- **Silero VAD** — browser-based voice activity detection via `@ricky0123/vad-web`
+- Auto-detects speech start/end, no tapping required
+- VAD tuning: positiveSpeechThreshold=0.6, redemptionFrames=12 (750ms pause)
+- **Silence timer fixed** — 30s timeout, only triggers AFTER Didi finishes speaking
+- Fallback manual mic button if WASM not supported
+
+### v7.1.1 Streaming LLM + TTS (Feb 18, 2026)
+- **Sentence-level streaming** — LLM streams, TTS generates per sentence
+- **Reduced latency** — First audio plays in ~3s instead of ~10s
+- New endpoint: `/session/message-stream` (SSE)
+- `llm.py`: Added `generate_streaming()` with sentence boundary detection
+- `tts.py`: Added `synthesize_async()` for parallel TTS
+- Frontend plays audio chunks as they arrive
+- Non-streaming fallback if SSE fails
+
 ## GAP ANALYSIS (Phase 2 Features)
 
 See `GAP_ANALYSIS.md` for vision alignment. Key gaps for future:
