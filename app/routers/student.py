@@ -98,7 +98,7 @@ def start_session(
     db.commit()
 
     # Create new session — MVP: Math only, skip topic discovery
-    chapter = "ch1_rational_numbers"  # Default chapter
+    chapter = "ch1_square_and_cube"  # Default to new chapter (was ch1_rational_numbers)
     session = Session(
         student_id=student_id,
         session_type="student",
