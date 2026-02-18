@@ -310,11 +310,13 @@ python -m pytest tests/ -v
 - TTS now handles √ (square root), ∛ (cube root), ² (ka square), ³ (ka cube)
 - Total questions: 60 (10 rational numbers + 50 squares/cubes)
 
-### v7.0.3 Yes/No Question Fix (Feb 18, 2026)
+### v7.0.3 P0 Fixes (Feb 18, 2026)
 - **Fixed yes/no answer classification** — "haan"/"yes" in WAITING_ANSWER now classified as ANSWER, not ACK
-- Yes/no questions (e.g., "Kya 49 ek perfect square hai?") now work correctly
-- Session start returns actual state (WAITING_ANSWER) instead of hardcoded DISCOVERING_TOPIC
-- Added 2 new classifier tests for yes/no during answer phase
+- **Added Hindi IDK/COMFORT phrases** — Devanagari + Romanized (पता नहीं, समझ नहीं आया, मुझसे नहीं होगा)
+- **Fixed repetition loop** — Varied fallbacks rotate responses when LLM enforcement fails 3x
+- **CONCEPT questions during hints** — Transition to TEACHING state to answer student questions
+- **Teaching uses SKILL_TEACHING content** — pre_teach, indian_example, key_insight with reteach levels
+- **Moved CONCEPT check before ACK** — Prevents false matches ("hai" matching "ha")
 - 82 tests total
 
 ## GAP ANALYSIS (Phase 2 Features)
