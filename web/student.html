@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Didi — Study Session</title>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- VAD: ONNX Runtime + Silero VAD -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/bundle.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -73,7 +76,7 @@
             gap: 4px;
         }
 
-        .status-dot {
+        .status-dot-header {
             width: 7px;
             height: 7px;
             border-radius: 50%;
@@ -192,86 +195,100 @@
             30% { transform: translateY(-6px); }
         }
 
-        /* ─── Input Area ─────────────────────────────── */
-        .input-area {
-            padding: 12px 16px 20px;
+        /* ─── Voice Status Area (replaces mic button) ─── */
+        .voice-area {
+            padding: 16px;
             background: white;
             border-top: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            text-align: center;
             flex-shrink: 0;
         }
 
-        .text-input {
-            flex: 1;
-            padding: 12px 16px;
-            border-radius: 24px;
-            border: 1.5px solid var(--border);
-            font-family: 'Nunito', sans-serif;
-            font-size: 15px;
-            outline: none;
-            background: var(--warm-bg);
-            transition: border-color 0.2s;
+        .voice-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
         }
 
-        .text-input:focus {
-            border-color: var(--primary);
+        .status-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
         }
 
-        .text-input::placeholder {
-            color: #B8AFA6;
+        .status-dot.green { background: #4CAF50; }
+        .status-dot.green.pulse { animation: pulse 2s ease-in-out infinite; }
+        .status-dot.green.bright { background: #66BB6A; box-shadow: 0 0 16px #4CAF50; }
+        .status-dot.yellow { background: #FFC107; }
+        .status-dot.blue { background: #2196F3; }
+        .status-dot.red { background: #F44336; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
         }
 
-        /* Mic button */
-        .mic-btn {
-            width: 52px;
-            height: 52px;
+        .status-text {
+            font-size: 14px;
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        /* Fallback mic button (hidden by default) */
+        .mic-fallback {
+            display: none;
+            text-align: center;
+        }
+
+        .mic-fallback .mic-btn {
+            width: 64px;
+            height: 64px;
             border-radius: 50%;
             border: none;
             background: linear-gradient(135deg, var(--primary), #FF8A50);
             color: white;
-            font-size: 22px;
+            font-size: 28px;
             cursor: pointer;
-            flex-shrink: 0;
             box-shadow: 0 4px 16px rgba(255,107,53,0.25);
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
         }
 
-        .mic-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 24px rgba(255,107,53,0.3);
-        }
-
-        .mic-btn.recording {
+        .mic-fallback .mic-btn.recording {
             background: #E53E3E;
             animation: pulse 1s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(229,62,62,0.4); }
-            50% { box-shadow: 0 0 0 12px rgba(229,62,62,0); }
+        /* Text input (optional - kept for accessibility) */
+        .text-input-area {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            padding: 0 16px;
         }
 
-        .mic-btn .mic-icon::before { content: '🎤'; }
-        .mic-btn.recording .mic-icon::before { content: '⏹'; }
+        .text-input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 20px;
+            border: 1.5px solid var(--border);
+            font-family: 'Nunito', sans-serif;
+            font-size: 14px;
+            outline: none;
+            background: var(--warm-bg);
+        }
 
-        /* Send button (appears when text is typed) */
+        .text-input:focus { border-color: var(--primary); }
+
         .send-btn {
-            width: 52px;
-            height: 52px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             border: none;
-            background: linear-gradient(135deg, var(--primary), #FF8A50);
+            background: var(--primary);
             color: white;
-            font-size: 20px;
+            font-size: 16px;
             cursor: pointer;
-            flex-shrink: 0;
-            display: none;
         }
 
         /* ─── Session overlay ─────────────────────────── */
@@ -350,8 +367,8 @@
         <div class="header-info">
             <div class="header-name">Didi दीदी</div>
             <div class="header-status">
-                <span class="status-dot"></span>
-                <span id="statusText">Connecting...</span>
+                <span class="status-dot-header"></span>
+                <span id="headerStatus">Connecting...</span>
             </div>
         </div>
         <button class="header-end-btn" onclick="endSession()">End</button>
@@ -366,14 +383,25 @@
         </div>
     </div>
 
-    <!-- Input -->
-    <div class="input-area">
-        <input type="text" class="text-input" id="textInput" placeholder="Type ya mic dabao..." 
-               oninput="toggleSendBtn()" onkeydown="if(event.key==='Enter')sendText()">
-        <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
-            <span class="mic-icon"></span>
-        </button>
-        <button class="send-btn" id="sendBtn" onclick="sendText()">➤</button>
+    <!-- Voice Status (VAD-based, no mic button) -->
+    <div class="voice-area">
+        <div id="voiceIndicator" class="voice-indicator">
+            <div id="voiceStatus" class="status-dot green pulse"></div>
+            <p id="statusText" class="status-text">Starting...</p>
+        </div>
+
+        <!-- Fallback mic button for browsers without WASM support -->
+        <div id="micFallback" class="mic-fallback">
+            <button id="micBtn" class="mic-btn" onclick="toggleRecording()">🎤</button>
+            <p style="margin-top: 8px; font-size: 12px; color: #999;">Tap to speak</p>
+        </div>
+
+        <!-- Optional text input -->
+        <div class="text-input-area">
+            <input type="text" class="text-input" id="textInput" placeholder="Ya type karo..."
+                   onkeydown="if(event.key==='Enter')sendText()">
+            <button class="send-btn" id="sendBtn" onclick="sendText()">➤</button>
+        </div>
     </div>
 
     <!-- Session end overlay -->
@@ -396,175 +424,287 @@
     </div>
 
     <script>
+    // ============================================================
+    // IDNA v7.1.0 — VAD Auto-Recording + Silence Fix
+    // ============================================================
+
     const API = window.location.origin;
     const token = localStorage.getItem('idna_token');
     const studentName = localStorage.getItem('idna_name') || 'Student';
 
     if (!token) window.location.href = '/';
 
+    // ─── State ─────────────────────────────────────────
     let sessionId = null;
+    let vadInstance = null;
+    let isProcessing = false;   // True while pipeline is running
+    let isDidiSpeaking = false; // True while TTS audio is playing
+    let currentAudio = null;
+
+    // Silence timer (Part C fix)
+    let inactivityTimer = null;
+    const INACTIVITY_TIMEOUT = 30000; // 30 seconds (was 15s)
+
+    // Fallback recording state
     let isRecording = false;
     let mediaRecorder = null;
     let audioChunks = [];
-    let currentAudio = null;
-    let silenceTimer = null;
-    const SILENCE_TIMEOUT = 15000; // 15 seconds
 
+    // DOM refs
     const chatArea = document.getElementById('chatArea');
     const typing = document.getElementById('typing');
-    const micBtn = document.getElementById('micBtn');
-    const sendBtn = document.getElementById('sendBtn');
-    const textInput = document.getElementById('textInput');
+    const voiceStatus = document.getElementById('voiceStatus');
     const statusText = document.getElementById('statusText');
+    const headerStatus = document.getElementById('headerStatus');
+    const textInput = document.getElementById('textInput');
 
-    // ─── Start session on load ─────────────────────────
-    async function startSession() {
-        statusText.textContent = 'Connecting...';
+    // ─── VAD Initialization ────────────────────────────
+    async function initVAD() {
         try {
-            const resp = await fetch(`${API}/api/student/session/start`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
+            vadInstance = await vad.MicVAD.new({
+                // When student starts speaking
+                onSpeechStart: () => {
+                    if (isDidiSpeaking || isProcessing) return;
+                    updateVoiceUI('listening');
+                    clearInactivityTimer(); // Reset silence timer on speech
+                    console.log("[VAD] Speech detected — recording...");
+                },
+
+                // When student stops speaking (silence detected)
+                onSpeechEnd: async (audioFloat32) => {
+                    if (isDidiSpeaking || isProcessing) return;
+
+                    isProcessing = true;
+                    updateVoiceUI('processing');
+                    console.log("[VAD] Speech ended — sending to pipeline...");
+
+                    try {
+                        // Convert Float32Array (16kHz) to WAV blob for STT
+                        const wavBlob = float32ToWav(audioFloat32, 16000);
+                        await sendAudioToPipeline(wavBlob);
+                    } catch (err) {
+                        console.error("[VAD] Pipeline error:", err);
+                        updateVoiceUI('error');
+                        setTimeout(() => updateVoiceUI('ready'), 2000);
+                    } finally {
+                        isProcessing = false;
+                    }
+                },
+
+                // VAD tuning for Indian classroom environments
+                positiveSpeechThreshold: 0.6,
+                negativeSpeechThreshold: 0.35,
+                redemptionFrames: 12,  // ~750ms silence before cutting off
+                minSpeechFrames: 5,    // Minimum speech to avoid clicks
+
+                // CDN paths for ONNX model files
+                workletURL: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/vad.worklet.bundle.min.js",
+                modelURL: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/silero_vad.onnx",
+                ortWasmRoot: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
             });
 
-            if (!resp.ok) throw new Error('Session start failed');
+            console.log("[VAD] Initialized successfully");
+            return true;
 
-            const data = await resp.json();
-            sessionId = data.session_id;
-            statusText.textContent = 'Online';
-
-            // Show greeting
-            addMessage('didi', data.greeting_text, data.greeting_audio_b64);
-
-            // Auto-play greeting
-            if (data.greeting_audio_b64) {
-                playAudioB64(data.greeting_audio_b64);
-            }
-
-            resetSilenceTimer();
         } catch (err) {
-            statusText.textContent = 'Connection error';
-            addMessage('didi', 'Server se connect nahi ho pa rahi. Thodi der baad try karo.');
+            console.error("[VAD] Init failed:", err);
+            return false;
         }
     }
 
-    // ─── Messages ──────────────────────────────────────
-    function addMessage(who, text, audioB64 = null) {
-        const div = document.createElement('div');
-        div.className = `msg ${who}`;
+    // Start VAD listening
+    function startListening() {
+        if (vadInstance && !isDidiSpeaking && !isProcessing) {
+            vadInstance.start();
+            updateVoiceUI('ready');
+            startInactivityTimer(); // Start silence timer when ready for input
+        }
+    }
 
-        let html = `<div class="text">${text}</div>`;
+    // Pause VAD (when Didi is speaking)
+    function pauseListening() {
+        if (vadInstance) {
+            vadInstance.pause();
+        }
+        clearInactivityTimer(); // Don't count silence while Didi speaks
+    }
 
-        if (audioB64 && who === 'didi') {
-            html += `<button class="play-btn" onclick="playAudioB64('${audioB64}')">
-                🔊 Sunein
-            </button>`;
+    // Convert Float32Array to WAV blob
+    function float32ToWav(float32Array, sampleRate) {
+        const buffer = new ArrayBuffer(44 + float32Array.length * 2);
+        const view = new DataView(buffer);
+
+        const writeString = (offset, str) => {
+            for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+        };
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + float32Array.length * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);        // PCM
+        view.setUint16(22, 1, true);        // Mono
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);       // 16-bit
+        writeString(36, 'data');
+        view.setUint32(40, float32Array.length * 2, true);
+
+        const offset = 44;
+        for (let i = 0; i < float32Array.length; i++) {
+            const s = Math.max(-1, Math.min(1, float32Array[i]));
+            view.setInt16(offset + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
         }
 
-        const now = new Date();
-        const time = now.getHours().toString().padStart(2,'0') + ':' + 
-                     now.getMinutes().toString().padStart(2,'0');
-        html += `<div class="timestamp">${time}</div>`;
-
-        div.innerHTML = html;
-
-        // Insert before typing indicator
-        chatArea.insertBefore(div, typing);
-        scrollToBottom();
+        return new Blob([buffer], { type: 'audio/wav' });
     }
 
-    function scrollToBottom() {
-        chatArea.scrollTop = chatArea.scrollHeight;
+    // ─── Voice UI Updates ──────────────────────────────
+    function updateVoiceUI(state) {
+        switch (state) {
+            case 'ready':
+                voiceStatus.className = 'status-dot green pulse';
+                statusText.textContent = 'Aapki baari — boliye!';
+                break;
+            case 'listening':
+                voiceStatus.className = 'status-dot green bright';
+                statusText.textContent = 'Sun rahi hoon...';
+                break;
+            case 'processing':
+                voiceStatus.className = 'status-dot yellow';
+                statusText.textContent = 'Didi soch rahi hai...';
+                break;
+            case 'didi-speaking':
+                voiceStatus.className = 'status-dot blue';
+                statusText.textContent = 'Didi bol rahi hai...';
+                break;
+            case 'error':
+                voiceStatus.className = 'status-dot red';
+                statusText.textContent = 'Phir se boliye?';
+                break;
+        }
     }
 
-    function showTyping(show) {
-        typing.classList.toggle('show', show);
-        if (show) scrollToBottom();
+    // Show fallback mic button if VAD fails
+    function showManualMicButton() {
+        document.getElementById('voiceIndicator').style.display = 'none';
+        document.getElementById('micFallback').style.display = 'block';
+    }
+
+    // ─── Inactivity Timer (Part C fix) ─────────────────
+    function startInactivityTimer() {
+        clearInactivityTimer();
+        inactivityTimer = setTimeout(() => {
+            // Only trigger if not speaking and not processing
+            if (!isDidiSpeaking && !isProcessing && sessionId) {
+                console.log("[Silence] 30s inactivity — sending nudge");
+                sendSilenceNudge();
+            }
+        }, INACTIVITY_TIMEOUT);
+    }
+
+    function clearInactivityTimer() {
+        if (inactivityTimer) {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = null;
+        }
+    }
+
+    async function sendSilenceNudge() {
+        const formData = new FormData();
+        formData.append('session_id', sessionId);
+        formData.append('text', '[silence]');
+
+        try {
+            const resp = await fetch(`${API}/api/student/session/message`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData,
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                addMessage('didi', data.didi_text, data.didi_audio_b64);
+                if (data.didi_audio_b64) {
+                    await playDidiAudio(data.didi_audio_b64);
+                }
+            }
+        } catch (e) {
+            console.error("[Silence] Nudge failed:", e);
+        }
+
+        // Restart timer after nudge
+        startInactivityTimer();
     }
 
     // ─── Audio Playback ────────────────────────────────
-    function playAudioB64(b64) {
-        if (currentAudio) {
-            currentAudio.pause();
-            currentAudio = null;
-        }
+    async function playDidiAudio(b64) {
+        isDidiSpeaking = true;
+        pauseListening();
+        updateVoiceUI('didi-speaking');
 
-        try {
-            const bytes = atob(b64);
-            const arr = new Uint8Array(bytes.length);
-            for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        return new Promise((resolve) => {
+            try {
+                const bytes = atob(b64);
+                const arr = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
 
-            // Try mp3 first, then wav
-            const blob = new Blob([arr], { type: 'audio/mp3' });
-            const url = URL.createObjectURL(blob);
-            currentAudio = new Audio(url);
-            currentAudio.play().catch(() => {
-                // Try wav
-                const blob2 = new Blob([arr], { type: 'audio/wav' });
-                const url2 = URL.createObjectURL(blob2);
-                currentAudio = new Audio(url2);
-                currentAudio.play().catch(e => console.error('Audio play failed:', e));
-            });
-        } catch (e) {
-            console.error('Audio decode error:', e);
-        }
+                const blob = new Blob([arr], { type: 'audio/mp3' });
+                const url = URL.createObjectURL(blob);
+
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+
+                currentAudio = new Audio(url);
+
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(url);
+                    isDidiSpeaking = false;
+                    currentAudio = null;
+
+                    // Auto-start listening after Didi finishes
+                    startListening();
+                    resolve();
+                };
+
+                currentAudio.onerror = (e) => {
+                    console.error("[Audio] Playback error:", e);
+                    isDidiSpeaking = false;
+                    startListening();
+                    resolve();
+                };
+
+                currentAudio.play().catch((e) => {
+                    console.error("[Audio] Play failed:", e);
+                    isDidiSpeaking = false;
+                    startListening();
+                    resolve();
+                });
+
+            } catch (e) {
+                console.error("[Audio] Decode error:", e);
+                isDidiSpeaking = false;
+                startListening();
+                resolve();
+            }
+        });
     }
 
-    // ─── Recording ─────────────────────────────────────
-    async function toggleRecording() {
-        if (isRecording) {
-            stopRecording();
-        } else {
-            startRecording();
-        }
-    }
-
-    async function startRecording() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: true, noiseSuppression: true } 
-            });
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-            audioChunks = [];
-
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunks.push(e.data);
-            };
-
-            mediaRecorder.onstop = () => {
-                stream.getTracks().forEach(t => t.stop());
-                const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                sendAudio(blob);
-            };
-
-            mediaRecorder.start();
-            isRecording = true;
-            micBtn.classList.add('recording');
-            clearSilenceTimer();
-        } catch (err) {
-            console.error('Mic access denied:', err);
-            addMessage('didi', 'Microphone ki permission chahiye. Browser settings check karo.');
-        }
-    }
-
-    function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-        }
-        isRecording = false;
-        micBtn.classList.remove('recording');
-    }
-
-    // ─── Send Audio ────────────────────────────────────
-    async function sendAudio(blob) {
+    // ─── Send Audio to Pipeline ────────────────────────
+    async function sendAudioToPipeline(wavBlob) {
         if (!sessionId) return;
 
-        // Show student bubble with "..."
+        // Show student bubble placeholder
         addMessage('student', '🎤 ...');
         showTyping(true);
 
         const formData = new FormData();
         formData.append('session_id', sessionId);
-        formData.append('audio', blob, 'recording.webm');
+        formData.append('audio', wavBlob, 'recording.wav');
 
         try {
             const resp = await fetch(`${API}/api/student/session/message`, {
@@ -583,17 +723,22 @@
             // Update student bubble with actual transcript
             const studentMsgs = chatArea.querySelectorAll('.msg.student');
             const lastStudent = studentMsgs[studentMsgs.length - 1];
-            if (lastStudent) {
-                lastStudent.querySelector('.text').textContent =
-                    data.verdict ? `${getStudentText(data)} ${getVerdictEmoji(data.verdict)}` : getStudentText(data);
+            if (lastStudent && data.student_transcript) {
+                const text = data.verdict
+                    ? `${data.student_transcript} ${getVerdictEmoji(data.verdict)}`
+                    : data.student_transcript;
+                lastStudent.querySelector('.text').textContent = text;
             }
 
             // Add Didi's response
             addMessage('didi', data.didi_text, data.didi_audio_b64);
 
-            // Auto-play Didi's response
+            // Play Didi's response
             if (data.didi_audio_b64) {
-                playAudioB64(data.didi_audio_b64);
+                await playDidiAudio(data.didi_audio_b64);
+            } else {
+                // No audio, just resume listening
+                startListening();
             }
 
             // Check session end
@@ -601,11 +746,11 @@
                 setTimeout(() => endSession(), 2000);
             }
 
-            resetSilenceTimer();
         } catch (err) {
             showTyping(false);
             addMessage('didi', 'Kuch gadbad ho gayi. Ek baar phir try karo.');
-            resetSilenceTimer();
+            updateVoiceUI('error');
+            setTimeout(() => startListening(), 2000);
         }
     }
 
@@ -615,10 +760,11 @@
         if (!text || !sessionId) return;
 
         textInput.value = '';
-        toggleSendBtn();
+        clearInactivityTimer();
 
         addMessage('student', text);
         showTyping(true);
+        updateVoiceUI('processing');
 
         const formData = new FormData();
         formData.append('session_id', sessionId);
@@ -641,65 +787,108 @@
             addMessage('didi', data.didi_text, data.didi_audio_b64);
 
             if (data.didi_audio_b64) {
-                playAudioB64(data.didi_audio_b64);
+                await playDidiAudio(data.didi_audio_b64);
+            } else {
+                startListening();
             }
 
             if (data.state === 'SESSION_COMPLETE') {
                 setTimeout(() => endSession(), 2000);
             }
 
-            resetSilenceTimer();
         } catch (err) {
             showTyping(false);
             addMessage('didi', 'Connection mein problem. Ek baar phir try karo.');
-            resetSilenceTimer();
+            startListening();
         }
     }
 
-    // ─── Silence Timer (P0 gap fix) ────────────────────
-    function resetSilenceTimer() {
-        clearSilenceTimer();
-        silenceTimer = setTimeout(() => {
-            // After 15s silence, send a nudge
-            if (sessionId) {
-                sendSilenceNudge();
-            }
-        }, SILENCE_TIMEOUT);
-    }
-
-    function clearSilenceTimer() {
-        if (silenceTimer) {
-            clearTimeout(silenceTimer);
-            silenceTimer = null;
+    // ─── Fallback Manual Recording ─────────────────────
+    async function toggleRecording() {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
         }
     }
 
-    async function sendSilenceNudge() {
-        // Send empty text to trigger the repeat/nudge mechanism
-        const formData = new FormData();
-        formData.append('session_id', sessionId);
-        formData.append('text', '[silence]');
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true }
+            });
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                sendAudioToPipeline(blob);
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            document.getElementById('micBtn').classList.add('recording');
+            document.getElementById('micBtn').textContent = '⏹';
+            clearInactivityTimer();
+
+        } catch (err) {
+            console.error('Mic access denied:', err);
+            addMessage('didi', 'Microphone ki permission chahiye.');
+        }
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+        isRecording = false;
+        document.getElementById('micBtn').classList.remove('recording');
+        document.getElementById('micBtn').textContent = '🎤';
+    }
+
+    // ─── Session Start ─────────────────────────────────
+    async function startSession() {
+        headerStatus.textContent = 'Connecting...';
+        statusText.textContent = 'Starting...';
 
         try {
-            const resp = await fetch(`${API}/api/student/session/message`, {
+            const resp = await fetch(`${API}/api/student/session/start`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
-                body: formData,
             });
 
-            if (resp.ok) {
-                const data = await resp.json();
-                addMessage('didi', data.didi_text, data.didi_audio_b64);
-                if (data.didi_audio_b64) playAudioB64(data.didi_audio_b64);
-            }
-        } catch (e) { /* silent fail */ }
+            if (!resp.ok) throw new Error('Session start failed');
 
-        resetSilenceTimer();
+            const data = await resp.json();
+            sessionId = data.session_id;
+            headerStatus.textContent = 'Online';
+
+            // Show greeting
+            addMessage('didi', data.greeting_text, data.greeting_audio_b64);
+
+            // Play greeting, then start listening
+            if (data.greeting_audio_b64) {
+                await playDidiAudio(data.greeting_audio_b64);
+            } else {
+                startListening();
+            }
+
+        } catch (err) {
+            headerStatus.textContent = 'Connection error';
+            statusText.textContent = 'Error';
+            addMessage('didi', 'Server se connect nahi ho pa rahi. Thodi der baad try karo.');
+        }
     }
 
     // ─── End Session ───────────────────────────────────
     async function endSession() {
-        clearSilenceTimer();
+        clearInactivityTimer();
+        if (vadInstance) vadInstance.pause();
 
         if (!sessionId) {
             window.location.href = '/';
@@ -722,30 +911,49 @@
                 document.getElementById('statCorrect').textContent = data.questions_correct;
                 document.getElementById('statTotal').textContent = data.questions_attempted;
 
-                if (data.summary_audio_b64) playAudioB64(data.summary_audio_b64);
+                if (data.summary_audio_b64) {
+                    playDidiAudio(data.summary_audio_b64);
+                }
             }
         } catch (e) { /* show overlay anyway */ }
 
         document.getElementById('endOverlay').classList.add('show');
     }
 
-    // ─── Helpers ───────────────────────────────────────
-    function toggleSendBtn() {
-        const hasText = textInput.value.trim().length > 0;
-        sendBtn.style.display = hasText ? 'block' : 'none';
-        micBtn.style.display = hasText ? 'none' : 'flex';
-    }
+    // ─── Messages ──────────────────────────────────────
+    function addMessage(who, text, audioB64 = null) {
+        const div = document.createElement('div');
+        div.className = `msg ${who}`;
 
-    function getStudentText(data) {
-        // Show what Whisper heard (student_transcript from API)
-        if (data.student_transcript) {
-            return data.student_transcript;
+        let html = `<div class="text">${text}</div>`;
+
+        if (audioB64 && who === 'didi') {
+            html += `<button class="play-btn" onclick="playDidiAudio('${audioB64}')">
+                🔊 Sunein
+            </button>`;
         }
-        return '🎤 ...';
+
+        const now = new Date();
+        const time = now.getHours().toString().padStart(2,'0') + ':' +
+                     now.getMinutes().toString().padStart(2,'0');
+        html += `<div class="timestamp">${time}</div>`;
+
+        div.innerHTML = html;
+        chatArea.insertBefore(div, typing);
+        scrollToBottom();
     }
 
+    function scrollToBottom() {
+        chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function showTyping(show) {
+        typing.classList.toggle('show', show);
+        if (show) scrollToBottom();
+    }
+
+    // ─── Helpers ───────────────────────────────────────
     function logLatency(data) {
-        // Log latency for debugging (visible in browser console)
         if (data.total_ms) {
             console.log(`⏱️ Latency: STT=${data.stt_ms}ms LLM=${data.llm_ms}ms TTS=${data.tts_ms}ms Total=${data.total_ms}ms`);
         }
@@ -758,7 +966,28 @@
     }
 
     // ─── Init ──────────────────────────────────────────
-    startSession();
+    window.addEventListener('load', async () => {
+        // Request mic permission first
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (err) {
+            alert('Mic permission chahiye. Please allow microphone access.');
+            showManualMicButton();
+            await startSession();
+            return;
+        }
+
+        // Try to initialize VAD
+        const vadOk = await initVAD();
+
+        if (!vadOk) {
+            console.log("[VAD] Falling back to manual mic button");
+            showManualMicButton();
+        }
+
+        // Start the session
+        await startSession();
+    });
     </script>
 </body>
 </html>
