@@ -224,24 +224,24 @@ def classify_student_input(
     if _has_match(text, _IDK_PHRASES):
         return "IDK"
 
-    # 8. ACK — student acknowledges understanding
-    if _has_match(text, _ACK_PHRASES):
-        # In WAITING_ANSWER state, "haan"/"yes" could be actual answers
-        # to yes/no questions (e.g., "Kya 49 ek perfect square hai?")
-        if current_state == "WAITING_ANSWER":
-            return "ANSWER"  # Let answer_checker evaluate it
-        return "ACK"
-
-    # 9. CONCEPT — student asks for explanation
+    # 8. CONCEPT — student asks for explanation (check before ACK to avoid "ha" in "hai" matching)
     concept_phrases = [
         "explain", "batao", "bataiye", "kya hai", "samjhao",
-        "samjhaiye", "samjhaiye", "what is", "how", "why", "kaise", "kyun",
+        "samjhaiye", "what is", "how", "why", "kaise", "kyun",
         "बताओ", "बताइये", "क्या है", "समझाओ", "समझाइए", "समझाइये",
         "कैसे", "क्यों", "किस", "कौन सा", "kaun sa", "kis",
         "chapter", "topic", "lesson",
     ]
     if _has_match(text, concept_phrases):
         return "CONCEPT"
+
+    # 9. ACK — student acknowledges understanding
+    if _has_match(text, _ACK_PHRASES):
+        # In WAITING_ANSWER state, "haan"/"yes" could be actual answers
+        # to yes/no questions (e.g., "Kya 49 ek perfect square hai?")
+        if current_state == "WAITING_ANSWER":
+            return "ANSWER"  # Let answer_checker evaluate it
+        return "ACK"
 
     # 10. ANSWER — if we're waiting for an answer and text looks numeric/mathematical
     if current_state == "WAITING_ANSWER":
