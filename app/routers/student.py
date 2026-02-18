@@ -102,7 +102,7 @@ def start_session(
         student_id=student_id,
         session_type="student",
         subject="math",
-        chapter="ch1_square_and_cube",
+        chapter="ch1_rational_numbers",
         state="GREETING",
         language=student.preferred_language,
     )
