@@ -1,4 +1,4 @@
-# IDNA Tutor Architecture v7.0.3 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v7.1.2 — CLAUDE CODE RULES
 
 ## OVERVIEW
 
@@ -334,15 +334,25 @@ python -m pytest tests/ -v
 - VAD tuning: positiveSpeechThreshold=0.6, redemptionFrames=12 (750ms pause)
 - **Silence timer fixed** — 30s timeout, only triggers AFTER Didi finishes speaking
 - Fallback manual mic button if WASM not supported
+- **VAD CDN versions:** Use `@ricky0123/vad-web@0.0.22` + `onnxruntime-web@1.14.0` (stable)
+- **v0.0.29 broken** — `silero_vad_legacy.onnx` 404 errors, WASM import failures
 
-### v7.1.1 Streaming LLM + TTS (Feb 18, 2026)
+### v7.1.1 Streaming LLM + TTS (Feb 18, 2026) — DISABLED
 - **Sentence-level streaming** — LLM streams, TTS generates per sentence
-- **Reduced latency** — First audio plays in ~3s instead of ~10s
 - New endpoint: `/session/message-stream` (SSE)
 - `llm.py`: Added `generate_streaming()` with sentence boundary detection
 - `tts.py`: Added `synthesize_async()` for parallel TTS
-- Frontend plays audio chunks as they arrive
-- Non-streaming fallback if SSE fails
+- **DISABLED:** SSE chunks split mid-JSON causing parse errors
+- **Non-streaming is faster for short responses** (~10s vs ~14s for 40-word limit)
+- Streaming benefit only for long teaching explanations (3+ sentences)
+- TODO: Fix SSE buffering to handle partial JSON chunks
+
+### v7.1.2 P0 TTS Audio Fix (Feb 18, 2026)
+- **Bug:** TTS audio not playing after first message
+- **Root cause:** 366KB base64 string embedded in `onclick="playDidiAudio('${audioB64}')"` broke HTML
+- **Fix:** Store audio in JavaScript `audioCache` object, reference by message ID
+- **Added:** `playAudioById(msgId)` function to retrieve from cache
+- **Added:** Debug logging in `playDidiAudio()` for future troubleshooting
 
 ## GAP ANALYSIS (Phase 2 Features)
 
