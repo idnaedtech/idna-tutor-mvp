@@ -292,6 +292,12 @@ python -m pytest tests/test_core.py -v
 - Subject selection will be UI buttons when Science/Hindi added
 - Voice-based subject detection unreliable with Hindi/Devanagari
 
+### Windows Development (Feb 18, 2026)
+- **Python 3.14 has compatibility issues** — pydantic-core, psycopg2 fail to build
+- **Use Python 3.11 explicitly:** `py -3.11 -m uvicorn app.main:app --port 8000`
+- **Install deps with:** `py -3.11 -m pip install -r requirements.txt`
+- Bash paths need quotes: `cd "C:/Users/User/Documents/idna"`
+
 ## GAP ANALYSIS (Phase 2 Features)
 
 See `GAP_ANALYSIS.md` for vision alignment. Key gaps for future:

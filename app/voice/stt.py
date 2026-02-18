@@ -1,8 +1,8 @@
 """
-IDNA EdTech v7.0 — STT Abstraction Layer
+IDNA EdTech v7.0.1 — STT Abstraction Layer
 Swap providers by changing config.STT_PROVIDER.
-Currently: Groq Whisper (whisper-large-v3-turbo).
-Future: Sarvam Saarika v2.5 or Saaras v3.
+Default: Sarvam Saarika v2.5 (handles Hindi-English code-mixing natively).
+Fallback: Groq Whisper (set STT_PROVIDER=groq_whisper).
 """
 
 import io

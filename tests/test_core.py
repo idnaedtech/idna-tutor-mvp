@@ -228,8 +228,7 @@ class TestInputClassifier:
     def test_answer_fraction(self):
         assert self.classify("2 by 7", current_state="WAITING_ANSWER") == "ANSWER"
 
-    def test_subject_math(self):
-        assert self.classify("aaj math padha", current_state="DISCOVERING_TOPIC") == "SUBJECT"
+    # test_subject_math removed — SUBJECT category disabled for MVP (math only)
 
     def test_homework(self):
         assert self.classify("homework hai") == "HOMEWORK"
