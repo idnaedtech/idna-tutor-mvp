@@ -643,18 +643,29 @@
 
     // ─── Audio Playback ────────────────────────────────
     async function playDidiAudio(b64) {
+        console.log("[Audio] playDidiAudio called, b64 length:", b64 ? b64.length : 0);
+
+        if (!b64 || b64.length === 0) {
+            console.error("[Audio] No audio data provided");
+            startListening();
+            return;
+        }
+
         isDidiSpeaking = true;
         pauseListening();
         updateVoiceUI('didi-speaking');
 
         return new Promise((resolve) => {
             try {
+                console.log("[Audio] Decoding base64...");
                 const bytes = atob(b64);
                 const arr = new Uint8Array(bytes.length);
                 for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
 
+                console.log("[Audio] Creating blob, size:", arr.length, "bytes");
                 const blob = new Blob([arr], { type: 'audio/mp3' });
                 const url = URL.createObjectURL(blob);
+                console.log("[Audio] Blob URL created:", url);
 
                 if (currentAudio) {
                     currentAudio.pause();
@@ -662,8 +673,10 @@
                 }
 
                 currentAudio = new Audio(url);
+                console.log("[Audio] Audio element created");
 
                 currentAudio.onended = () => {
+                    console.log("[Audio] Playback ended successfully");
                     URL.revokeObjectURL(url);
                     isDidiSpeaking = false;
                     currentAudio = null;
@@ -674,14 +687,21 @@
                 };
 
                 currentAudio.onerror = (e) => {
-                    console.error("[Audio] Playback error:", e);
+                    console.error("[Audio] Playback error:", e, currentAudio.error);
                     isDidiSpeaking = false;
                     startListening();
                     resolve();
                 };
 
-                currentAudio.play().catch((e) => {
-                    console.error("[Audio] Play failed:", e);
+                console.log("[Audio] Calling play()...");
+                currentAudio.play().then(() => {
+                    console.log("[Audio] Play started successfully");
+                }).catch((e) => {
+                    console.error("[Audio] Play failed:", e.name, e.message);
+                    // Try to show a play button if autoplay blocked
+                    if (e.name === 'NotAllowedError') {
+                        console.log("[Audio] Autoplay blocked - user interaction required");
+                    }
                     isDidiSpeaking = false;
                     startListening();
                     resolve();
