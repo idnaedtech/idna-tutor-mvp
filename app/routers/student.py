@@ -322,6 +322,9 @@ def process_message(
             # Re-read current question
             question_data = _load_question(db, session.current_question_id)
         else:
+            # Add current question to asked_ids to avoid repeating it
+            if session.current_question_id and session.current_question_id not in asked_ids:
+                asked_ids.append(session.current_question_id)
             # Pick new question
             q = memory.pick_next_question(
                 db, session.student_id,

@@ -97,8 +97,10 @@ def _build_evaluate_answer(a, ctx, q, sk, prev):
     v = a.verdict
     if not v:
         return _build_fallback(a, ctx, q, sk, prev)
+    # Note: When correct, route_after_evaluation changes action_type to pick_next_question,
+    # so this "correct" branch rarely executes. Kept for edge cases.
     if v.correct:
-        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". CORRECT. Praise with their answer. 1 sentence. Then say next question.'}]
+        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". CORRECT. Praise briefly referencing their answer. 1 sentence only.'}]
     return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". Diagnostic: "{v.diagnostic}". Tell what went wrong. Say "Aapne ... bola". Do NOT reveal answer. 2 sentences.'}]
 
 
@@ -119,8 +121,13 @@ def _build_show_solution(a, ctx, q, sk, prev):
 
 def _build_pick_next_question(a, ctx, q, sk, prev):
     if a.extra.get("follow_up"):
+        if q:
+            return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "Chalo, ek aur try karte hain." Then read: "{q["question_voice"]}"'}]
         return [{"role": "system", "content": _sys()}, {"role": "user", "content": 'After solution, say briefly: "Chalo, ek aur try karte hain."'}]
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": '"Bahut achha! Chalo agle question pe chalte hain."'}]
+    if q:
+        # Include praise for correct answer + the next question
+        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}"'}]
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": 'No more questions available. Say: "Is topic ke questions ho gaye! Bahut achhi practice hui."'}]
 
 
 def _build_comfort_student(a, ctx, q, sk, prev):
