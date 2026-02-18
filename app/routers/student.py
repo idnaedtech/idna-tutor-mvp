@@ -373,9 +373,8 @@ def process_message(
 
     prev_response = None
     if session.turns:
-        last_didi_turn = [t for t in session.turns if t.speaker == "didi"]
-        if last_didi_turn:
-            prev_response = last_didi_turn[-1].didi_response
+        # Every turn has didi_response - get the most recent one
+        prev_response = session.turns[-1].didi_response
 
     session_ctx = {
         "subject": session.subject,
