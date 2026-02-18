@@ -449,6 +449,8 @@
     let isRecording = false;
     let mediaRecorder = null;
     let audioChunks = [];
+    let audioCache = {};  // Store audio by message ID
+    let messageCounter = 0;
 
     // DOM refs
     const chatArea = document.getElementById('chatArea');
@@ -1061,10 +1063,16 @@
         const div = document.createElement('div');
         div.className = `msg ${who}`;
 
+        // Store audio in cache, reference by ID (fixes 366KB onclick bug)
+        const msgId = ++messageCounter;
+        if (audioB64 && who === 'didi') {
+            audioCache[msgId] = audioB64;
+        }
+
         let html = `<div class="text">${text}</div>`;
 
         if (audioB64 && who === 'didi') {
-            html += `<button class="play-btn" onclick="playDidiAudio('${audioB64}')">
+            html += `<button class="play-btn" onclick="playAudioById(${msgId})">
                 🔊 Sunein
             </button>`;
         }
@@ -1077,6 +1085,14 @@
         div.innerHTML = html;
         chatArea.insertBefore(div, typing);
         scrollToBottom();
+    }
+
+    // Play audio from cache by message ID
+    function playAudioById(msgId) {
+        const b64 = audioCache[msgId];
+        if (b64) {
+            playDidiAudio(b64);
+        }
     }
 
     function scrollToBottom() {
