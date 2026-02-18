@@ -51,13 +51,32 @@ SAFE_FALLBACKS = {
     "TEACHING": "Isko samjhne ke liye ek example lete hain.",
     "WAITING_ANSWER": "Aapka answer sunne mein problem aayi. Ek baar phir boliye?",
     "EVALUATING": "Mujhe check karne mein problem aayi. Ek baar phir try karo.",
-    "HINT_1": "Sochiye — answer kya ho sakta hai?",
-    "HINT_2": "Ek hint deti hoon — dhyan se sochiye.",
+    "HINT_1": "Step by step sochiye. Pehla step kya hoga?",
+    "HINT_2": "Ek aur hint deti hoon. Dhyan se suno.",
     "FULL_SOLUTION": "Koi baat nahi, chalo saath mein solve karte hain.",
     "NEXT_QUESTION": "Chalo agle question pe chalte hain.",
     "HOMEWORK_HELP": "Homework question phir se padh ke batao?",
     "COMFORT": "Koi baat nahi. Mushkil lag raha hai na? Ruk ke practice karne mein koi bura nahi hai.",
     "SESSION_COMPLETE": "Aaj ki padhai ho gayi! Bahut achha kaam kiya. Kal phir milte hain.",
+}
+
+# Varied fallbacks to avoid repetition (cycle through these)
+VARIED_FALLBACKS = {
+    "HINT_1": [
+        "Step by step sochiye. Pehla step kya hoga?",
+        "Ek simple example se shuru karte hain.",
+        "Dekhiye, isko alag tarike se samjhte hain.",
+    ],
+    "HINT_2": [
+        "Ek aur hint deti hoon. Dhyan se suno.",
+        "Chalo, main thoda aur help karti hoon.",
+        "Arey, dekho isko aise samjho.",
+    ],
+    "TEACHING": [
+        "Isko samjhne ke liye ek example lete hain.",
+        "Dekhiye, main isko simple tarike se samjhati hoon.",
+        "Chalo, ek Indian example se samjhte hain.",
+    ],
 }
 
 
@@ -242,21 +261,20 @@ def _check_no_repetition(
     if not previous_response:
         return True, text
 
+    text_lower = text.strip().lower()
+    prev_lower = previous_response.strip().lower()
+
     # Exact match
-    if text.strip().lower() == previous_response.strip().lower():
-        # Return fallback instead of repeated text
-        fallback = SAFE_FALLBACKS.get(state, text)
-        return False, fallback
+    if text_lower == prev_lower:
+        return False, text  # Signal failure, let caller handle
 
     # High overlap (>70% of words same)
-    words_now = set(text.lower().split())
-    words_prev = set(previous_response.lower().split())
+    words_now = set(text_lower.split())
+    words_prev = set(prev_lower.split())
     if len(words_now) > 0:
         overlap = len(words_now & words_prev) / len(words_now)
         if overlap > 0.7:
-            # Return fallback instead of nearly-repeated text
-            fallback = SAFE_FALLBACKS.get(state, text)
-            return False, fallback
+            return False, text  # Signal failure, let caller handle
 
     return True, text
 
@@ -330,7 +348,19 @@ def enforce(
     )
 
 
-def get_safe_fallback(state: str) -> str:
+import random
+
+def get_safe_fallback(state: str, previous_response: Optional[str] = None) -> str:
     """Get a pre-written safe response for a given state.
-    Used when enforcement fails after MAX_RETRIES."""
+    Used when enforcement fails after MAX_RETRIES.
+    Avoids returning the same response as previous turn."""
+    # Check for varied fallbacks first
+    if state in VARIED_FALLBACKS:
+        options = VARIED_FALLBACKS[state]
+        # Filter out the previous response to avoid repetition
+        if previous_response:
+            options = [opt for opt in options if opt.lower() != previous_response.strip().lower()]
+        if options:
+            return random.choice(options)
+
     return SAFE_FALLBACKS.get(state, "Ek minute rukiye, main soch rahi hoon.")

@@ -48,24 +48,35 @@ _ACK_PHRASES = [
 ]
 
 _IDK_PHRASES = [
+    # English
+    "i don't know", "don't know", "dont know", "no idea", "not sure", "idk",
+    # Romanized Hindi
     "nahi samjha", "nahi samajh", "samajh nahi", "nahi pata",
-    "pata nahi", "don't know", "dont know", "no idea",
-    "nahi maloom", "confused", "kya hua", "kuch samajh nahi",
-    "नहीं समझा", "नहीं पता", "पता नहीं", "समझ नहीं आया",
-    "mushkil", "difficult", "hard",
+    "pata nahi", "nahi maloom", "maloom nahi", "confused",
+    "kuch samajh nahi", "samajh nahi aaya", "mujhe nahi pata",
+    # Devanagari Hindi - CRITICAL for real student input
+    "पता नहीं", "नहीं पता", "मुझे नहीं पता",
+    "समझ में नहीं आया", "कुछ समझ में नहीं आया", "समझ नहीं आया",
+    "नहीं समझा", "मालूम नहीं", "अभी भी नहीं पता",
+    # Re-explain requests (overlap with IDK intent)
     "ek baar phir", "phir se", "dobara", "explain again",
     "phir se batao", "फिर से बताओ",
 ]
 
 _COMFORT_PHRASES = [
-    "i give up", "give up", "haar gaya", "haar gayi",
-    "bahut mushkil", "bohot mushkil", "too hard", "too difficult",
-    "nahi kar sakta", "nahi kar sakti", "can't do",
+    # English
+    "i give up", "give up", "too hard", "too difficult", "can't do this",
+    "hopeless", "crying", "sad", "frustrated",
+    # Romanized Hindi
+    "haar gaya", "haar gayi", "bahut mushkil", "bohot mushkil",
+    "nahi kar sakta", "nahi kar sakti", "mujhse nahi hoga",
     "bore", "boring", "thak gaya", "thak gayi", "tired",
-    "you're rude", "rude", "mean", "gussa", "angry",
+    "gussa", "angry", "kuch nahi hoga", "chhod do",
+    "ro raha", "ro rahi", "nahi ho raha",
+    # Devanagari Hindi - CRITICAL
     "बहुत मुश्किल", "हार गया", "हार गयी", "थक गया",
-    "kuch nahi hoga", "hopeless",
-    "crying", "ro raha", "ro rahi", "sad",
+    "मुझसे नहीं होगा", "छोड़ दो", "नहीं हो रहा",
+    "कुछ समझ में नहीं आया",  # Can also be IDK, but comfort takes priority
 ]
 
 _STOP_PHRASES = [
@@ -226,11 +237,17 @@ def classify_student_input(
 
     # 8. CONCEPT — student asks for explanation (check before ACK to avoid "ha" in "hai" matching)
     concept_phrases = [
-        "explain", "batao", "bataiye", "kya hai", "samjhao",
-        "samjhaiye", "what is", "how", "why", "kaise", "kyun",
-        "बताओ", "बताइये", "क्या है", "समझाओ", "समझाइए", "समझाइये",
-        "कैसे", "क्यों", "किस", "कौन सा", "kaun sa", "kis",
-        "chapter", "topic", "lesson",
+        # English
+        "explain", "what is", "how", "why", "what is this",
+        "explain please", "explain karo",
+        # Romanized Hindi
+        "batao", "bataiye", "kya hai", "samjhao", "samjhaiye",
+        "aap samjhaiye", "kaise", "kyun", "kaun sa", "kis",
+        "yeh kya hai", "chapter", "topic", "lesson",
+        # Devanagari Hindi - CRITICAL
+        "बताओ", "बताइये", "बताइए", "क्या है", "यह क्या है",
+        "समझाओ", "समझाइए", "समझाइये", "आप समझाइए",
+        "कैसे", "क्यों", "किस", "कौन सा", "कौन सा चैप्टर",
     ]
     if _has_match(text, concept_phrases):
         return "CONCEPT"

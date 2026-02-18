@@ -98,11 +98,12 @@ def start_session(
     db.commit()
 
     # Create new session — MVP: Math only, skip topic discovery
+    chapter = "ch1_rational_numbers"  # Default chapter
     session = Session(
         student_id=student_id,
         session_type="student",
         subject="math",
-        chapter="ch1_rational_numbers",
+        chapter=chapter,
         state="GREETING",
         language=student.preferred_language,
     )
@@ -112,18 +113,35 @@ def start_session(
 
     # Pick first question (or weakest skill question for returning students)
     first_question = memory.pick_next_question(
-        db, student_id, "math", "ch1_square_and_cube", asked_question_ids=[]
+        db, student_id, "math", chapter, asked_question_ids=[]
     )
     if first_question:
         session.current_question_id = first_question["id"]
 
-    # Generate greeting with first question
+    # Generate greeting WITH teaching (P0 fix: don't skip teaching)
     if first_question:
-        greeting_text = (
-            f"Namaste {student.name}! Chalo math practice karte hain. "
-            f"Pehla sawaal: {first_question['question_voice']}"
-        )
-        session.state = "WAITING_ANSWER"
+        # Get skill teaching content
+        from app.content.seed_questions import SKILL_TEACHING
+        skill = first_question.get("target_skill", "")
+        lesson = SKILL_TEACHING.get(skill, {})
+
+        # Get pre_teach content (new format) or teaching (old format)
+        pre_teach = lesson.get("pre_teach") or lesson.get("teaching", "")
+
+        if pre_teach:
+            # Start with teaching, then ask question
+            greeting_text = (
+                f"Namaste {student.name}! Aaj hum {lesson.get('title_hi', lesson.get('name', 'math'))} "
+                f"seekhenge. {pre_teach} Samajh aaya?"
+            )
+            session.state = "TEACHING"
+        else:
+            # No teaching content available, ask question directly (fallback)
+            greeting_text = (
+                f"Namaste {student.name}! Chalo math practice karte hain. "
+                f"Pehla sawaal: {first_question['question_voice']}"
+            )
+            session.state = "WAITING_ANSWER"
     else:
         greeting_text = f"Namaste {student.name}! Chalo math practice karte hain."
         session.state = "SESSION_COMPLETE"  # No questions available
@@ -341,8 +359,10 @@ def process_message(
                 # No more questions → end session
                 new_state = "SESSION_COMPLETE"
                 action = Action("end_session", student_text=student_text)
-    elif action.action_type in ("give_hint", "show_solution"):
-        question_data = _load_question(db, session.current_question_id)
+    elif action.action_type in ("give_hint", "show_solution", "teach_concept"):
+        # Load question for hints, solutions, and teaching (to get skill info)
+        if session.current_question_id:
+            question_data = _load_question(db, session.current_question_id)
 
     # ── Step 6: Build LLM prompt ──────────────────────────────────────────
     skill_data = None
@@ -387,7 +407,7 @@ def process_message(
         # Failed — try re-prompting with stricter instructions
         didi_text = enforce_result.text  # Use partially cleaned version
         if attempt == MAX_ENFORCE_RETRIES - 1:
-            didi_text = get_safe_fallback(new_state)
+            didi_text = get_safe_fallback(new_state, prev_response)
             logger.warning(f"Enforcer failed {MAX_ENFORCE_RETRIES}x, using fallback for {new_state}")
 
     # ── Step 9: Clean for TTS ────────────────────────────────────────────

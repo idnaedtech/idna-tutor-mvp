@@ -68,19 +68,33 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     extra = ""
     if a.reteach_count > 0:
         extra = f"\nRe-teach #{a.reteach_count}. Use COMPLETELY DIFFERENT example. Previous: \"{prev or 'unknown'}\". Do NOT repeat."
-    skill_info = ""
-    if sk:
-        skill_info = f"Mastery: {sk.get('mastery_score', 0):.0%}. "
-        if sk.get("teaching_notes"):
-            skill_info += f"What worked: {sk['teaching_notes']}. "
+
+    # Get actual teaching content from SKILL_TEACHING
+    from app.content.seed_questions import SKILL_TEACHING
+    skill_key = q.get("target_skill", "") if q else ctx.get("skill", "")
+    lesson = SKILL_TEACHING.get(skill_key, {})
+
+    # Get content based on reteach count
+    if a.reteach_count >= 2:
+        teach_content = lesson.get("key_insight") or lesson.get("indian_example") or lesson.get("pre_teach") or ""
+    elif a.reteach_count == 1:
+        teach_content = lesson.get("indian_example") or lesson.get("key_insight") or lesson.get("pre_teach") or ""
+    else:
+        teach_content = lesson.get("pre_teach") or lesson.get("teaching") or ""
 
     approach = a.extra.get("approach", "fresh")
     if approach == "answer_question":
-        msg = f'Student asked: "{a.student_text}". Answer their question about {ch}. Simple example. 2 sentences.'
+        msg = f'Student asked: "{a.student_text}". Answer their question about {ch}. {teach_content if teach_content else "Use simple example."} 2 sentences.'
     elif approach == "different_example":
-        msg = f"Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"Ab samajh aaya?\""
+        if teach_content:
+            msg = f'Student didn\'t understand. Explain differently: "{teach_content}". 2 sentences. End: "Ab samajh aaya?"'
+        else:
+            msg = f"Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"Ab samajh aaya?\""
     else:
-        msg = f"Teach one concept from {ch}. {skill_info}Use Indian example. 2 sentences. End: \"Samajh aaya?\""
+        if teach_content:
+            msg = f'Teach this concept naturally in Hinglish: "{teach_content}". 2 sentences. End: "Samajh aaya?"'
+        else:
+            msg = f"Teach one concept from {ch}. Use Indian example. 2 sentences. End: \"Samajh aaya?\""
     return [{"role": "system", "content": _sys(extra)}, {"role": "user", "content": msg}]
 
 
@@ -108,7 +122,24 @@ def _build_give_hint(a, ctx, q, sk, prev):
     if not q:
         return _build_fallback(a, ctx, q, sk, prev)
     hints = q.get("hints") or []
-    h = hints[a.hint_level - 1] if a.hint_level <= len(hints) else "Sochiye — answer kya ho sakta hai?"
+
+    # Get actual hint or build from question context
+    if a.hint_level <= len(hints):
+        h = hints[a.hint_level - 1]
+    else:
+        # No more hints — build contextual hint from question and answer
+        answer = q.get("answer", "")
+        skill = q.get("target_skill", "")
+        if "perfect_square" in skill:
+            h = f"Sochiye: kaunsa number khud se multiply karke yeh answer dega?"
+        elif "cube" in skill:
+            h = f"Sochiye: kaunsa number teen baar multiply karke yeh answer dega?"
+        elif "fraction" in skill.lower():
+            h = f"Pehle numerators ko dekho, phir denominators ko."
+        else:
+            # Generic hint based on answer type
+            h = f"Is sawaal ka jawab ek number hai. Sochiye step by step."
+
     return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". Say naturally in Hinglish. Ask to try again. 2 sentences.'}]
 
 
