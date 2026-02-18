@@ -57,6 +57,15 @@ class MockTTS:
             cache_path=None,
         )
 
+    async def synthesize_async(
+        self,
+        text: str,
+        language: str = "hi-IN",
+        speaker: str = "mock",
+    ) -> TTSResult:
+        """Async version for streaming endpoint compatibility."""
+        return self.synthesize(text, language, speaker)
+
 
 # ─── Sarvam Bulbul v3 ────────────────────────────────────────────────────────
 
