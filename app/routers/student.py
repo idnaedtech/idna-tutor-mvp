@@ -505,14 +505,19 @@ async def process_message_stream(
     if audio_b64:
         audio_bytes = base64.b64decode(audio_b64)
         stt = get_stt()
-        stt_result = stt.transcribe(audio_bytes, session.language)
+        # Auto-detect language (don't force - students speak Hinglish)
+        stt_result = stt.transcribe(audio_bytes)
         student_text = stt_result.text
         stt_latency = stt_result.latency_ms
     else:
         student_text = text_input or ""
 
     # ── Classify ──
-    category = classify_student_input(student_text, session.state)
+    category = classify_student_input(
+        student_text,
+        current_state=session.state,
+        subject=session.subject or "math",
+    )
 
     # Handle silence without LLM
     if category == "SILENCE":
@@ -534,21 +539,41 @@ async def process_message_stream(
     if session.current_question_id:
         question_data = _load_question(db, session.current_question_id)
 
-    new_state, action = transition(
-        session.state, category,
-        current_question_id=session.current_question_id,
-        student_text=student_text,
-    )
+    # Build context for state machine (same as non-streaming endpoint)
+    ctx = {
+        "student_text": student_text,
+        "subject": session.subject or "math",
+        "chapter": session.chapter or "ch1_square_and_cube",
+        "current_question_id": session.current_question_id,
+        "current_hint_level": session.current_hint_level,
+        "current_reteach_count": session.current_reteach_count,
+        "questions_attempted": session.questions_attempted,
+        "questions_correct": session.questions_correct,
+        "total_hints_used": session.total_hints_used,
+    }
+    new_state, action = transition(session.state, category, ctx)
 
     # ── Answer check (if ANSWER) ──
     verdict = None
-    if category == "ANSWER" and question_data:
-        verdict = check_math_answer(student_text, question_data.get("answer", ""))
-        new_state, action = route_after_evaluation(
-            session.state, verdict,
-            question_id=session.current_question_id,
-            student_text=student_text,
-        )
+    verdict_str = None
+    if action.action_type == "evaluate_answer" and session.current_question_id:
+        question = db.query(Question).filter(
+            Question.id == session.current_question_id
+        ).first()
+        if question:
+            verdict = check_math_answer(
+                student_text,
+                question.answer,
+                question.answer_variants or [],
+            )
+            verdict_str = verdict.verdict
+            # Route based on verdict
+            new_state, action.action_type = route_after_evaluation(
+                verdict,
+                session.current_hint_level,
+                session.questions_attempted + 1,
+            )
+            action.verdict = verdict
 
     # ── Build prompt ──
     session_ctx = {
@@ -577,7 +602,7 @@ async def process_message_stream(
             # Enforce rules on each sentence
             enforce_result = enforce(
                 cleaned, new_state,
-                verdict="CORRECT" if verdict and verdict.correct else "INCORRECT" if verdict else None,
+                verdict=verdict_str,
                 student_answer=student_text,
                 language=session.language,
                 previous_response=prev_response,
@@ -604,7 +629,7 @@ async def process_message_stream(
         full_text = full_text.strip()
         yield f"data: {json.dumps({'type': 'text', 'content': full_text})}\n\n"
         yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
-        yield f"data: {json.dumps({'type': 'verdict', 'value': verdict.correct if verdict else None, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
+        yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
 
         # Save turn to database (after streaming completes)
@@ -617,7 +642,7 @@ async def process_message_stream(
             state_before=state_before,
             state_after=new_state,
             question_id=session.current_question_id,
-            verdict="CORRECT" if verdict and verdict.correct else "INCORRECT" if verdict else None,
+            verdict=verdict_str,
             didi_response=full_text,
             stt_latency_ms=stt_latency,
         )
