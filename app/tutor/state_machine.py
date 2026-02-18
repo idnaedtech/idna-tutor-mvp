@@ -196,6 +196,12 @@ def transition(
                 "give_hint", hint_level=2, question_id=q_id,
                 student_text=text,
             )
+        if category == "CONCEPT":
+            # Student asking for explanation - teach, then return to question
+            return "TEACHING", Action(
+                "teach_concept", question_id=q_id, student_text=text,
+                extra={"return_to": "HINT_1"},
+            )
         return "HINT_1", Action(
             "give_hint", hint_level=1, question_id=q_id,
             student_text=text, extra={"nudge": True},
@@ -212,6 +218,12 @@ def transition(
         if category == "IDK":
             return "FULL_SOLUTION", Action(
                 "show_solution", question_id=q_id, student_text=text,
+            )
+        if category == "CONCEPT":
+            # Student asking for explanation - teach, then return to question
+            return "TEACHING", Action(
+                "teach_concept", question_id=q_id, student_text=text,
+                extra={"return_to": "HINT_2"},
             )
         return "HINT_2", Action(
             "give_hint", hint_level=2, question_id=q_id,

@@ -235,8 +235,10 @@ def classify_student_input(
     # 9. CONCEPT — student asks for explanation
     concept_phrases = [
         "explain", "batao", "bataiye", "kya hai", "samjhao",
-        "samjhaiye", "what is", "how", "why", "kaise", "kyun",
-        "बताओ", "बताइये", "क्या है", "समझाओ", "कैसे", "क्यों",
+        "samjhaiye", "samjhaiye", "what is", "how", "why", "kaise", "kyun",
+        "बताओ", "बताइये", "क्या है", "समझाओ", "समझाइए", "समझाइये",
+        "कैसे", "क्यों", "किस", "कौन सा", "kaun sa", "kis",
+        "chapter", "topic", "lesson",
     ]
     if _has_match(text, concept_phrases):
         return "CONCEPT"
