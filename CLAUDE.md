@@ -1,11 +1,11 @@
-# IDNA Tutor Architecture v7.0.1 — CLAUDE CODE RULES
+# IDNA Tutor Architecture v7.0.2 — CLAUDE CODE RULES
 
 ## OVERVIEW
 
 Voice-first AI math tutor for CBSE Class 8 students (India). Full rewrite with deterministic state machine — Python decides flow, LLM only generates spoken words.
 
 **Entry point:** `uvicorn app.main:app --port 8000`
-**Tests:** `python -m pytest tests/test_core.py -v` (69 tests)
+**Tests:** `python -m pytest tests/ -v` (80 tests)
 **Production:** https://idna-tutor-mvp-production.up.railway.app
 **Test student:** PIN `1234` (name: Priya, class 8)
 
@@ -33,12 +33,14 @@ app/
 │   ├── stt.py              → Sarvam Saarika v2.5 (handles Hindi-English code-mixing)
 │   └── clean_for_tts.py    → Convert fractions, symbols for speech
 ├── content/
-│   └── seed_questions.py   → Question bank (10 questions, Ch1 Rational Numbers)
+│   ├── seed_questions.py       → Question bank master (60 questions total)
+│   └── ch1_square_and_cube.py  → Chapter 1: A Square and A Cube (50 questions)
 ├── ocr/                    → Homework photo extraction (scaffolded)
 └── parent_engine/          → Parent voice sessions (scaffolded)
 
 tests/
-└── test_core.py            → 69 tests: answer_checker, classifier, enforcer, clean_for_tts
+├── test_core.py            → 68 tests: answer_checker, classifier, enforcer, clean_for_tts
+└── test_ch1_square_cube.py → 12 tests: new chapter question bank validation
 
 web/
 ├── login.html              → PIN entry
@@ -234,19 +236,21 @@ RESET_DATABASE=true  # DANGER: drops all tables on startup
 - `app/routers/student.py` pipeline order
 - TTS speaker (simran) — user requirement
 
-## TEST SUITE (69 tests)
+## TEST SUITE (80 tests)
 
 ```bash
-python -m pytest tests/test_core.py -v
+python -m pytest tests/ -v
 ```
 
 | Test Class | Coverage |
 |------------|----------|
 | TestFractionParsing | 18 tests — Hindi/English numbers, fractions |
 | TestMathAnswerChecker | 27 tests — correct, incorrect, diagnostics |
-| TestInputClassifier | 15 tests — all categories |
+| TestInputClassifier | 14 tests — all categories |
 | TestEnforcer | 4 tests — rules enforcement |
 | TestCleanForTTS | 5 tests — fraction/symbol conversion |
+| TestQuestionBank | 10 tests — Ch1 Square & Cube question bank |
+| TestAnswerCheckerRules | 2 tests — Hindi numbers, TTS conversions |
 
 ## VERIFIED FLOWS (v7.0.1 MVP)
 
@@ -297,6 +301,14 @@ python -m pytest tests/test_core.py -v
 - **Use Python 3.11 explicitly:** `py -3.11 -m uvicorn app.main:app --port 8000`
 - **Install deps with:** `py -3.11 -m pip install -r requirements.txt`
 - Bash paths need quotes: `cd "C:/Users/User/Documents/idna"`
+
+### v7.0.2 Content Expansion (Feb 18, 2026)
+- **Added Chapter 1: A Square and A Cube** (Ganita Prakash 2025 syllabus)
+- 50 new questions (easy: 16, medium: 21, hard: 13)
+- 20 skill lessons with Hindi teaching content
+- Added Hindi number words: ekkees (21), baees (22), tees (30), sau (100), hazaar (1000)
+- TTS now handles √ (square root), ∛ (cube root), ² (ka square), ³ (ka cube)
+- Total questions: 60 (10 rational numbers + 50 squares/cubes)
 
 ## GAP ANALYSIS (Phase 2 Features)
 

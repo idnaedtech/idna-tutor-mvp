@@ -70,9 +70,14 @@ def clean_for_tts(text: str) -> str:
     # Only at word boundaries, not already handled by fraction rule
     result = re.sub(r'(?<!\w)-(\d)', r'minus \1', result)
 
-    # ─── Exponents: x² → x square, x³ → x cube ──────────────────────────
-    result = result.replace('²', ' square')
-    result = result.replace('³', ' cube')
+    # ─── Roots: √ → square root, ∛ → cube root ───────────────────────────
+    # Must come BEFORE exponent handling
+    result = result.replace('√', 'square root of ')
+    result = result.replace('∛', 'cube root of ')
+
+    # ─── Exponents: x² → x ka square, x³ → x ka cube ───────────────────
+    result = result.replace('²', ' ka square')
+    result = result.replace('³', ' ka cube')
     result = re.sub(r'\^(\d+)', r' to the power \1', result)
 
     # ─── Common abbreviations ─────────────────────────────────────────────

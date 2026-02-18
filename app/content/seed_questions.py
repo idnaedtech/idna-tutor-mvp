@@ -1,7 +1,16 @@
 """
-IDNA EdTech v7.0 — Seed Questions
-Class 8 NCERT Math Chapter 1: Rational Numbers
+IDNA EdTech v7.0.2 — Seed Questions
+Class 8 NCERT Math Chapters:
+  - Chapter 1: Rational Numbers (10 questions)
+  - Chapter 1: A Square and A Cube (50 questions) — Ganita Prakash 2025
 """
+
+from app.content.ch1_square_and_cube import (
+    QUESTIONS as CH1_SQ_QUESTIONS,
+    SKILL_LESSONS as CH1_SQ_SKILL_LESSONS,
+    CHAPTER_META as CH1_SQ_META,
+    ANSWER_CHECKER_RULES as CH1_SQ_ANSWER_RULES,
+)
 
 QUESTIONS = [
     # ─── Fraction Addition ──────────────────────────────────────────────────────
@@ -279,4 +288,26 @@ SKILL_TEACHING = {
             "Isko dense property kehte hain. Matlab: kabhi khatam nahi hote!"
         ),
     },
+}
+
+
+# ─── Merge Chapter 1: A Square and A Cube (Ganita Prakash 2025) ───────────────
+
+QUESTIONS.extend(CH1_SQ_QUESTIONS)
+SKILL_TEACHING.update(CH1_SQ_SKILL_LESSONS)
+
+# Chapter metadata for selection UI
+CHAPTERS = {
+    "ch1_rational_numbers": {
+        "id": "ch1_rational_numbers",
+        "title": "Rational Numbers",
+        "title_hi": "Parimey Sankhyayen",
+        "question_count": 10,
+    },
+    "ch1_square_and_cube": CH1_SQ_META,
+}
+
+# Answer checker rules for new chapter
+ANSWER_RULES = {
+    "ch1_square_and_cube": CH1_SQ_ANSWER_RULES,
 }
