@@ -314,10 +314,13 @@ python -m pytest tests/ -v
 - **Fixed yes/no answer classification** — "haan"/"yes" in WAITING_ANSWER now classified as ANSWER, not ACK
 - **Added Hindi IDK/COMFORT phrases** — Devanagari + Romanized (पता नहीं, समझ नहीं आया, मुझसे नहीं होगा)
 - **Fixed repetition loop** — Varied fallbacks rotate responses when LLM enforcement fails 3x
+- **Fixed prev_response lookup** — All turns have `didi_response`, don't filter by `speaker == "didi"`
 - **CONCEPT questions during hints** — Transition to TEACHING state to answer student questions
 - **Teaching uses SKILL_TEACHING content** — pre_teach, indian_example, key_insight with reteach levels
 - **Moved CONCEPT check before ACK** — Prevents false matches ("hai" matching "ha")
 - 82 tests total
+
+**Lesson:** SessionTurn stores both student input AND didi response in one row. The `speaker` field is always "student". To get prev_response, use `session.turns[-1].didi_response` — don't filter by speaker.
 
 ## GAP ANALYSIS (Phase 2 Features)
 
