@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Didi — Study Session</title>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <!-- VAD: ONNX Runtime + Silero VAD -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/bundle.min.js"></script>
+    <!-- VAD: ONNX Runtime + Silero VAD (v0.0.22 stable) -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/bundle.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -499,10 +499,12 @@
                 redemptionFrames: 12,  // ~750ms silence before cutting off
                 minSpeechFrames: 5,    // Minimum speech to avoid clicks
 
-                // CDN paths for ONNX model files
-                workletURL: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/vad.worklet.bundle.min.js",
-                modelURL: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/silero_vad.onnx",
-                ortWasmRoot: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
+                // CDN paths for ONNX model files (v0.0.22 has stable model)
+                workletURL: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/vad.worklet.bundle.min.js",
+                modelURL: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/silero_vad.onnx",
+                ortConfig: (ort) => {
+                    ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
+                },
             });
 
             console.log("[VAD] Initialized successfully");
@@ -732,7 +734,12 @@
         });
 
         try {
-            // Use streaming endpoint
+            // v7.1.1: Streaming disabled temporarily - SSE chunk parsing issues
+            // TODO: Fix SSE buffering for partial JSON chunks
+            // For now, use reliable non-streaming endpoint
+            return sendAudioNonStreaming(wavBlob);
+
+            /* DISABLED: Streaming endpoint
             const resp = await fetch(`${API}/api/student/session/message-stream`, {
                 method: 'POST',
                 headers: {
@@ -749,6 +756,7 @@
                 // Fallback to non-streaming endpoint
                 return sendAudioNonStreaming(wavBlob);
             }
+            */
 
             showTyping(false);
 
