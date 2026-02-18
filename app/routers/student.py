@@ -1,16 +1,21 @@
 """
-IDNA EdTech v7.0 — Student Session Router
+IDNA EdTech v7.1 — Student Session Router
 The main interaction loop. Full pipeline:
 STT → classify → state machine → answer check → instruction build → LLM → enforce → clean → TTS
+
+v7.1: Added streaming endpoint for sentence-level TTS (reduces perceived latency).
 """
 
 import logging
 import time
 import base64
+import json
+import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 
@@ -465,6 +470,162 @@ def process_message(
         tts_ms=tts_latency,
         total_ms=total_ms,
     )
+
+
+# ─── Streaming Response (v7.1) ────────────────────────────────────────────────
+
+@router.post("/session/message-stream")
+async def process_message_stream(
+    request: Request,
+    user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """
+    v7.1 Streaming endpoint: LLM streams → sentence-level TTS → SSE to frontend.
+    Reduces perceived latency from ~10s to ~3s by starting audio playback earlier.
+    """
+    if user.get("role") != "student":
+        raise HTTPException(403, "Student access only")
+
+    # Parse request body
+    body = await request.json()
+    session_id = body.get("session_id")
+    audio_b64 = body.get("audio")
+    text_input = body.get("text")
+
+    session = db.query(Session).filter(Session.id == session_id).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    student = db.query(Student).filter(Student.id == session.student_id).first()
+    state_before = session.state
+
+    # ── STT ──
+    stt_latency = 0
+    if audio_b64:
+        audio_bytes = base64.b64decode(audio_b64)
+        stt = get_stt()
+        stt_result = stt.transcribe(audio_bytes, session.language)
+        student_text = stt_result.text
+        stt_latency = stt_result.latency_ms
+    else:
+        student_text = text_input or ""
+
+    # ── Classify ──
+    category = classify_student_input(student_text, session.state)
+
+    # Handle silence without LLM
+    if category == "SILENCE":
+        nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
+        tts = get_tts()
+        tts_result = tts.synthesize(nudge, session.language)
+        audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+
+        async def silence_stream():
+            yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
+            yield f"data: {json.dumps({'type': 'text', 'content': nudge})}\n\n"
+            yield f"data: {json.dumps({'type': 'transcript', 'content': '[silence]'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'state': session.state})}\n\n"
+
+        return StreamingResponse(silence_stream(), media_type="text/event-stream")
+
+    # ── State transition ──
+    question_data = None
+    if session.current_question_id:
+        question_data = _load_question(db, session.current_question_id)
+
+    new_state, action = transition(
+        session.state, category,
+        current_question_id=session.current_question_id,
+        student_text=student_text,
+    )
+
+    # ── Answer check (if ANSWER) ──
+    verdict = None
+    if category == "ANSWER" and question_data:
+        verdict = check_math_answer(student_text, question_data.get("answer", ""))
+        new_state, action = route_after_evaluation(
+            session.state, verdict,
+            question_id=session.current_question_id,
+            student_text=student_text,
+        )
+
+    # ── Build prompt ──
+    session_ctx = {
+        "subject": session.subject,
+        "chapter": session.chapter,
+        "questions_attempted": session.questions_attempted,
+        "questions_correct": session.questions_correct,
+    }
+    prev_response = session.turns[-1].didi_response if session.turns else None
+    messages = build_prompt(action, session_ctx, question_data, None, prev_response)
+
+    # ── Streaming LLM + TTS ──
+    llm = get_llm()
+    tts = get_tts()
+
+    async def stream_response():
+        """SSE: stream audio chunks as sentences complete."""
+        full_text = ""
+        sentence_index = 0
+        tts_tasks = []
+
+        async for sentence in llm.generate_streaming(messages):
+            # Clean for TTS
+            cleaned = clean_for_tts(sentence)
+
+            # Enforce rules on each sentence
+            enforce_result = enforce(
+                cleaned, new_state,
+                verdict="CORRECT" if verdict and verdict.correct else "INCORRECT" if verdict else None,
+                student_answer=student_text,
+                language=session.language,
+                previous_response=prev_response,
+            )
+            cleaned = enforce_result.text
+            full_text += " " + cleaned
+
+            # Generate TTS for this sentence
+            try:
+                tts_result = await tts.synthesize_async(cleaned, session.language)
+                audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+
+                # Stream audio chunk to frontend
+                yield f"data: {json.dumps({'type': 'audio_chunk', 'index': sentence_index, 'audio': audio_chunk, 'is_last': False})}\n\n"
+                sentence_index += 1
+            except Exception as e:
+                logger.error(f"TTS error for sentence: {e}")
+
+        # Mark last chunk
+        if sentence_index > 0:
+            yield f"data: {json.dumps({'type': 'last_chunk'})}\n\n"
+
+        # Send full text and metadata
+        full_text = full_text.strip()
+        yield f"data: {json.dumps({'type': 'text', 'content': full_text})}\n\n"
+        yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
+        yield f"data: {json.dumps({'type': 'verdict', 'value': verdict.correct if verdict else None, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
+
+        # Save turn to database (after streaming completes)
+        turn = SessionTurn(
+            session_id=session.id,
+            turn_number=len(session.turns) + 1,
+            speaker="student",
+            transcript=student_text,
+            input_category=category,
+            state_before=state_before,
+            state_after=new_state,
+            question_id=session.current_question_id,
+            verdict="CORRECT" if verdict and verdict.correct else "INCORRECT" if verdict else None,
+            didi_response=full_text,
+            stt_latency_ms=stt_latency,
+        )
+        db.add(turn)
+        session.state = new_state
+        db.commit()
+
+    return StreamingResponse(stream_response(), media_type="text/event-stream")
 
 
 # ─── Session End ─────────────────────────────────────────────────────────────

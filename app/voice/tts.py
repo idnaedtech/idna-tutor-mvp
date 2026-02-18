@@ -1,12 +1,14 @@
 """
-IDNA EdTech v7.0 — TTS Abstraction Layer
+IDNA EdTech v7.1 — TTS Abstraction Layer
 Sarvam Bulbul v3. Speaker=simran. Single API call (no chunking).
-Language switches based on who's in session (student vs parent).
+Supports both sync and async for streaming TTS.
 """
 
 import time
 import logging
 import hashlib
+import base64
+import asyncio
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Protocol
@@ -144,6 +146,75 @@ class SarvamBulbulTTS:
         """Generate deterministic cache key from text+language+speaker."""
         raw = f"{text}|{language}|{speaker}|{TTS_PACE}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    async def synthesize_async(
+        self,
+        text: str,
+        language: str = "hi-IN",
+        speaker: str = TTS_SPEAKER,
+    ) -> TTSResult:
+        """Async version of synthesize for parallel TTS calls."""
+        # Check cache first
+        cache_key = self._cache_key(text, language, speaker)
+        cache_path = AUDIO_CACHE_DIR / f"{cache_key}.mp3"
+
+        if cache_path.exists():
+            audio = cache_path.read_bytes()
+            logger.info(f"TTS [async cache hit]: {cache_path.name}")
+            return TTSResult(
+                audio_bytes=audio, latency_ms=0,
+                cached=True, cache_path=str(cache_path),
+            )
+
+        start = time.perf_counter()
+        try:
+            if len(text) > 2000:
+                text = text[:1997] + "..."
+                logger.warning(f"TTS text truncated to 2000 chars")
+
+            payload = {
+                "inputs": [text],
+                "target_language_code": language,
+                "speaker": speaker,
+                "model": TTS_MODEL,
+                "pace": TTS_PACE,
+                "temperature": TTS_TEMPERATURE,
+                "enable_preprocessing": True,
+                "audio_format": "mp3",
+                "sample_rate": TTS_SAMPLE_RATE,
+            }
+            headers = {
+                "api-subscription-key": SARVAM_API_KEY,
+                "Content-Type": "application/json",
+            }
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(SARVAM_TTS_URL, json=payload, headers=headers)
+                if response.status_code != 200:
+                    logger.error(f"TTS [async] HTTP {response.status_code}: {response.text}")
+                response.raise_for_status()
+                data = response.json()
+
+            elapsed = int((time.perf_counter() - start) * 1000)
+
+            audio_b64 = data.get("audios", [""])[0]
+            if not audio_b64:
+                raise ValueError("Empty audio response from Sarvam")
+
+            audio_bytes = base64.b64decode(audio_b64)
+            cache_path.write_bytes(audio_bytes)
+
+            logger.info(f"TTS [async]: {elapsed}ms, {len(audio_bytes)} bytes")
+
+            return TTSResult(
+                audio_bytes=audio_bytes, latency_ms=elapsed,
+                cached=False, cache_path=str(cache_path),
+            )
+
+        except Exception as e:
+            elapsed = int((time.perf_counter() - start) * 1000)
+            logger.error(f"TTS [async] error after {elapsed}ms: {e}")
+            raise
 
 
 # ─── Pre-generation ──────────────────────────────────────────────────────────

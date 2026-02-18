@@ -1,15 +1,16 @@
 """
-IDNA EdTech v7.0 — LLM Abstraction Layer
-Swap providers by changing config.LLM_PROVIDER.
-Currently: OpenAI GPT-4o.
+IDNA EdTech v7.1 — LLM Abstraction Layer
+Supports both sync and async streaming for sentence-level TTS.
 """
 
 import time
+import re
 import logging
-from typing import Protocol, Optional
+import asyncio
+from typing import Protocol, Optional, AsyncGenerator
 from dataclasses import dataclass
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 
 from app.config import (
     OPENAI_API_KEY, LLM_MODEL, LLM_MAX_TOKENS, LLM_TEMPERATURE,
@@ -28,7 +29,7 @@ class LLMResult:
 
 
 class LLMProvider(Protocol):
-    async def generate(self, messages: list[dict], **kwargs) -> LLMResult: ...
+    def generate(self, messages: list[dict], **kwargs) -> LLMResult: ...
 
 
 # ─── OpenAI GPT-4o ───────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ class LLMProvider(Protocol):
 class OpenAIGPT4o:
     def __init__(self):
         self._client = OpenAI(api_key=OPENAI_API_KEY)
+        self._async_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
     def generate(
         self,
@@ -43,6 +45,7 @@ class OpenAIGPT4o:
         max_tokens: int = LLM_MAX_TOKENS,
         temperature: float = LLM_TEMPERATURE,
     ) -> LLMResult:
+        """Synchronous generation (existing behavior)."""
         start = time.perf_counter()
         try:
             response = self._client.chat.completions.create(
@@ -64,6 +67,67 @@ class OpenAIGPT4o:
             elapsed = int((time.perf_counter() - start) * 1000)
             logger.error(f"LLM error after {elapsed}ms: {e}")
             raise
+
+    async def generate_streaming(
+        self,
+        messages: list[dict],
+        max_tokens: int = LLM_MAX_TOKENS,
+        temperature: float = LLM_TEMPERATURE,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Async streaming generation — yields complete sentences.
+        Used for sentence-level TTS to reduce perceived latency.
+        """
+        buffer = ""
+
+        try:
+            stream = await self._async_client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True,
+            )
+
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content or ""
+                buffer += delta
+
+                # Yield complete sentences
+                while True:
+                    # Find sentence boundary (. ? ! but not abbreviations)
+                    match = self._find_sentence_boundary(buffer)
+                    if match:
+                        sentence = buffer[:match].strip()
+                        buffer = buffer[match:].strip()
+                        if sentence:
+                            yield sentence
+                    else:
+                        break
+
+            # Yield remaining buffer
+            if buffer.strip():
+                yield buffer.strip()
+
+        except Exception as e:
+            logger.error(f"LLM streaming error: {e}")
+            if buffer.strip():
+                yield buffer.strip()
+
+    def _find_sentence_boundary(self, text: str) -> Optional[int]:
+        """Find the end of the first complete sentence."""
+        # Match sentence-ending punctuation
+        # Avoid splitting on: Dr. Mr. Rs. etc.
+        for i, char in enumerate(text):
+            if char in '.?!।' and i > 0:
+                # Check it's not an abbreviation
+                before = text[:i].strip()
+                if before and len(before) > 2:
+                    # Not an abbreviation if previous char is lowercase
+                    # or if it's a question/exclamation mark
+                    if char in '?!।' or (before[-1].islower() or before[-1].isdigit()):
+                        return i + 1
+        return None
 
 
 # ─── Provider Factory ────────────────────────────────────────────────────────

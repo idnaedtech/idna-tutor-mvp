@@ -694,7 +694,7 @@
         });
     }
 
-    // ─── Send Audio to Pipeline ────────────────────────
+    // ─── Send Audio to Pipeline (Streaming v7.1) ────────
     async function sendAudioToPipeline(wavBlob) {
         if (!sessionId) return;
 
@@ -702,6 +702,147 @@
         addMessage('student', '🎤 ...');
         showTyping(true);
 
+        // Convert blob to base64
+        const reader = new FileReader();
+        const audioB64 = await new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(wavBlob);
+        });
+
+        try {
+            // Use streaming endpoint
+            const resp = await fetch(`${API}/api/student/session/message-stream`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    audio: audioB64,
+                }),
+            });
+
+            if (!resp.ok) {
+                // Fallback to non-streaming endpoint
+                return sendAudioNonStreaming(wavBlob);
+            }
+
+            showTyping(false);
+
+            // Process SSE stream
+            const eventReader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let audioQueue = [];
+            let isPlaying = false;
+            let fullText = '';
+            let transcript = '';
+            let verdict = null;
+            let newState = null;
+
+            while (true) {
+                const { done, value } = await eventReader.read();
+                if (done) break;
+
+                const text = decoder.decode(value);
+                const lines = text.split('\n').filter(l => l.startsWith('data: '));
+
+                for (const line of lines) {
+                    try {
+                        const data = JSON.parse(line.substring(6));
+
+                        if (data.type === 'audio_chunk') {
+                            const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+                            const blob = new Blob([audioBytes], { type: 'audio/mp3' });
+                            audioQueue.push({ blob, isLast: data.is_last });
+
+                            // Start playing first chunk immediately
+                            if (!isPlaying && audioQueue.length === 1) {
+                                isPlaying = true;
+                                isDidiSpeaking = true;
+                                pauseListening();
+                                updateVoiceUI('didi-speaking');
+                                playNextChunk();
+                            }
+                        }
+
+                        if (data.type === 'text') {
+                            fullText = data.content;
+                        }
+
+                        if (data.type === 'transcript') {
+                            transcript = data.content;
+                            // Update student bubble
+                            const studentMsgs = chatArea.querySelectorAll('.msg.student');
+                            const lastStudent = studentMsgs[studentMsgs.length - 1];
+                            if (lastStudent && transcript) {
+                                lastStudent.querySelector('.text').textContent = transcript;
+                            }
+                        }
+
+                        if (data.type === 'verdict') {
+                            verdict = data.value;
+                            // Update student bubble with emoji
+                            if (verdict !== null) {
+                                const studentMsgs = chatArea.querySelectorAll('.msg.student');
+                                const lastStudent = studentMsgs[studentMsgs.length - 1];
+                                if (lastStudent) {
+                                    const emoji = verdict ? '✅' : '❌';
+                                    lastStudent.querySelector('.text').textContent = transcript + ' ' + emoji;
+                                }
+                            }
+                        }
+
+                        if (data.type === 'done') {
+                            newState = data.state;
+                            // Add Didi's message to chat (without audio - already playing)
+                            if (fullText) {
+                                addMessage('didi', fullText);
+                            }
+                            if (newState === 'SESSION_COMPLETE') {
+                                setTimeout(() => endSession(), 2000);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[SSE] Parse error:', e);
+                    }
+                }
+            }
+
+            // Play audio chunks sequentially
+            function playNextChunk() {
+                if (audioQueue.length === 0) {
+                    isDidiSpeaking = false;
+                    startListening();
+                    return;
+                }
+
+                const { blob } = audioQueue.shift();
+                const url = URL.createObjectURL(blob);
+                const audio = new Audio(url);
+
+                audio.onended = () => {
+                    URL.revokeObjectURL(url);
+                    playNextChunk();
+                };
+
+                audio.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    playNextChunk();
+                };
+
+                audio.play().catch(() => playNextChunk());
+            }
+
+        } catch (err) {
+            console.error('[Stream] Error:', err);
+            // Fallback to non-streaming
+            return sendAudioNonStreaming(wavBlob);
+        }
+    }
+
+    // Fallback non-streaming send (for older browsers or if streaming fails)
+    async function sendAudioNonStreaming(wavBlob) {
         const formData = new FormData();
         formData.append('session_id', sessionId);
         formData.append('audio', wavBlob, 'recording.wav');
@@ -720,7 +861,6 @@
             const data = await resp.json();
             logLatency(data);
 
-            // Update student bubble with actual transcript
             const studentMsgs = chatArea.querySelectorAll('.msg.student');
             const lastStudent = studentMsgs[studentMsgs.length - 1];
             if (lastStudent && data.student_transcript) {
@@ -730,18 +870,14 @@
                 lastStudent.querySelector('.text').textContent = text;
             }
 
-            // Add Didi's response
             addMessage('didi', data.didi_text, data.didi_audio_b64);
 
-            // Play Didi's response
             if (data.didi_audio_b64) {
                 await playDidiAudio(data.didi_audio_b64);
             } else {
-                // No audio, just resume listening
                 startListening();
             }
 
-            // Check session end
             if (data.state === 'SESSION_COMPLETE') {
                 setTimeout(() => endSession(), 2000);
             }
