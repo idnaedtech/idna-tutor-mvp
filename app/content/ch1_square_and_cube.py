@@ -5,15 +5,19 @@ NCERT Ganita Prakash, Class 8 Mathematics (New Syllabus 2025)
 Complete question bank, skill lessons, answer checking rules,
 hints, common mistakes, and teaching scripts.
 
-Version: 7.0.1
+Version: 7.3.0
 Chapter mapping: ch1_square_and_cube
 Total questions: 50
 Difficulty split: 18 Easy, 18 Medium, 14 Hard
 Skills covered: 14 distinct skills
 
+v7.3.0: Added ChapterGraph with multilingual Concept objects
+
 Usage:
-    from ch1_square_and_cube import QUESTIONS, SKILL_LESSONS, CHAPTER_META
+    from ch1_square_and_cube import QUESTIONS, SKILL_LESSONS, CHAPTER_META, CHAPTER_GRAPH
 """
+
+from app.content.curriculum import Concept, ChapterGraph
 
 # ============================================================
 # CHAPTER METADATA
@@ -1559,6 +1563,397 @@ def chapter_stats() -> dict:
     }
 
 
+# ============================================================
+# CHAPTER GRAPH (v7.3.0) — Structured concept graph with multilingual content
+# ============================================================
+
+# Question ID mappings to concepts
+_PERFECT_SQUARE_QUESTIONS = [
+    "sq_e01", "sq_e02", "sq_e03", "sq_e04", "sq_e05", "sq_e06", "sq_e07", "sq_e08",
+    "sq_m01", "sq_m05", "sq_m07", "sq_m09",
+    "sq_h03", "sq_h06",
+    "cn_01", "cn_02", "cn_03", "cn_04",
+]
+_SQUARE_ROOT_QUESTIONS = [
+    "sq_m02", "sq_m03", "sq_m04", "sq_m06", "sq_m08",
+    "sq_h01", "sq_h02", "sq_h04", "sq_h05",
+]
+_PERFECT_CUBE_QUESTIONS = [
+    "cb_e01", "cb_e02", "cb_e03", "cb_e04", "cb_e05", "cb_e06", "cb_e07",
+    "cb_m04", "cb_m05", "cb_m06", "cb_m07",
+    "cb_h01", "cb_h04", "cb_h05",
+    "cn_05", "cn_06",
+]
+_CUBE_ROOT_QUESTIONS = [
+    "cb_m01", "cb_m02", "cb_m03", "cb_m08",
+    "cb_h02", "cb_h03", "cb_h06",
+]
+
+CHAPTER_GRAPH = ChapterGraph(
+    chapter_id="ch1_square_and_cube",
+    chapter_name="A Square and A Cube",
+    chapter_name_hi="वर्ग और घन",
+    subject="Mathematics",
+    grade=8,
+    concepts=[
+        # CONCEPT 1: Perfect Square (no prerequisites)
+        Concept(
+            id="perfect_square",
+            name="Perfect Square",
+            name_hi="पूर्ण वर्ग",
+            prerequisites=[],
+            questions=_PERFECT_SQUARE_QUESTIONS,
+            key_insight="Perfect squares have an odd number of factors because one factor pairs with itself.",
+            teaching={
+                "definition": {
+                    "en": (
+                        "When we multiply a number by itself, the result is called a perfect square. "
+                        "For example, 3 times 3 equals 9. So 9 is a perfect square because 3 × 3 = 9. "
+                        "We call this '3 squared' or 'the square of 3'."
+                    ),
+                    "hi": (
+                        "जब हम किसी संख्या को खुद से गुणा करते हैं, तो जो उत्तर आता है उसे पूर्ण वर्ग कहते हैं। "
+                        "जैसे 3 गुणा 3 बराबर 9। तो 9 एक पूर्ण वर्ग है क्योंकि 3 × 3 = 9। "
+                        "इसे हम '3 का वर्ग' कहते हैं।"
+                    ),
+                    "hinglish": (
+                        "Dekhiye, jab hum ek number ko khud se multiply karte hain, "
+                        "toh jo answer aata hai woh perfect square kehlata hai. "
+                        "Jaise 3 times 3 = 9. Toh 9 ek perfect square hai kyunki 3 × 3 = 9. "
+                        "Isko hum 3 ka square ya 3 squared bolte hain."
+                    ),
+                },
+                "indian_example": {
+                    "en": (
+                        "Think about square tiles in your home. 4 tiles on one side, "
+                        "4 tiles on the other side. Total tiles? 4 times 4 = 16! "
+                        "So 16 is a perfect square because 4 × 4 = 16."
+                    ),
+                    "hi": (
+                        "सोचिए आपके घर में चौकोर टाइल्स लगी हैं। एक तरफ 4 टाइल्स, "
+                        "दूसरी तरफ भी 4 टाइल्स। कुल कितनी टाइल्स? 4 गुणा 4 = 16! "
+                        "तो 16 एक पूर्ण वर्ग है क्योंकि 4 × 4 = 16।"
+                    ),
+                    "hinglish": (
+                        "Sochiye aapke ghar mein square tiles lagi hain. Ek taraf 4 tiles, "
+                        "doosri taraf bhi 4 tiles. Total kitni tiles? 4 times 4 = 16! "
+                        "Toh 16 ek perfect square hai kyunki 4 × 4 = 16."
+                    ),
+                },
+                "visual_analogy": {
+                    "en": (
+                        "Imagine making a rangoli pattern. Start with 1 dot. Add 3 dots in an L-shape. "
+                        "Then 5 more dots. Each time you get a bigger square! "
+                        "1, then 1+3=4, then 4+5=9. All perfect squares!"
+                    ),
+                    "hi": (
+                        "सोचिए रंगोली बना रहे हैं। पहले 1 बिंदु। फिर L-आकार में 3 बिंदु जोड़ो। "
+                        "फिर 5 और बिंदु। हर बार एक बड़ा वर्ग बनता है! "
+                        "1, फिर 1+3=4, फिर 4+5=9। सब पूर्ण वर्ग!"
+                    ),
+                    "hinglish": (
+                        "Rangoli banate waqt sochiye: pehle 1 dot, phir 3 dots ka "
+                        "L-shape add karo, phir 5 dots. Har baar ek bada square "
+                        "banta jaata hai! 1, phir 1+3=4, phir 4+5=9. Sab perfect squares!"
+                    ),
+                },
+                "real_life": {
+                    "en": (
+                        "Chess boards, carrom boards, floor tiles — all use perfect squares! "
+                        "8 × 8 = 64 squares on a chess board. "
+                        "When arranging chairs in equal rows and columns, you need a perfect square number."
+                    ),
+                    "hi": (
+                        "शतरंज बोर्ड, कैरम बोर्ड, फ्लोर टाइल्स — सब पूर्ण वर्ग उपयोग करते हैं! "
+                        "शतरंज बोर्ड पर 8 × 8 = 64 वर्ग। "
+                        "जब कुर्सियाँ बराबर पंक्तियों और स्तंभों में लगानी हों, तो पूर्ण वर्ग संख्या चाहिए।"
+                    ),
+                    "hinglish": (
+                        "Chess board, carrom board, floor tiles — sab perfect squares use karte hain! "
+                        "Chess board pe 8 × 8 = 64 squares hote hain. "
+                        "Jab chairs equal rows aur columns mein lagani ho, toh perfect square number chahiye."
+                    ),
+                },
+            },
+        ),
+
+        # CONCEPT 2: Square Root (requires: perfect_square)
+        Concept(
+            id="square_root",
+            name="Square Root",
+            name_hi="वर्गमूल",
+            prerequisites=["perfect_square"],
+            questions=_SQUARE_ROOT_QUESTIONS,
+            key_insight="Square root is the reverse of squaring — finding which number was multiplied by itself.",
+            teaching={
+                "definition": {
+                    "en": (
+                        "If a square has area 49 square cm, what's the side length? "
+                        "We know 7 times 7 = 49. So the side is 7 cm. "
+                        "7 is called the square root of 49. "
+                        "Square root means: the number that multiplies by itself to give the original."
+                    ),
+                    "hi": (
+                        "अगर एक वर्ग का क्षेत्रफल 49 वर्ग सेमी है, तो भुजा की लंबाई क्या होगी? "
+                        "हम जानते हैं 7 गुणा 7 = 49। तो भुजा 7 सेमी है। "
+                        "7 को 49 का वर्गमूल कहते हैं। "
+                        "वर्गमूल का मतलब: वह संख्या जो खुद से गुणा करने पर मूल संख्या दे।"
+                    ),
+                    "hinglish": (
+                        "Agar ek square ka area 49 square cm hai, toh uski side kitni? "
+                        "Hum jaante hain 7 times 7 = 49. Toh side 7 cm hai. "
+                        "7 ko hum 49 ka square root kehte hain. "
+                        "Square root matlab: woh number jisko khud se multiply karo toh original number aaye."
+                    ),
+                },
+                "indian_example": {
+                    "en": (
+                        "A farmer has 225 mango trees to plant in a square arrangement. "
+                        "How many trees per row? Find √225. "
+                        "15 × 15 = 225, so 15 trees per row!"
+                    ),
+                    "hi": (
+                        "एक किसान के पास 225 आम के पेड़ हैं जो वर्गाकार में लगाने हैं। "
+                        "प्रत्येक पंक्ति में कितने पेड़? √225 निकालो। "
+                        "15 × 15 = 225, तो प्रत्येक पंक्ति में 15 पेड़!"
+                    ),
+                    "hinglish": (
+                        "Ek kisan ke paas 225 aam ke ped hain jo square arrangement mein lagane hain. "
+                        "Har row mein kitne ped? √225 nikalo. "
+                        "15 × 15 = 225, toh har row mein 15 ped!"
+                    ),
+                },
+                "visual_analogy": {
+                    "en": (
+                        "Think of unwrapping a square. If you have 64 small squares arranged in a big square, "
+                        "count one side — that's your square root. 8 squares on each side, so √64 = 8."
+                    ),
+                    "hi": (
+                        "एक वर्ग को खोलने की सोचो। अगर 64 छोटे वर्ग एक बड़े वर्ग में हैं, "
+                        "एक तरफ गिनो — वही वर्गमूल है। हर तरफ 8 वर्ग, तो √64 = 8।"
+                    ),
+                    "hinglish": (
+                        "Sochiye ek square ko unwrap kar rahe ho. Agar 64 chhote squares ek bade square mein hain, "
+                        "ek side gino — wahi square root hai. Har side pe 8 squares, toh √64 = 8."
+                    ),
+                },
+                "real_life": {
+                    "en": (
+                        "Architects use square roots when designing rooms. "
+                        "If a room needs 100 sq ft area with equal sides, each side = √100 = 10 ft. "
+                        "Photographers use it to calculate diagonal of pictures."
+                    ),
+                    "hi": (
+                        "आर्किटेक्ट कमरे डिजाइन करते समय वर्गमूल का उपयोग करते हैं। "
+                        "अगर कमरे का क्षेत्रफल 100 वर्ग फुट चाहिए समान भुजाओं के साथ, तो प्रत्येक भुजा = √100 = 10 फुट। "
+                        "फोटोग्राफर इससे तस्वीरों की तिरछाई निकालते हैं।"
+                    ),
+                    "hinglish": (
+                        "Architects room design karte waqt square root use karte hain. "
+                        "Agar room ka area 100 sq ft chahiye equal sides ke saath, toh har side = √100 = 10 ft. "
+                        "Photographers isse pictures ki diagonal calculate karte hain."
+                    ),
+                },
+            },
+        ),
+
+        # CONCEPT 3: Perfect Cube (requires: perfect_square)
+        Concept(
+            id="perfect_cube",
+            name="Perfect Cube",
+            name_hi="पूर्ण घन",
+            prerequisites=["perfect_square"],
+            questions=_PERFECT_CUBE_QUESTIONS,
+            key_insight="A perfect cube is a number multiplied by itself THREE times, forming a 3D cube shape.",
+            teaching={
+                "definition": {
+                    "en": (
+                        "Now think in 3D! When we multiply a number three times, we get a perfect cube. "
+                        "2 × 2 × 2 = 8. So 8 is a perfect cube because 2 × 2 × 2 = 8. "
+                        "We call this '2 cubed' or 'the cube of 2'."
+                    ),
+                    "hi": (
+                        "अब 3D में सोचिए! जब हम किसी संख्या को तीन बार गुणा करते हैं, तो पूर्ण घन मिलता है। "
+                        "2 × 2 × 2 = 8। तो 8 एक पूर्ण घन है क्योंकि 2 × 2 × 2 = 8। "
+                        "इसे हम '2 का घन' कहते हैं।"
+                    ),
+                    "hinglish": (
+                        "Ab 3D mein sochiye! Jab hum ek number ko teen baar multiply "
+                        "karte hain, toh perfect cube banta hai. "
+                        "2 × 2 × 2 = 8. Toh 8 ek perfect cube hai kyunki 2 × 2 × 2 = 8. "
+                        "Isko 2 ka cube ya 2 cubed kehte hain."
+                    ),
+                },
+                "indian_example": {
+                    "en": (
+                        "Think of a laddoo box! 3 laddoos in a row, 3 rows in a layer, 3 layers. "
+                        "Total = 3 × 3 × 3 = 27 laddoos. "
+                        "27 is a perfect cube because 3 × 3 × 3 = 27!"
+                    ),
+                    "hi": (
+                        "लड्डू के डिब्बे की सोचिए! एक कतार में 3 लड्डू, एक परत में 3 कतारें, 3 परतें। "
+                        "कुल = 3 × 3 × 3 = 27 लड्डू। "
+                        "27 एक पूर्ण घन है क्योंकि 3 × 3 × 3 = 27!"
+                    ),
+                    "hinglish": (
+                        "Laddoo ke dabba sochiye! 3 laddoo ek line mein, 3 lines ek "
+                        "layer mein, 3 layers. Total = 3 × 3 × 3 = 27 laddoos. "
+                        "27 ek perfect cube hai kyunki 3 × 3 × 3 = 27!"
+                    ),
+                },
+                "visual_analogy": {
+                    "en": (
+                        "Imagine building with Lego blocks. Stack cubes into a bigger cube. "
+                        "2 blocks wide, 2 blocks deep, 2 blocks tall = 8 blocks total. "
+                        "That's why 8 is 2 cubed!"
+                    ),
+                    "hi": (
+                        "लेगो ब्लॉक्स से बनाने की सोचो। छोटे क्यूब्स को बड़ा क्यूब बनाओ। "
+                        "2 ब्लॉक चौड़ा, 2 ब्लॉक गहरा, 2 ब्लॉक ऊंचा = कुल 8 ब्लॉक। "
+                        "इसीलिए 8 है 2 का घन!"
+                    ),
+                    "hinglish": (
+                        "Lego blocks se building sochiye. Chhote cubes ko bada cube banao. "
+                        "2 blocks wide, 2 blocks deep, 2 blocks tall = 8 blocks total. "
+                        "Isliye 8 hai 2 cubed!"
+                    ),
+                },
+                "real_life": {
+                    "en": (
+                        "Rubik's cube has 3 × 3 × 3 = 27 small cubes! "
+                        "Shipping containers are cubes. Ice cube trays. "
+                        "When packing boxes into a truck, cubic numbers matter."
+                    ),
+                    "hi": (
+                        "रूबिक क्यूब में 3 × 3 × 3 = 27 छोटे क्यूब हैं! "
+                        "शिपिंग कंटेनर क्यूब होते हैं। आइस क्यूब ट्रे। "
+                        "जब ट्रक में बक्से पैक करते हैं, घन संख्याएं मायने रखती हैं।"
+                    ),
+                    "hinglish": (
+                        "Rubik's cube mein 3 × 3 × 3 = 27 chhote cubes hote hain! "
+                        "Shipping containers cubes hote hain. Ice cube trays bhi. "
+                        "Jab truck mein boxes pack karte ho, cube numbers matter karte hain."
+                    ),
+                },
+            },
+        ),
+
+        # CONCEPT 4: Cube Root (requires: perfect_cube)
+        Concept(
+            id="cube_root",
+            name="Cube Root",
+            name_hi="घनमूल",
+            prerequisites=["perfect_cube"],
+            questions=_CUBE_ROOT_QUESTIONS,
+            key_insight="Cube root finds which number was multiplied three times to get the result.",
+            teaching={
+                "definition": {
+                    "en": (
+                        "8 = 2 × 2 × 2 = 2 cubed. So 2 is the cube root of 8. "
+                        "Just like square root unpacks a square, cube root unpacks a cube. "
+                        "We make groups of three identical factors."
+                    ),
+                    "hi": (
+                        "8 = 2 × 2 × 2 = 2 का घन। तो 2 है 8 का घनमूल। "
+                        "जैसे वर्गमूल वर्ग को खोलता है, घनमूल घन को खोलता है। "
+                        "हम तीन-तीन समान गुणनखंडों के समूह बनाते हैं।"
+                    ),
+                    "hinglish": (
+                        "8 = 2 × 2 × 2 = 2 ka cube. Toh 2 ko 8 ka cube root kehte hain. "
+                        "Jaise square root mein pair banate the, cube root mein "
+                        "teen-teen ke groups banate hain."
+                    ),
+                },
+                "indian_example": {
+                    "en": (
+                        "A shopkeeper has 125 sweets to pack in a cubic box with equal pieces per side. "
+                        "How many per side? Find ∛125. "
+                        "5 × 5 × 5 = 125, so 5 sweets per side!"
+                    ),
+                    "hi": (
+                        "एक दुकानदार के पास 125 मिठाइयाँ हैं जो घन डिब्बे में पैक करनी हैं। "
+                        "प्रत्येक तरफ कितनी? ∛125 निकालो। "
+                        "5 × 5 × 5 = 125, तो प्रत्येक तरफ 5 मिठाइयाँ!"
+                    ),
+                    "hinglish": (
+                        "Ek dukandaar ke paas 125 mithai hain jo cubic box mein pack karni hain. "
+                        "Har taraf kitni? ∛125 nikalo. "
+                        "5 × 5 × 5 = 125, toh har taraf 5 mithai!"
+                    ),
+                },
+                "visual_analogy": {
+                    "en": (
+                        "If you have a big cube made of 27 small cubes, "
+                        "count one edge — that's the cube root. "
+                        "3 cubes on each edge, so ∛27 = 3."
+                    ),
+                    "hi": (
+                        "अगर एक बड़ा घन 27 छोटे घनों से बना है, "
+                        "एक किनारा गिनो — वही घनमूल है। "
+                        "हर किनारे पर 3 घन, तो ∛27 = 3।"
+                    ),
+                    "hinglish": (
+                        "Agar ek bada cube 27 chhote cubes se bana hai, "
+                        "ek edge gino — wahi cube root hai. "
+                        "Har edge pe 3 cubes, toh ∛27 = 3."
+                    ),
+                },
+                "real_life": {
+                    "en": (
+                        "Engineers use cube roots when designing tanks and containers. "
+                        "If you need a 1000-liter tank (1000 cm³), each side = ∛1000 = 10 cm. "
+                        "Sculptors calculate cube roots when scaling 3D models."
+                    ),
+                    "hi": (
+                        "इंजीनियर टैंक और कंटेनर डिजाइन करते समय घनमूल का उपयोग करते हैं। "
+                        "अगर 1000 लीटर टैंक चाहिए (1000 सेमी³), तो प्रत्येक भुजा = ∛1000 = 10 सेमी। "
+                        "शिल्पकार 3D मॉडल स्केल करते समय घनमूल निकालते हैं।"
+                    ),
+                    "hinglish": (
+                        "Engineers tanks aur containers design karte waqt cube root use karte hain. "
+                        "Agar 1000-liter tank chahiye (1000 cm³), toh har side = ∛1000 = 10 cm. "
+                        "Sculptors 3D models scale karte waqt cube roots calculate karte hain."
+                    ),
+                },
+            },
+        ),
+    ],
+)
+
+
+# ============================================================
+# SKILL to CONCEPT mapping (for backward compatibility)
+# ============================================================
+
+SKILL_TO_CONCEPT = {
+    "perfect_square_concept": "perfect_square",
+    "square_factor_pairs": "perfect_square",
+    "squares_table_1_to_30": "perfect_square",
+    "square_units_digit": "perfect_square",
+    "square_zeros_parity": "perfect_square",
+    "square_odd_pattern": "perfect_square",
+    "triangular_square_relation": "perfect_square",
+    "make_perfect_square": "perfect_square",
+    "square_root_concept": "square_root",
+    "sqrt_prime_factorisation": "square_root",
+    "sqrt_estimation": "square_root",
+    "perfect_cube_concept": "perfect_cube",
+    "cubes_table_1_to_20": "perfect_cube",
+    "cube_units_digit": "perfect_cube",
+    "taxicab_ramanujan": "perfect_cube",
+    "cube_odd_pattern": "perfect_cube",
+    "make_perfect_cube": "perfect_cube",
+    "cube_root_concept": "cube_root",
+    "cbrt_prime_factorisation": "cube_root",
+    "successive_differences": "cube_root",
+}
+
+
+def get_concept_for_skill(skill_id: str) -> str:
+    """Map a SKILL_LESSONS skill ID to its parent concept ID."""
+    return SKILL_TO_CONCEPT.get(skill_id, "perfect_square")
+
+
 if __name__ == "__main__":
     stats = chapter_stats()
     print(f"Chapter: {stats['chapter']}")
@@ -1568,3 +1963,6 @@ if __name__ == "__main__":
     for s in stats['skills']:
         count = len(get_questions_by_skill(s))
         print(f"  - {s}: {count} questions")
+    print(f"\nChapter Graph: {len(CHAPTER_GRAPH.concepts)} concepts")
+    for c in CHAPTER_GRAPH.concepts:
+        print(f"  - {c.id}: {len(c.questions)} questions")
