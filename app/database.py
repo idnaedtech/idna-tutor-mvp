@@ -72,6 +72,43 @@ def get_db():
         db.close()
 
 
+def run_migrations():
+    """Add missing columns to existing tables. Safe to run multiple times (idempotent)."""
+    import logging
+    from sqlalchemy import text, inspect
+
+    logger = logging.getLogger("idna")
+    inspector = inspect(engine)
+
+    # Check if sessions table exists
+    if 'sessions' not in inspector.get_table_names():
+        return  # Table doesn't exist yet, will be created by create_all
+
+    existing_columns = {col['name'] for col in inspector.get_columns('sessions')}
+
+    # Column migrations for sessions table
+    # Use TEXT for JSON on SQLite, JSON/JSONB for PostgreSQL
+    json_type = "TEXT" if _is_sqlite else "JSONB"
+
+    migrations = {
+        'teaching_turn': f"ALTER TABLE sessions ADD COLUMN teaching_turn INTEGER DEFAULT 0",
+        'explanations_given': f"ALTER TABLE sessions ADD COLUMN explanations_given {json_type} DEFAULT '[]'",
+        'language_pref': f"ALTER TABLE sessions ADD COLUMN language_pref VARCHAR(20) DEFAULT 'hinglish'",
+        'conversation_history': f"ALTER TABLE sessions ADD COLUMN conversation_history {json_type} DEFAULT '[]'",
+        'current_concept_id': f"ALTER TABLE sessions ADD COLUMN current_concept_id VARCHAR(100)",
+        'concept_mastery': f"ALTER TABLE sessions ADD COLUMN concept_mastery {json_type} DEFAULT '{{}}'",
+    }
+
+    with engine.begin() as conn:
+        for col_name, sql in migrations.items():
+            if col_name not in existing_columns:
+                try:
+                    conn.execute(text(sql))
+                    logger.info(f"Migration: added column '{col_name}' to sessions table")
+                except Exception as e:
+                    logger.warning(f"Migration: column '{col_name}' may already exist: {e}")
+
+
 def init_db():
     """Create all tables. Called once at startup."""
     if RESET_DATABASE:
@@ -96,4 +133,9 @@ def init_db():
             conn.commit()
 
         logger.info("All tables dropped. Creating fresh schema...")
+
+    # Create tables first
     Base.metadata.create_all(bind=engine)
+
+    # Then run migrations to add any missing columns to existing tables
+    run_migrations()
