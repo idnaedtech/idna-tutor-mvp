@@ -22,7 +22,7 @@ States (MVP flow — math only, no topic discovery):
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
-from app.tutor.input_classifier import StudentCategory
+from app.tutor.input_classifier import StudentCategory, get_language_switch_preference
 from app.tutor.answer_checker import Verdict
 from app.config import (
     MAX_QUESTIONS_PER_SESSION, MAX_RETEACH_ATTEMPTS,
@@ -53,6 +53,9 @@ class Action:
     detected_subject: Optional[str] = None
     student_text: str = ""
     extra: dict = field(default_factory=dict)
+    # v7.2.0: Teaching progression and language
+    teaching_turn: int = 0  # Current teaching turn (1, 2, 3)
+    language_pref: Optional[str] = None  # Set when LANGUAGE_SWITCH detected
 
 
 # ─── Transition Function ─────────────────────────────────────────────────────
@@ -87,6 +90,15 @@ def transition(
 
     if category == "STOP":
         return "SESSION_COMPLETE", Action("end_session", student_text=text)
+
+    # v7.2.0: LANGUAGE_SWITCH — stay in current state, just acknowledge switch (BUG 2)
+    if category == "LANGUAGE_SWITCH":
+        pref = get_language_switch_preference(text)
+        return current_state, Action(
+            "acknowledge_language_switch", student_text=text,
+            language_pref=pref,
+            extra={"new_language": pref},
+        )
 
     if category == "COMFORT" and current_state != "COMFORT":
         return "COMFORT", Action(
@@ -127,24 +139,44 @@ def transition(
     # ── TEACHING ──────────────────────────────────────────────────────────
 
     if current_state == "TEACHING":
+        # v7.2.0: Get teaching_turn from context (BUG 1 fix)
+        teaching_turn = ctx.get("teaching_turn", 0)
+
         if category == "ACK":
+            # v7.2.0: ACK in TEACHING → reset teaching_turn, transition to WAITING_ANSWER
             return "WAITING_ANSWER", Action(
                 "read_question", student_text=text,
+                extra={"reset_teaching_turn": True},
             )
         if category == "IDK":
-            new_rt = reteach + 1
-            if new_rt >= MAX_RETEACH_ATTEMPTS:
+            # v7.2.0: Increment teaching_turn, force transition at turn 3 (BUG 1 fix)
+            new_turn = teaching_turn + 1
+            if new_turn >= 3:
+                # Force transition: "Koi baat nahi, chaliye ek sawaal try karte hain"
                 return "WAITING_ANSWER", Action(
-                    "read_question", reteach_count=new_rt,
-                    student_text=text, extra={"difficulty": "easy"},
+                    "read_question", reteach_count=new_turn,
+                    teaching_turn=new_turn,
+                    student_text=text,
+                    extra={"difficulty": "easy", "forced_transition": True},
                 )
             return "TEACHING", Action(
-                "teach_concept", reteach_count=new_rt,
-                student_text=text, extra={"approach": "different_example"},
+                "teach_concept", reteach_count=new_turn,
+                teaching_turn=new_turn,
+                student_text=text,
+                extra={"approach": "different_example"},
+            )
+        if category == "META_QUESTION":
+            # v7.2.0: Handle meta questions like "any more examples?" (BUG 4 fix)
+            return "TEACHING", Action(
+                "answer_meta_question", reteach_count=reteach,
+                teaching_turn=teaching_turn,
+                student_text=text,
+                extra={"meta_type": "more_examples"},
             )
         if category == "CONCEPT":
             return "TEACHING", Action(
                 "teach_concept", reteach_count=reteach,
+                teaching_turn=teaching_turn,
                 student_text=text, extra={"approach": "answer_question"},
             )
         if category == "ANSWER":
@@ -154,6 +186,7 @@ def transition(
             )
         return "TEACHING", Action(
             "teach_concept", student_text=text,
+            teaching_turn=teaching_turn,
         )
 
     # ── WAITING_ANSWER ────────────────────────────────────────────────────

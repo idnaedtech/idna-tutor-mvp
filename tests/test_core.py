@@ -295,6 +295,59 @@ class TestInputClassifier:
 
 # ─── Enforcer Tests ───────────────────────────────────────────────────────────
 
+# ─── State Machine Tests (v7.2.0) ───────────────────────────────────────────
+
+class TestStateMachine:
+    """Test state_machine.py transitions including v7.2.0 changes."""
+
+    def setup_method(self):
+        from app.tutor.state_machine import transition
+        self.transition = transition
+
+    def test_ack_in_teaching_transitions_to_waiting_answer(self):
+        """BUG 1: ACK in TEACHING should transition to WAITING_ANSWER."""
+        ctx = {"student_text": "ab samajh aaya", "teaching_turn": 0}
+        new_state, action = self.transition("TEACHING", "ACK", ctx)
+        assert new_state == "WAITING_ANSWER"
+        assert action.action_type == "read_question"
+
+    def test_idk_in_teaching_increments_turn(self):
+        """BUG 1: IDK in TEACHING should increment teaching_turn."""
+        ctx = {"student_text": "nahi samjha", "teaching_turn": 0}
+        new_state, action = self.transition("TEACHING", "IDK", ctx)
+        assert new_state == "TEACHING"
+        assert action.teaching_turn == 1
+
+    def test_idk_at_turn_3_forces_transition(self):
+        """BUG 1: At teaching_turn=3, should force transition to WAITING_ANSWER."""
+        ctx = {"student_text": "nahi samjha", "teaching_turn": 2}
+        new_state, action = self.transition("TEACHING", "IDK", ctx)
+        assert new_state == "WAITING_ANSWER"
+        assert action.extra.get("forced_transition") == True
+
+    def test_language_switch_stays_in_current_state(self):
+        """BUG 2: LANGUAGE_SWITCH should stay in current state."""
+        ctx = {"student_text": "can you speak in english"}
+        new_state, action = self.transition("TEACHING", "LANGUAGE_SWITCH", ctx)
+        assert new_state == "TEACHING"
+        assert action.action_type == "acknowledge_language_switch"
+        assert action.language_pref == "english"
+
+    def test_language_switch_from_waiting_answer(self):
+        """BUG 2: LANGUAGE_SWITCH should work from any state."""
+        ctx = {"student_text": "hindi mein bolo"}
+        new_state, action = self.transition("WAITING_ANSWER", "LANGUAGE_SWITCH", ctx)
+        assert new_state == "WAITING_ANSWER"
+        assert action.language_pref == "hindi"
+
+    def test_meta_question_in_teaching(self):
+        """BUG 4: META_QUESTION in TEACHING should be handled."""
+        ctx = {"student_text": "any more examples?", "teaching_turn": 1}
+        new_state, action = self.transition("TEACHING", "META_QUESTION", ctx)
+        assert new_state == "TEACHING"
+        assert action.action_type == "answer_meta_question"
+
+
 class TestEnforcer:
     """Test enforcer.py rules."""
 
