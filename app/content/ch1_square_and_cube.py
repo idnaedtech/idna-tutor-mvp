@@ -92,7 +92,7 @@ SKILL_LESSONS = {
         "indian_example": (
             "Sochiye aapke ghar mein square tiles lagi hain. Ek taraf 4 tiles, "
             "doosri taraf bhi 4 tiles. Total kitni tiles? 4 times 4 = 16! "
-            "Toh 16 ek perfect square hai."
+            "Toh 16 ek perfect square hai kyunki 4 × 4 = 16."
         ),
         "key_insight": (
             "Perfect squares ke factors ki sankhya odd hoti hai. Kyunki ek "
@@ -336,7 +336,7 @@ SKILL_LESSONS = {
         "indian_example": (
             "Laddoo ke dabba sochiye! 3 laddoo ek line mein, 3 lines ek "
             "layer mein, 3 layers. Total = 3 × 3 × 3 = 27 laddoos. "
-            "27 ek perfect cube hai!"
+            "27 ek perfect cube hai kyunki 3 × 3 × 3 = 27!"
         ),
         "key_property": (
             "Perfect cube ke prime factorisation mein har prime factor "
