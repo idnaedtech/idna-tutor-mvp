@@ -201,7 +201,7 @@ def check_input_classifier_hindi():
     sig = inspect.signature(classify)
     assert "text" in sig.parameters, "classify() must accept text"
     assert "current_state" in sig.parameters, "classify() must accept current_state"
-    return True
+    return True, f"FAST_ACK={len(FAST_ACK)}, FAST_IDK={len(FAST_IDK)}, FAST_STOP={len(FAST_STOP)} (within caps)"
 
 
 def check_no_hardcoded_sochiye():

@@ -40,9 +40,9 @@ ParentCategory = Literal["PROGRESS", "INSTRUCTION", "CHITCHAT", "GOODBYE"]
 # These bypass the LLM call for common responses, saving ~150ms latency
 
 FAST_ACK = {
-    "haan", "haa", "ha", "yes", "ok", "okay", "hmm", "hmmm",
-    "theek hai", "ठीक है", "हां", "हाँ", "अच्छा", "accha",
-    "samajh gaya", "समझ गया", "got it",
+    "haan", "ha", "yes", "ok", "okay", "hmm",
+    "हां", "हाँ", "ठीक है", "अच्छा",
+    "samajh gaya", "समझ गया",
 }
 
 FAST_IDK = {
@@ -52,7 +52,7 @@ FAST_IDK = {
 
 FAST_STOP = {
     "bye", "stop", "band karo", "बंद करो", "bas", "बस",
-    "goodbye", "khatam", "खतम",
+    "khatam", "खतम",
 }
 
 # ─── LLM Classifier System Prompt ────────────────────────────────────────────
