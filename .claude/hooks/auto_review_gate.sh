@@ -20,5 +20,7 @@ fi
 
 printf "%s\n" "${files[@]}" > .claude/_state/modified_files.unique
 
-jq -n --arg reason "AUTO-REVIEW REQUIRED. Review ONLY files listed in .claude/_state/modified_files.unique, fix issues, then stop again." \
-  '{decision:"block", reason:$reason}'
+# Output valid JSON without jq dependency
+cat <<'EOF'
+{"decision":"block","reason":"AUTO-REVIEW REQUIRED. Review ONLY files listed in .claude/_state/modified_files.unique, fix issues, then stop again."}
+EOF
