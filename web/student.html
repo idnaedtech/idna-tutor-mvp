@@ -645,7 +645,6 @@
 
     // ─── Audio Playback ────────────────────────────────
     async function playDidiAudio(b64) {
-        console.log("[DEBUG] playDidiAudio called, isDidiSpeaking:", isDidiSpeaking);
         console.log("[Audio] playDidiAudio called, b64 length:", b64 ? b64.length : 0);
 
         if (!b64 || b64.length === 0) {
@@ -686,7 +685,7 @@
                 const cleanup = () => {
                     if (hasEnded) return;
                     hasEnded = true;
-                    console.log("[DEBUG] cleanup() called, setting isDidiSpeaking = false");
+                    console.log("[Audio] Cleanup called");
                     if (maxTimeout) clearTimeout(maxTimeout);
                     if (stuckCheckInterval) clearInterval(stuckCheckInterval);
                     URL.revokeObjectURL(url);
@@ -719,37 +718,29 @@
                     }
                 };
 
-                console.log("[Audio] Calling play()...");
-                const playStartTime = Date.now();
-                currentAudio.play().then(() => {
-                    console.log("[DEBUG] play() resolved after", Date.now() - playStartTime, "ms");
-                    console.log("[Audio] Play started successfully");
+                // Create safety timeout BEFORE play() — guarantees cleanup even if play() hangs
+                maxTimeout = setTimeout(() => {
+                    console.warn("[Audio] Max timeout (30s) - forcing cleanup");
+                    cleanup();
+                }, 30000);
 
-                    // Fallback 1: Max 30 second timeout (Didi responses are short)
-                    maxTimeout = setTimeout(() => {
-                        console.warn("[Audio] Max timeout (30s) - forcing cleanup");
-                        cleanup();
-                    }, 30000);
-
-                    // Fallback 2: Check every 500ms if audio is stuck
-                    stuckCheckInterval = setInterval(() => {
-                        if (hasEnded) {
-                            clearInterval(stuckCheckInterval);
-                            return;
-                        }
-                        const now = Date.now();
-                        // If no timeupdate for 2 seconds and audio started, consider it done
-                        if (lastTimeUpdate > 0 && (now - lastTimeUpdate) > 2000) {
-                            console.warn("[Audio] No timeupdate for 2s - forcing cleanup");
-                            cleanup();
-                        }
-                    }, 500);
-                }).catch((e) => {
-                    console.log("[DEBUG] play() rejected after", Date.now() - playStartTime, "ms");
-                    console.error("[Audio] Play failed:", e.name, e.message);
-                    if (e.name === 'NotAllowedError') {
-                        console.log("[Audio] Autoplay blocked - user interaction required");
+                // Create stuck checker BEFORE play() — detects if audio stops updating
+                stuckCheckInterval = setInterval(() => {
+                    if (hasEnded) {
+                        clearInterval(stuckCheckInterval);
+                        return;
                     }
+                    if (lastTimeUpdate > 0 && (Date.now() - lastTimeUpdate) > 2000) {
+                        console.warn("[Audio] No timeupdate for 2s - forcing cleanup");
+                        cleanup();
+                    }
+                }, 500);
+
+                console.log("[Audio] Calling play()...");
+                currentAudio.play().then(() => {
+                    console.log("[Audio] Play started successfully");
+                }).catch((e) => {
+                    console.error("[Audio] Play failed:", e.name, e.message);
                     cleanup();
                 });
 
