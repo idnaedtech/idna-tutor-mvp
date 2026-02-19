@@ -191,24 +191,17 @@ def check_skill_lessons_have_pre_teach():
 
 
 def check_input_classifier_hindi():
-    """Verify Hindi IDK phrases are in the classifier."""
-    try:
-        found_path = find_file(CLASSIFIER_PATHS)
-        if not found_path:
-            return False, "input_classifier.py not found in any expected location"
-
-        with open(found_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        hindi_phrases = ["पता नहीं", "नहीं पता", "समझ"]
-        found = [p for p in hindi_phrases if p in content]
-        missing = [p for p in hindi_phrases if p not in content]
-
-        if missing:
-            return False, f"Missing Hindi phrases: {missing}"
-        return True, f"Found {len(found)}/3 Hindi IDK phrases"
-    except Exception as e:
-        return False, f"Error: {e}"
+    """Verify fast-path sets are capped and LLM handles overflow."""
+    from app.tutor.input_classifier import FAST_IDK, FAST_ACK, FAST_STOP
+    assert len(FAST_IDK) <= 12, f"FAST_IDK has {len(FAST_IDK)} entries — max 12"
+    assert len(FAST_ACK) <= 12, f"FAST_ACK has {len(FAST_ACK)} entries — max 12"
+    assert len(FAST_STOP) <= 8, f"FAST_STOP has {len(FAST_STOP)} entries — max 8"
+    import inspect
+    from app.tutor.input_classifier import classify
+    sig = inspect.signature(classify)
+    assert "text" in sig.parameters, "classify() must accept text"
+    assert "current_state" in sig.parameters, "classify() must accept current_state"
+    return True
 
 
 def check_no_hardcoded_sochiye():
