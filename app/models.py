@@ -92,6 +92,13 @@ class Session(Base):
     current_hint_level: Mapped[int] = mapped_column(Integer, default=0)
     current_reteach_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # v7.2.0: Teaching progression tracking (BUG 1/3 fix)
+    teaching_turn: Mapped[int] = mapped_column(Integer, default=0)  # Resets per concept
+    explanations_given: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # List of explanations
+
+    # v7.2.0: Language preference persistence (BUG 2 fix)
+    language_pref: Mapped[str] = mapped_column(String(10), default="hinglish")  # hinglish/english/hindi
+
     # Session summary (generated at end)
     summary_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     summary_audio_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
