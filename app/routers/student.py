@@ -31,7 +31,10 @@ from app.voice.stt import get_stt, is_low_confidence
 from app.voice.tts import get_tts
 from app.voice.clean_for_tts import clean_for_tts
 
-from app.tutor.input_classifier import classify_student_input
+from app.tutor.input_classifier import classify
+from openai import AsyncOpenAI
+from app.config import OPENAI_API_KEY
+import asyncio
 from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer
 from app.tutor.instruction_builder import build_prompt
@@ -181,7 +184,7 @@ def start_session(
 # ─── Main Message Handler ───────────────────────────────────────────────────
 
 @router.post("/session/message", response_model=MessageResponse)
-def process_message(
+async def process_message(
     session_id: str = Form(...),
     audio: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
@@ -263,11 +266,18 @@ def process_message(
     # ── Step 2: Classify input ────────────────────────────────────────────
     # MVP: No topic discovery (math only). Subject detection removed.
 
-    category = classify_student_input(
+    # v7.3.0: Use async LLM classifier
+    openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    classify_result = await classify(
         student_text,
         current_state=session.state,
         subject=session.subject or "math",
+        client=openai_client,
     )
+    category = classify_result["category"]
+    # Handle LANGUAGE_SWITCH preference from classifier
+    if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
+        session.language_pref = classify_result["extras"]["preferred_language"]
     logger.info(f"Input: '{student_text[:50]}' → category={category}, state={session.state}")
 
     # Handle SILENCE without LLM — just give a gentle nudge
@@ -562,11 +572,18 @@ async def process_message_stream(
         return StreamingResponse(garbled_stream(), media_type="text/event-stream")
 
     # ── Classify ──
-    category = classify_student_input(
+    # v7.3.0: Use async LLM classifier
+    openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    classify_result = await classify(
         student_text,
         current_state=session.state,
         subject=session.subject or "math",
+        client=openai_client,
     )
+    category = classify_result["category"]
+    # Handle LANGUAGE_SWITCH preference from classifier (Break 4 fix)
+    if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
+        session.language_pref = classify_result["extras"]["preferred_language"]
 
     # Handle silence without LLM
     if category == "SILENCE":

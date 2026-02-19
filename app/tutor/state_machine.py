@@ -124,7 +124,7 @@ def transition(
             return "EVALUATING", Action(
                 "evaluate_answer", question_id=q_id, student_text=text,
             )
-        if category in ("IDK", "CONCEPT"):
+        if category in ("IDK", "CONCEPT_REQUEST"):
             return "TEACHING", Action(
                 "teach_concept", student_text=text,
             )
@@ -173,7 +173,7 @@ def transition(
                 student_text=text,
                 extra={"meta_type": "more_examples"},
             )
-        if category == "CONCEPT":
+        if category == "CONCEPT_REQUEST":
             return "TEACHING", Action(
                 "teach_concept", reteach_count=reteach,
                 teaching_turn=teaching_turn,
@@ -201,7 +201,7 @@ def transition(
                 "give_hint", hint_level=1, question_id=q_id,
                 student_text=text,
             )
-        if category == "CONCEPT":
+        if category == "CONCEPT_REQUEST":
             return "TEACHING", Action(
                 "teach_concept", question_id=q_id,
                 student_text=text, extra={"return_to": "WAITING_ANSWER"},
@@ -229,7 +229,7 @@ def transition(
                 "give_hint", hint_level=2, question_id=q_id,
                 student_text=text,
             )
-        if category == "CONCEPT":
+        if category == "CONCEPT_REQUEST":
             # Student asking for explanation - teach, then return to question
             return "TEACHING", Action(
                 "teach_concept", question_id=q_id, student_text=text,
@@ -252,7 +252,7 @@ def transition(
             return "FULL_SOLUTION", Action(
                 "show_solution", question_id=q_id, student_text=text,
             )
-        if category == "CONCEPT":
+        if category == "CONCEPT_REQUEST":
             # Student asking for explanation - teach, then return to question
             return "TEACHING", Action(
                 "teach_concept", question_id=q_id, student_text=text,

@@ -54,7 +54,10 @@ class STTProvider(Protocol):
 class GroqWhisperSTT:
     """Groq-hosted Whisper large-v3-turbo. Fast, good for MVP."""
 
-    def transcribe(self, audio: bytes, language: str = "hi") -> STTResult:
+    def transcribe(self, audio: bytes, language: str = None) -> STTResult:
+        # Use config default if no language specified
+        if language is None:
+            language = STT_DEFAULT_LANGUAGE
         start = time.perf_counter()
         try:
             # Groq Whisper uses OpenAI-compatible API
@@ -122,7 +125,10 @@ class SarvamSaarikaSTT:
     NATIVE Hindi-English code-mixing. No phonetic mapping needed.
     """
 
-    def transcribe(self, audio: bytes, language: str = "hi-IN") -> STTResult:
+    def transcribe(self, audio: bytes, language: str = None) -> STTResult:
+        # Use config default if no language specified
+        if language is None:
+            language = STT_DEFAULT_LANGUAGE
         start = time.perf_counter()
         try:
             # Sarvam REST API for STT
@@ -176,7 +182,10 @@ class SarvamSaarikaSTT:
 class SarvamSaarasSTT:
     """Sarvam Saaras v3 — 22 Indian languages, beats GPT-4o on benchmarks."""
 
-    def transcribe(self, audio: bytes, language: str = "hi-IN") -> STTResult:
+    def transcribe(self, audio: bytes, language: str = None) -> STTResult:
+        # Use config default if no language specified
+        if language is None:
+            language = STT_DEFAULT_LANGUAGE
         start = time.perf_counter()
         try:
             files = {
