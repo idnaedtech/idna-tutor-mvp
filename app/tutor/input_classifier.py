@@ -30,7 +30,8 @@ from typing import Literal
 
 StudentCategory = Literal[
     "ACK", "IDK", "ANSWER", "CONCEPT", "COMFORT", "STOP",
-    "TROLL", "REPEAT", "DISPUTE", "HOMEWORK", "SUBJECT", "SILENCE"
+    "TROLL", "REPEAT", "DISPUTE", "HOMEWORK", "SUBJECT", "SILENCE",
+    "LANGUAGE_SWITCH", "META_QUESTION"
 ]
 ParentCategory = Literal["PROGRESS", "INSTRUCTION", "CHITCHAT", "GOODBYE"]
 
@@ -45,6 +46,12 @@ _ACK_PHRASES = [
     "accha", "acha", "अच्छा",
     "hmm", "got it", "understood",
     "next", "agle", "aage", "आगे",
+    # v7.2.0: Additional Hindi ACK variants (BUG 1 fix)
+    "ab samajh aaya", "ab samajh aa gaya", "samajh mein aaya",
+    "samajh aa gaya mujhe", "hmmm", "hmm hmm",
+    "oke", "ok ok", "accha accha", "theek hai",
+    "अब समझ आया", "अब समझ में आया", "हम्म", "ओके",
+    "अच्छा अच्छा", "ठीक है",
 ]
 
 _IDK_PHRASES = [
@@ -143,6 +150,40 @@ _GOODBYE_PHRASES = [
     "बाय", "धन्यवाद", "शुक्रिया", "ठीक है",
 ]
 
+# v7.2.0: LANGUAGE_SWITCH patterns (BUG 2 fix)
+_LANGUAGE_SWITCH_PHRASES = [
+    # English requests
+    "can you speak in english", "english mein bolo", "english mein batao",
+    "speak in english", "in english please", "english please",
+    "talk in english", "say in english",
+    # Hindi requests
+    "hindi mein bolo", "hindi mein batao", "speak in hindi",
+    "talk in hindi", "say in hindi",
+    # Devanagari
+    "इंग्लिश में बोलो", "इंग्लिश में समझाओ", "हिंदी में बोलो",
+    "कैन यू स्पीक इन इंग्लिश", "बट कैन यू स्पीक इन इंग्लिश",
+    "इंग्लिश में बताओ", "अंग्रेजी में बोलो",
+]
+
+# v7.2.0: META_QUESTION patterns (BUG 4 fix)
+_META_QUESTION_PHRASES = [
+    # More examples requests
+    "any more examples", "aur examples", "aur batao",
+    "more examples", "another example", "ek aur example",
+    "aur ek example", "give me example", "example do",
+    # Chapter/topic questions
+    "which chapter", "kaun sa chapter", "kya padha rahe ho",
+    "konsa topic", "what topic", "which topic",
+    # Real-life relevance
+    "how can we use", "real life example", "real life mein",
+    "kaise use karte hain", "why is this important",
+    "iska use kya hai", "kahan use hota hai",
+    # Devanagari
+    "एनी मोर एग्जांपल्स", "और एग्ज़ांपल्स", "कौन सा चैप्टर",
+    "रियल लाइफ", "और बताइए", "और बताओ",
+    "इसका उपयोग", "क्या उपयोग",
+]
+
 
 # ─── Classification Functions ────────────────────────────────────────────────
 
@@ -153,6 +194,21 @@ def _has_match(text: str, phrases: list[str]) -> bool:
         if phrase in text_lower:
             return True
     return False
+
+
+def _detect_language_preference(text: str) -> str | None:
+    """Detect which language the student wants. Returns 'english', 'hindi', or None."""
+    text_lower = text.lower().strip()
+    english_indicators = ["english", "इंग्लिश", "अंग्रेजी", "angrez"]
+    hindi_indicators = ["hindi", "हिंदी", "हिन्दी"]
+
+    for indicator in english_indicators:
+        if indicator in text_lower:
+            return "english"
+    for indicator in hindi_indicators:
+        if indicator in text_lower:
+            return "hindi"
+    return None
 
 
 def _looks_like_math_answer(text: str) -> bool:
@@ -212,6 +268,10 @@ def classify_student_input(
     if _has_match(text, _STOP_PHRASES):
         return "STOP"
 
+    # 1.5. LANGUAGE_SWITCH — student wants to change language (BUG 2 fix)
+    if _has_match(text, _LANGUAGE_SWITCH_PHRASES):
+        return "LANGUAGE_SWITCH"
+
     # 2. COMFORT — student is upset (must catch before generic classification)
     if _has_match(text, _COMFORT_PHRASES):
         return "COMFORT"
@@ -238,6 +298,10 @@ def classify_student_input(
     # 7. IDK — student doesn't understand
     if _has_match(text, _IDK_PHRASES):
         return "IDK"
+
+    # 7.5. META_QUESTION — student asks meta questions (BUG 4 fix)
+    if _has_match(text, _META_QUESTION_PHRASES):
+        return "META_QUESTION"
 
     # 8. CONCEPT — student asks for explanation (check before ACK to avoid "ha" in "hai" matching)
     concept_phrases = [
@@ -279,6 +343,16 @@ def classify_student_input(
 
     # 12. Default: treat as CONCEPT request if we can't classify
     return "CONCEPT"
+
+
+def get_language_switch_preference(text: str) -> str:
+    """Get the preferred language from a LANGUAGE_SWITCH input.
+
+    Returns:
+        'english', 'hindi', or 'hinglish' (default if unclear)
+    """
+    pref = _detect_language_preference(text)
+    return pref if pref else "hinglish"
 
 
 def classify_parent_input(text: str) -> ParentCategory:

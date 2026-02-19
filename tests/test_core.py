@@ -247,6 +247,51 @@ class TestInputClassifier:
     def test_repeat(self):
         assert self.classify("phir se bolo") == "REPEAT"
 
+    # v7.2.0: New ACK variants tests
+    def test_ack_ab_samajh_aaya(self):
+        assert self.classify("ab samajh aaya") == "ACK"
+
+    def test_ack_ab_samajh_aaya_hindi(self):
+        assert self.classify("अब समझ आया") == "ACK"
+
+    def test_ack_hmm(self):
+        assert self.classify("hmm") == "ACK"
+
+    def test_ack_accha_accha(self):
+        assert self.classify("accha accha") == "ACK"
+
+    def test_ack_theek_hai(self):
+        assert self.classify("theek hai") == "ACK"
+
+    # v7.2.0: LANGUAGE_SWITCH tests
+    def test_language_switch_english(self):
+        assert self.classify("can you speak in english") == "LANGUAGE_SWITCH"
+
+    def test_language_switch_english_please(self):
+        assert self.classify("speak in english please") == "LANGUAGE_SWITCH"
+
+    def test_language_switch_hindi(self):
+        assert self.classify("hindi mein bolo") == "LANGUAGE_SWITCH"
+
+    def test_language_switch_hindi_devanagari(self):
+        assert self.classify("इंग्लिश में बोलो") == "LANGUAGE_SWITCH"
+
+    # v7.2.0: META_QUESTION tests
+    def test_meta_question_more_examples(self):
+        assert self.classify("any more examples") == "META_QUESTION"
+
+    def test_meta_question_aur_batao(self):
+        assert self.classify("aur batao") == "META_QUESTION"
+
+    def test_meta_question_which_chapter(self):
+        assert self.classify("which chapter") == "META_QUESTION"
+
+    def test_meta_question_real_life(self):
+        assert self.classify("real life mein kaise use karte hain") == "META_QUESTION"
+
+    def test_meta_question_hindi(self):
+        assert self.classify("और बताओ") == "META_QUESTION"
+
 
 # ─── Enforcer Tests ───────────────────────────────────────────────────────────
 
