@@ -58,9 +58,13 @@ _IDK_PHRASES = [
     "पता नहीं", "नहीं पता", "मुझे नहीं पता",
     "समझ में नहीं आया", "कुछ समझ में नहीं आया", "समझ नहीं आया",
     "नहीं समझा", "मालूम नहीं", "अभी भी नहीं पता",
+    # Word order variations - Hindi allows flexible word order
+    "नहीं समझ में आया", "नहीं समझ आया", "समझ में आया नहीं",
+    "नहीं समझे", "समझाओ फिर से", "फिर से समझाओ",
+    "फिर से समझाइए", "फिर से समझाएंगे", "दोबारा समझाओ",
     # Re-explain requests (overlap with IDK intent)
     "ek baar phir", "phir se", "dobara", "explain again",
-    "phir se batao", "फिर से बताओ",
+    "phir se batao", "फिर से बताओ", "फिर से",
 ]
 
 _COMFORT_PHRASES = [

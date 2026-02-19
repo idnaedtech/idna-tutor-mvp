@@ -677,36 +677,70 @@
                 currentAudio = new Audio(url);
                 console.log("[Audio] Audio element created");
 
-                currentAudio.onended = () => {
-                    console.log("[Audio] Playback ended successfully");
+                // Timeout fallback - if onended doesn't fire, force reset after duration + buffer
+                let audioTimeout = null;
+                let hasEnded = false;
+
+                const cleanup = () => {
+                    if (hasEnded) return;
+                    hasEnded = true;
+                    if (audioTimeout) clearTimeout(audioTimeout);
                     URL.revokeObjectURL(url);
                     isDidiSpeaking = false;
                     currentAudio = null;
-
-                    // Auto-start listening after Didi finishes
                     startListening();
                     resolve();
                 };
 
+                currentAudio.onloadedmetadata = () => {
+                    // Set timeout based on actual duration + 2 second buffer
+                    const duration = currentAudio.duration || 30;
+                    const timeoutMs = (duration + 2) * 1000;
+                    console.log("[Audio] Duration:", duration, "s, timeout:", timeoutMs, "ms");
+                    audioTimeout = setTimeout(() => {
+                        console.warn("[Audio] Timeout fallback - onended didn't fire");
+                        cleanup();
+                    }, timeoutMs);
+                };
+
+                currentAudio.onended = () => {
+                    console.log("[Audio] Playback ended successfully");
+                    cleanup();
+                };
+
                 currentAudio.onerror = (e) => {
-                    console.error("[Audio] Playback error:", e, currentAudio.error);
-                    isDidiSpeaking = false;
-                    startListening();
-                    resolve();
+                    console.error("[Audio] Playback error:", e, currentAudio?.error);
+                    cleanup();
+                };
+
+                // Also listen for pause (in case user pauses or tab becomes inactive)
+                currentAudio.onpause = () => {
+                    // Only cleanup if audio actually finished (currentTime near duration)
+                    if (currentAudio && currentAudio.duration > 0) {
+                        const remaining = currentAudio.duration - currentAudio.currentTime;
+                        if (remaining < 0.5) {
+                            console.log("[Audio] Pause near end - treating as ended");
+                            cleanup();
+                        }
+                    }
                 };
 
                 console.log("[Audio] Calling play()...");
                 currentAudio.play().then(() => {
                     console.log("[Audio] Play started successfully");
+                    // Fallback timeout if loadedmetadata didn't fire (shouldn't happen but just in case)
+                    if (!audioTimeout) {
+                        audioTimeout = setTimeout(() => {
+                            console.warn("[Audio] Max timeout fallback (60s)");
+                            cleanup();
+                        }, 60000);
+                    }
                 }).catch((e) => {
                     console.error("[Audio] Play failed:", e.name, e.message);
-                    // Try to show a play button if autoplay blocked
                     if (e.name === 'NotAllowedError') {
                         console.log("[Audio] Autoplay blocked - user interaction required");
                     }
-                    isDidiSpeaking = false;
-                    startListening();
-                    resolve();
+                    cleanup();
                 });
 
             } catch (e) {
