@@ -645,6 +645,7 @@
 
     // ─── Audio Playback ────────────────────────────────
     async function playDidiAudio(b64) {
+        console.log("[DEBUG] playDidiAudio called, isDidiSpeaking:", isDidiSpeaking);
         console.log("[Audio] playDidiAudio called, b64 length:", b64 ? b64.length : 0);
 
         if (!b64 || b64.length === 0) {
@@ -685,7 +686,7 @@
                 const cleanup = () => {
                     if (hasEnded) return;
                     hasEnded = true;
-                    console.log("[Audio] Cleanup called");
+                    console.log("[DEBUG] cleanup() called, setting isDidiSpeaking = false");
                     if (maxTimeout) clearTimeout(maxTimeout);
                     if (stuckCheckInterval) clearInterval(stuckCheckInterval);
                     URL.revokeObjectURL(url);
@@ -719,7 +720,9 @@
                 };
 
                 console.log("[Audio] Calling play()...");
+                const playStartTime = Date.now();
                 currentAudio.play().then(() => {
+                    console.log("[DEBUG] play() resolved after", Date.now() - playStartTime, "ms");
                     console.log("[Audio] Play started successfully");
 
                     // Fallback 1: Max 30 second timeout (Didi responses are short)
@@ -742,6 +745,7 @@
                         }
                     }, 500);
                 }).catch((e) => {
+                    console.log("[DEBUG] play() rejected after", Date.now() - playStartTime, "ms");
                     console.error("[Audio] Play failed:", e.name, e.message);
                     if (e.name === 'NotAllowedError') {
                         console.log("[Audio] Autoplay blocked - user interaction required");
