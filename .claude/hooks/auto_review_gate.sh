@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# No modified files log → allow (no edits this turn)
 if [[ ! -f ".claude/_state/modified_files.log" ]]; then
+  echo '{"decision":"allow"}'
   exit 0
 fi
 
@@ -13,14 +15,16 @@ mapfile -t files < <(
     done
 )
 
+# No valid files → clean up and allow
 if [[ "${#files[@]}" -eq 0 ]]; then
   rm -f .claude/_state/modified_files.log
+  echo '{"decision":"allow"}'
   exit 0
 fi
 
 printf "%s\n" "${files[@]}" > .claude/_state/modified_files.unique
 
-# Output valid JSON without jq dependency
+# Files were modified → block until verify.py proof shown
 cat <<'EOF'
-{"decision":"block","reason":"AUTO-REVIEW REQUIRED. Review ONLY files listed in .claude/_state/modified_files.unique, fix issues, then stop again."}
+{"decision":"block","reason":"You modified files. Run python verify.py and show ALL 14 checks passing before completing."}
 EOF
