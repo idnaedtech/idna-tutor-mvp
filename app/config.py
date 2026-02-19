@@ -70,7 +70,7 @@ STT_CONFIDENCE_THRESHOLD = float(os.getenv("STT_CONFIDENCE_THRESHOLD", "0.4"))
 STT_DEFAULT_LANGUAGE = "hi"
 
 # ─── LLM Settings ────────────────────────────────────────────────────────────
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-5-mini")
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "200"))
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 

@@ -275,6 +275,7 @@ async def process_message(
         client=openai_client,
     )
     category = classify_result["category"]
+    logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
     # Handle LANGUAGE_SWITCH preference from classifier
     if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
         session.language_pref = classify_result["extras"]["preferred_language"]
@@ -581,6 +582,7 @@ async def process_message_stream(
         client=openai_client,
     )
     category = classify_result["category"]
+    logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
     # Handle LANGUAGE_SWITCH preference from classifier (Break 4 fix)
     if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
         session.language_pref = classify_result["extras"]["preferred_language"]
