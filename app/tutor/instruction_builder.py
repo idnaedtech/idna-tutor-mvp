@@ -34,11 +34,33 @@ HARD RULES:
 DIDI_NO_PRAISE = "\nCRITICAL: Do NOT praise. Answer was NOT correct. No shabash/bahut accha/well done.\n"
 DIDI_PRAISE_OK = "\nStudent answered correctly. Praise genuinely. Reference their exact answer.\n"
 
+# v7.2.0: Language preference instructions (BUG 2 fix)
+LANG_ENGLISH = "\nIMPORTANT: Respond ENTIRELY in English. Do not use Hindi words.\n"
+LANG_HINDI = "\nIMPORTANT: Respond entirely in Hindi (Devanagari script).\n"
+LANG_HINGLISH = "\nRespond in natural Hinglish. Use 'aap' form.\n"
+
+
+def _get_language_instruction(session_context: dict) -> str:
+    """Get language instruction based on session preference."""
+    pref = session_context.get("language_pref", "hinglish")
+    if pref == "english":
+        return LANG_ENGLISH
+    elif pref == "hindi":
+        return LANG_HINDI
+    return LANG_HINGLISH
+
 
 def build_prompt(action, session_context, question_data=None, skill_data=None, previous_didi_response=None):
     at = action.action_type
     builder = _BUILDERS.get(at, _build_fallback)
-    return builder(action, session_context, question_data, skill_data, previous_didi_response)
+    messages = builder(action, session_context, question_data, skill_data, previous_didi_response)
+
+    # v7.2.0: Inject language preference into system prompt (BUG 2 fix)
+    lang_instruction = _get_language_instruction(session_context)
+    if messages and messages[0].get("role") == "system":
+        messages[0]["content"] = messages[0]["content"] + lang_instruction
+
+    return messages
 
 
 def _sys(extra=""):
@@ -66,31 +88,53 @@ def _build_probe_understanding(a, ctx, q, sk, prev):
 def _build_teach_concept(a, ctx, q, sk, prev):
     ch = ctx.get("chapter", "rational numbers")
     extra = ""
-    if a.reteach_count > 0:
-        extra = f"\nRe-teach #{a.reteach_count}. Use COMPLETELY DIFFERENT example. Previous: \"{prev or 'unknown'}\". Do NOT repeat."
+
+    # v7.2.0: Phase-based teaching with teaching_turn (BUG 1/3 fix)
+    teaching_turn = getattr(a, 'teaching_turn', 0) or a.reteach_count
+    if teaching_turn > 0:
+        extra = f"\nRe-teach #{teaching_turn}. Use COMPLETELY DIFFERENT example. Previous: \"{prev or 'unknown'}\". Do NOT repeat."
+
+    # v7.2.0: Anti-repetition context (BUG 3 fix)
+    explanations = ctx.get("explanations_given") or []
+    if explanations:
+        anti_rep = "\n\nYOU ALREADY EXPLAINED THESE (DO NOT REPEAT):\n"
+        for exp in explanations[-3:]:  # Last 3 explanations
+            anti_rep += f"- Turn {exp.get('turn', '?')}: {exp.get('summary', 'unknown')}\n"
+        anti_rep += "Use a COMPLETELY DIFFERENT approach this time.\n"
+        extra += anti_rep
 
     # Get actual teaching content from SKILL_TEACHING
     from app.content.seed_questions import SKILL_TEACHING
     skill_key = q.get("target_skill", "") if q else ctx.get("skill", "")
     lesson = SKILL_TEACHING.get(skill_key, {})
 
-    # Get content based on reteach count
-    if a.reteach_count >= 2:
+    # v7.2.0: Rotate approaches based on teaching_turn (BUG 3 fix)
+    # Turn 0: definition/pre_teach, Turn 1: indian_example, Turn 2+: key_insight/visual
+    if teaching_turn >= 2:
         teach_content = lesson.get("key_insight") or lesson.get("indian_example") or lesson.get("pre_teach") or ""
-    elif a.reteach_count == 1:
+    elif teaching_turn == 1:
         teach_content = lesson.get("indian_example") or lesson.get("key_insight") or lesson.get("pre_teach") or ""
     else:
         teach_content = lesson.get("pre_teach") or lesson.get("teaching") or ""
 
     approach = a.extra.get("approach", "fresh")
-    if approach == "answer_question":
+
+    # v7.2.0: Phase-based prompts (BUG 1 fix)
+    if a.extra.get("forced_transition"):
+        # Turn 3+: Force to question with gentle transition
+        msg = 'Say: "Koi baat nahi, chaliye ek sawaal try karte hain." Then read the question.'
+    elif approach == "answer_question":
         msg = f'Student asked: "{a.student_text}". Answer their question about {ch}. {teach_content if teach_content else "Use simple example."} 2 sentences.'
     elif approach == "different_example":
-        if teach_content:
-            msg = f'Student didn\'t understand. Explain differently: "{teach_content}". 2 sentences. End: "Ab samajh aaya?"'
+        if teaching_turn == 1:
+            msg = f'Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. End: "Ab samajh aaya?"'
+        elif teaching_turn >= 2:
+            # Simplest version
+            msg = f"Student still doesn't understand. Give the SIMPLEST explanation possible: \"{teach_content}\" 2 sentences. End: \"Ab samajh aaya?\""
         else:
             msg = f"Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"Ab samajh aaya?\""
     else:
+        # Turn 0: Initial teaching
         if teach_content:
             msg = f'Teach this concept naturally in Hinglish: "{teach_content}". 2 sentences. End: "Samajh aaya?"'
         else:
@@ -184,6 +228,44 @@ def _build_ask_repeat(a, ctx, q, sk, prev):
     return [{"role": "system", "content": _sys()}, {"role": "user", "content": '"Sorry, samajh nahi aaya. Ek baar phir boliye?" 1 sentence.'}]
 
 
+# v7.2.0: New builders for language switch and meta questions
+
+def _build_acknowledge_language_switch(a, ctx, q, sk, prev):
+    """Acknowledge language switch and continue in new language."""
+    new_lang = a.extra.get("new_language", "hinglish")
+    if new_lang == "english":
+        msg = 'Student asked to switch to English. Say: "Sure, I can speak in English. What would you like to know?" 1 sentence.'
+    elif new_lang == "hindi":
+        msg = 'Student asked for Hindi. Say: "ठीक है, मैं हिंदी में बोलती हूं। आगे बढ़ें?" 1 sentence.'
+    else:
+        msg = 'Student asked for Hinglish. Say: "Theek hai, hum Hinglish mein baat karte hain. Aage badhein?" 1 sentence.'
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
+
+
+def _build_answer_meta_question(a, ctx, q, sk, prev):
+    """Answer meta questions like 'more examples', 'which chapter', etc."""
+    meta_type = a.extra.get("meta_type", "more_examples")
+    ch = ctx.get("chapter", "rational numbers")
+
+    # Get teaching content for more examples
+    from app.content.seed_questions import SKILL_TEACHING
+    skill_key = q.get("target_skill", "") if q else ""
+    lesson = SKILL_TEACHING.get(skill_key, {})
+
+    if "example" in a.student_text.lower() or meta_type == "more_examples":
+        examples = lesson.get("indian_example") or lesson.get("examples", "")
+        msg = f'Student wants more examples. Give 2-3 NEW examples for {skill_key}. DO NOT repeat the definition. Do NOT reuse: "{prev or ""}". Use fresh examples: {examples if examples else "laddoo, cricket score, rangoli squares"}. 2 sentences.'
+    elif "chapter" in a.student_text.lower() or "topic" in a.student_text.lower():
+        title = lesson.get("title_hi") or lesson.get("name") or ch
+        msg = f'Student asked which chapter. Say: "Yeh {title} chapter hai, Class 8 Math se." 1 sentence.'
+    elif "real life" in a.student_text.lower() or "use" in a.student_text.lower():
+        msg = f'Student asked about real-life use. Give 1-2 practical examples: architecture, cooking, shopping. How {ch} is used in daily life. 2 sentences.'
+    else:
+        msg = f'Student asked: "{a.student_text}". Answer briefly about {ch}. 2 sentences.'
+
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
+
+
 def _build_fallback(a, ctx, q, sk, prev):
     return [{"role": "system", "content": _sys()}, {"role": "user", "content": 'Something unexpected. Say naturally: "Chalo, aage badhte hain."'}]
 
@@ -196,4 +278,7 @@ _BUILDERS = {
     "pick_next_question": _build_pick_next_question, "comfort_student": _build_comfort_student,
     "end_session": _build_end_session, "acknowledge_homework": _build_acknowledge_homework,
     "replay_heard": _build_replay_heard, "ask_repeat": _build_ask_repeat,
+    # v7.2.0: New action builders
+    "acknowledge_language_switch": _build_acknowledge_language_switch,
+    "answer_meta_question": _build_answer_meta_question,
 }
