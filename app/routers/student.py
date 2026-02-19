@@ -287,6 +287,10 @@ def process_message(
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
         "total_hints_used": session.total_hints_used,
+        # v7.2.0: Teaching progression fields
+        "teaching_turn": session.teaching_turn or 0,
+        "explanations_given": session.explanations_given or [],
+        "language_pref": session.language_pref or "hinglish",
     }
 
     state_before = session.state
@@ -381,12 +385,24 @@ def process_message(
         # Every turn has didi_response - get the most recent one
         prev_response = session.turns[-1].didi_response
 
+    # v7.2.0: Update session fields based on action
+    if action.language_pref:
+        session.language_pref = action.language_pref
+    if action.extra.get("reset_teaching_turn"):
+        session.teaching_turn = 0
+        session.explanations_given = []
+    elif action.teaching_turn > 0:
+        session.teaching_turn = action.teaching_turn
+
     session_ctx = {
         "subject": session.subject,
         "chapter": session.chapter,
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
         "total_hints_used": session.total_hints_used,
+        # v7.2.0: Include language preference for prompt injection
+        "language_pref": session.language_pref or "hinglish",
+        "explanations_given": session.explanations_given or [],
     }
 
     messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response)
@@ -550,6 +566,10 @@ async def process_message_stream(
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
         "total_hints_used": session.total_hints_used,
+        # v7.2.0: Teaching progression fields
+        "teaching_turn": session.teaching_turn or 0,
+        "explanations_given": session.explanations_given or [],
+        "language_pref": session.language_pref or "hinglish",
     }
     new_state, action = transition(session.state, category, ctx)
 
