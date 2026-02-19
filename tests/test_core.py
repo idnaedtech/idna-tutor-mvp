@@ -186,15 +186,19 @@ class TestMathAnswerChecker:
         assert v.correct
 
 
-# ─── Input Classifier Tests ──────────────────────────────────────────────────
+# ─── Input Classifier Tests (v7.3.0 — LLM-based) ────────────────────────────
+# Note: The sync classify_student_input() is now FAST-PATH ONLY.
+# Full classification requires async classify() with OpenAI client.
+# Tests marked with "fast-path" use sync function, others require async/mock.
 
-class TestInputClassifier:
-    """Test input_classifier.py categories."""
+class TestInputClassifierFastPath:
+    """Test input_classifier.py fast-path (no LLM needed)."""
 
     def setup_method(self):
         from app.tutor.input_classifier import classify_student_input
         self.classify = classify_student_input
 
+    # Fast-path ACK tests (single/two-word obvious inputs)
     def test_ack_haan(self):
         assert self.classify("haan") == "ACK"
 
@@ -204,29 +208,41 @@ class TestInputClassifier:
     def test_ack_okay(self):
         assert self.classify("okay") == "ACK"
 
-    def test_idk_nahi_samjha(self):
-        assert self.classify("nahi samjha") == "IDK"
+    def test_ack_hmm(self):
+        assert self.classify("hmm") == "ACK"
 
+    def test_ack_theek_hai(self):
+        assert self.classify("theek hai") == "ACK"
+
+    def test_ack_accha(self):
+        assert self.classify("accha") == "ACK"
+
+    # Fast-path IDK tests
     def test_idk_pata_nahi(self):
         assert self.classify("pata nahi") == "IDK"
 
+    def test_idk_nahi_samjha(self):
+        assert self.classify("nahi samjha") == "IDK"
+
+    def test_idk_no(self):
+        assert self.classify("no") == "IDK"
+
+    # Fast-path STOP tests
     def test_stop_bye(self):
         assert self.classify("bye") == "STOP"
 
     def test_stop_band_karo(self):
         assert self.classify("band karo") == "STOP"
 
-    def test_comfort_give_up(self):
-        assert self.classify("I give up") == "COMFORT"
+    def test_stop_bas(self):
+        assert self.classify("bas") == "STOP"
 
-    def test_comfort_mushkil(self):
-        assert self.classify("bahut mushkil hai") == "COMFORT"
-
+    # Fast-path ANSWER tests (numeric in WAITING_ANSWER state)
     def test_answer_number(self):
-        assert self.classify("minus 3", current_state="WAITING_ANSWER") == "ANSWER"
+        assert self.classify("49", current_state="WAITING_ANSWER") == "ANSWER"
 
     def test_answer_fraction(self):
-        assert self.classify("2 by 7", current_state="WAITING_ANSWER") == "ANSWER"
+        assert self.classify("2/7", current_state="WAITING_ANSWER") == "ANSWER"
 
     def test_haan_during_waiting_answer_is_answer(self):
         """Yes/no answers like 'haan' should be ANSWER during WAITING_ANSWER state."""
@@ -236,61 +252,75 @@ class TestInputClassifier:
         """Yes/no answers like 'yes' should be ANSWER during WAITING_ANSWER state."""
         assert self.classify("yes", current_state="WAITING_ANSWER") == "ANSWER"
 
-    # test_subject_math removed — SUBJECT category disabled for MVP (math only)
+    # Non-fast-path returns UNCLEAR (requires LLM)
+    def test_complex_input_returns_unclear(self):
+        """Complex inputs require LLM, sync function returns UNCLEAR."""
+        assert self.classify("I give up") == "UNCLEAR"
 
-    def test_homework(self):
-        assert self.classify("homework hai") == "HOMEWORK"
+    def test_language_switch_returns_unclear(self):
+        """LANGUAGE_SWITCH requires LLM classification."""
+        assert self.classify("can you speak in english") == "UNCLEAR"
 
-    def test_dispute(self):
-        assert self.classify("maine sahi bola") == "DISPUTE"
 
-    def test_repeat(self):
-        assert self.classify("phir se bolo") == "REPEAT"
+class TestInputClassifierAsync:
+    """Test async classify() function with mocked OpenAI client."""
 
-    # v7.2.0: New ACK variants tests
-    def test_ack_ab_samajh_aaya(self):
-        assert self.classify("ab samajh aaya") == "ACK"
+    def test_fast_path_ack_async(self):
+        """Fast-path works without client."""
+        import asyncio
+        from app.tutor.input_classifier import classify
 
-    def test_ack_ab_samajh_aaya_hindi(self):
-        assert self.classify("अब समझ आया") == "ACK"
+        result = asyncio.run(classify("ok", "TEACHING", client=None))
+        assert result["category"] == "ACK"
+        assert result["confidence"] >= 0.9
 
-    def test_ack_hmm(self):
-        assert self.classify("hmm") == "ACK"
+    def test_fast_path_idk_async(self):
+        """Fast-path IDK works without client."""
+        import asyncio
+        from app.tutor.input_classifier import classify
 
-    def test_ack_accha_accha(self):
-        assert self.classify("accha accha") == "ACK"
+        result = asyncio.run(classify("nahi", "TEACHING", client=None))
+        assert result["category"] == "IDK"
 
-    def test_ack_theek_hai(self):
-        assert self.classify("theek hai") == "ACK"
+    def test_fast_path_stop_async(self):
+        """Fast-path STOP works without client."""
+        import asyncio
+        from app.tutor.input_classifier import classify
 
-    # v7.2.0: LANGUAGE_SWITCH tests
-    def test_language_switch_english(self):
-        assert self.classify("can you speak in english") == "LANGUAGE_SWITCH"
+        result = asyncio.run(classify("bye", "TEACHING", client=None))
+        assert result["category"] == "STOP"
 
-    def test_language_switch_english_please(self):
-        assert self.classify("speak in english please") == "LANGUAGE_SWITCH"
+    def test_answer_in_waiting_state_async(self):
+        """Numeric input in WAITING_ANSWER returns ANSWER."""
+        import asyncio
+        from app.tutor.input_classifier import classify
 
-    def test_language_switch_hindi(self):
-        assert self.classify("hindi mein bolo") == "LANGUAGE_SWITCH"
+        result = asyncio.run(classify("144", "WAITING_ANSWER", client=None))
+        assert result["category"] == "ANSWER"
 
-    def test_language_switch_hindi_devanagari(self):
-        assert self.classify("इंग्लिश में बोलो") == "LANGUAGE_SWITCH"
+    def test_no_client_returns_unclear(self):
+        """Without client, non-fast-path returns UNCLEAR."""
+        import asyncio
+        from app.tutor.input_classifier import classify
 
-    # v7.2.0: META_QUESTION tests
-    def test_meta_question_more_examples(self):
-        assert self.classify("any more examples") == "META_QUESTION"
+        result = asyncio.run(classify("could you explain in English please", "TEACHING", client=None))
+        assert result["category"] == "UNCLEAR"
 
-    def test_meta_question_aur_batao(self):
-        assert self.classify("aur batao") == "META_QUESTION"
+    def test_silence_marker(self):
+        """[silence] marker is handled."""
+        import asyncio
+        from app.tutor.input_classifier import classify
 
-    def test_meta_question_which_chapter(self):
-        assert self.classify("which chapter") == "META_QUESTION"
+        result = asyncio.run(classify("[silence]", "TEACHING", client=None))
+        assert result["category"] == "SILENCE"
 
-    def test_meta_question_real_life(self):
-        assert self.classify("real life mein kaise use karte hain") == "META_QUESTION"
+    def test_empty_input(self):
+        """Empty input returns REPEAT."""
+        import asyncio
+        from app.tutor.input_classifier import classify
 
-    def test_meta_question_hindi(self):
-        assert self.classify("और बताओ") == "META_QUESTION"
+        result = asyncio.run(classify("", "TEACHING", client=None))
+        assert result["category"] == "REPEAT"
 
 
 # ─── Enforcer Tests ───────────────────────────────────────────────────────────

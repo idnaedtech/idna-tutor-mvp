@@ -1,203 +1,190 @@
 """
-IDNA EdTech v7.0 — Input Classifier
-Classifies student or parent voice input into actionable categories.
-Pure functions — no API calls, no side effects.
+IDNA EdTech v7.3.0 — Input Classifier (LLM-Based)
+
+ARCHITECTURAL CHANGE: Replaced pattern-based classification with GPT-4o-mini LLM calls.
+Fast-path for obvious single/two-word inputs saves latency and cost.
 
 Categories (Student):
-    ACK        — "haan", "samajh gaya", "okay"
-    IDK        — "nahi samjha", "pata nahi"
-    ANSWER     — any numeric, mathematical, or substantive response
-    CONCEPT    — "explain karo", "kya hai ye"
-    COMFORT    — "bahut mushkil", "I give up", frustration signals
-    STOP       — "bye", "band karo"
-    TROLL      — off-topic, jokes
-    REPEAT     — "phir se bolo", "I didn't hear"
-    DISPUTE    — "maine sahi bola", "galat check kiya" (challenges Didi's verdict)
-    HOMEWORK   — "homework hai", "photo bhejta hoon"
-    SUBJECT    — "math padha", "science padhi" (topic discovery)
+    ACK            — understood/agrees (yes, okay, samajh aaya, hmm, got it)
+    IDK            — doesn't understand (nahi samjha, I don't know, confused)
+    ANSWER         — giving an answer (numbers, math expressions, factual responses)
+    CONCEPT_REQUEST — asks to explain something (what is this, explain, why)
+    LANGUAGE_SWITCH — wants language change (speak in English, Hindi mein bolo)
+    META_QUESTION   — asks about session (which chapter, more examples, real life use)
+    COMFORT        — frustrated (I give up, too hard, boring)
+    STOP           — wants to end (bye, stop)
+    REPEAT         — didn't hear (say again, phir se bolo)
+    UNCLEAR        — cannot determine
 
 Categories (Parent):
-    PROGRESS   — "kaisa chal raha hai", "aaj kya padha"
-    INSTRUCTION — "fractions pe dhyan do", "zyada practice karao"
+    PROGRESS   — asking about child's progress
+    INSTRUCTION — telling Didi what to focus on
     CHITCHAT   — off-topic, greetings
-    GOODBYE    — "bye", "theek hai", "chalo"
+    GOODBYE    — wants to end
 """
 
+import json
 import re
-from typing import Literal
+from typing import Literal, Optional
+from openai import AsyncOpenAI
 
 # ─── Type Definitions ────────────────────────────────────────────────────────
 
 StudentCategory = Literal[
-    "ACK", "IDK", "ANSWER", "CONCEPT", "COMFORT", "STOP",
-    "TROLL", "REPEAT", "DISPUTE", "HOMEWORK", "SUBJECT", "SILENCE",
-    "LANGUAGE_SWITCH", "META_QUESTION"
+    "ACK", "IDK", "ANSWER", "CONCEPT_REQUEST", "LANGUAGE_SWITCH",
+    "META_QUESTION", "COMFORT", "STOP", "REPEAT", "UNCLEAR", "SILENCE"
 ]
 ParentCategory = Literal["PROGRESS", "INSTRUCTION", "CHITCHAT", "GOODBYE"]
 
-# ─── Phrase Banks ────────────────────────────────────────────────────────────
-# Lowercase. Checked via substring match.
+# ─── Fast-Path Sets (for single/two-word obvious inputs) ────────────────────
+# These bypass the LLM call for common responses, saving ~150ms latency
 
-_ACK_PHRASES = [
-    "haan", "haa", "ha", "yes", "okay", "ok", "theek", "thik",
-    "samajh gaya", "samajh gayi", "samajh aa gaya", "samjha",
-    "pata hai", "maloom", "sahi", "correct",
-    "हां", "हाँ", "ठीक", "समझ गया", "समझ गयी", "समझा",
-    "accha", "acha", "अच्छा",
-    "hmm", "got it", "understood",
-    "next", "agle", "aage", "आगे",
-    # v7.2.0: Additional Hindi ACK variants (BUG 1 fix)
-    "ab samajh aaya", "ab samajh aa gaya", "samajh mein aaya",
-    "samajh aa gaya mujhe", "hmmm", "hmm hmm",
-    "oke", "ok ok", "accha accha", "theek hai",
-    "अब समझ आया", "अब समझ में आया", "हम्म", "ओके",
-    "अच्छा अच्छा", "ठीक है",
-]
-
-_IDK_PHRASES = [
-    # English
-    "i don't know", "don't know", "dont know", "no idea", "not sure", "idk",
-    # Romanized Hindi
-    "nahi samjha", "nahi samajh", "samajh nahi", "nahi pata",
-    "pata nahi", "nahi maloom", "maloom nahi", "confused",
-    "kuch samajh nahi", "samajh nahi aaya", "mujhe nahi pata",
-    # Devanagari Hindi - CRITICAL for real student input
-    "पता नहीं", "नहीं पता", "मुझे नहीं पता",
-    "समझ में नहीं आया", "कुछ समझ में नहीं आया", "समझ नहीं आया",
-    "नहीं समझा", "मालूम नहीं", "अभी भी नहीं पता",
-    # Word order variations - Hindi allows flexible word order
-    "नहीं समझ में आया", "नहीं समझ आया", "समझ में आया नहीं",
-    "नहीं समझे", "समझाओ फिर से", "फिर से समझाओ",
-    "फिर से समझाइए", "फिर से समझाएंगे", "दोबारा समझाओ",
-    # Re-explain requests (overlap with IDK intent)
-    "ek baar phir", "phir se", "dobara", "explain again",
-    "phir se batao", "फिर से बताओ", "फिर से",
-]
-
-_COMFORT_PHRASES = [
-    # English
-    "i give up", "give up", "too hard", "too difficult", "can't do this",
-    "hopeless", "crying", "sad", "frustrated",
-    # Romanized Hindi
-    "haar gaya", "haar gayi", "bahut mushkil", "bohot mushkil",
-    "nahi kar sakta", "nahi kar sakti", "mujhse nahi hoga",
-    "bore", "boring", "thak gaya", "thak gayi", "tired",
-    "gussa", "angry", "kuch nahi hoga", "chhod do",
-    "ro raha", "ro rahi", "nahi ho raha",
-    # Devanagari Hindi - CRITICAL
-    "बहुत मुश्किल", "हार गया", "हार गयी", "थक गया",
-    "मुझसे नहीं होगा", "छोड़ दो", "नहीं हो रहा",
-    "कुछ समझ में नहीं आया",  # Can also be IDK, but comfort takes priority
-]
-
-_STOP_PHRASES = [
-    "bye", "goodbye", "stop", "band karo", "band kar do",
-    "bas", "khatam", "finish", "done", "chalo",
-    "let's stop", "i want to stop", "enough",
-    "बंद करो", "बस", "खतम", "चलो",
-    "good night", "good bye",
-]
-
-_REPEAT_PHRASES = [
-    "phir se bolo", "repeat", "say again", "kya bola",
-    "sunai nahi", "didn't hear", "what did you say",
-    "dobara bolo", "ek baar phir bolo",
-    "फिर से बोलो", "दोबारा", "सुनाई नहीं",
-]
-
-_DISPUTE_PHRASES = [
-    "maine sahi bola", "sahi tha", "mera answer sahi",
-    "galat check", "wrong check", "i said correct",
-    "मैंने सही बोला", "सही था", "गलत चेक",
-    "listen again", "suno phir se",
-]
-
-_HOMEWORK_PHRASES = [
-    "homework", "home work", "गृहकार्य", "grahkarya",
-    "photo", "camera", "picture", "image",
-    "homework hai", "homework mila", "homework dikhaata",
-]
-
-_SUBJECT_PHRASES = {
-    "math": [
-        "math", "maths", "mathematics", "गणित", "ganit", "hisaab",
-        # Whisper garbled versions
-        "मैथ", "मैथ्स", "मेथ", "मेथ्स", "मादस", "मेट्स", "मेठ",
-        "mathe", "mats", "meth", "meths",
-    ],
-    "science": ["science", "विज्ञान", "vigyan", "साइंस"],
-    "hindi": ["hindi", "हिंदी", "हिन्दी"],
+FAST_ACK = {
+    "haan", "haa", "ha", "yes", "ok", "okay", "hmm", "hmmm",
+    "theek hai", "ठीक है", "हां", "हाँ", "अच्छा", "accha",
+    "samajh gaya", "समझ गया", "got it",
 }
 
-# Parent-specific
-_PROGRESS_PHRASES = [
-    "kaisa chal", "kaise chal", "how is", "progress", "kya padha",
-    "aaj kya", "score", "marks", "result", "report",
-    "कैसा चल", "कैसे चल", "क्या पढ़ा", "आज क्या",
-    "kitna padha", "homework kiya", "practice kiya",
-]
+FAST_IDK = {
+    "nahi", "no", "नहीं", "pata nahi", "नहीं पता",
+    "don't know", "idk", "नहीं समझा", "nahi samjha",
+}
 
-_INSTRUCTION_PHRASES = [
-    "dhyan do", "dhyan de", "focus", "zyada practice",
-    "concentrate", "weak", "kamzor", "improve",
-    "ध्यान दो", "ध्यान दे", "ज़्यादा",
-    "karwao", "karao", "sikhao", "teach more",
-]
+FAST_STOP = {
+    "bye", "stop", "band karo", "बंद करो", "bas", "बस",
+    "goodbye", "khatam", "खतम",
+}
 
-_GOODBYE_PHRASES = [
-    "bye", "goodbye", "theek hai", "chalo", "bas",
-    "okay thanks", "thank you", "dhanyavaad", "shukriya",
-    "बाय", "धन्यवाद", "शुक्रिया", "ठीक है",
-]
+# ─── LLM Classifier System Prompt ────────────────────────────────────────────
 
-# v7.2.0: LANGUAGE_SWITCH patterns (BUG 2 fix)
-_LANGUAGE_SWITCH_PHRASES = [
-    # English requests
-    "can you speak in english", "english mein bolo", "english mein batao",
-    "speak in english", "in english please", "english please",
-    "talk in english", "say in english",
-    # Hindi requests
-    "hindi mein bolo", "hindi mein batao", "speak in hindi",
-    "talk in hindi", "say in hindi",
-    # Devanagari
-    "इंग्लिश में बोलो", "इंग्लिश में समझाओ", "हिंदी में बोलो",
-    "कैन यू स्पीक इन इंग्लिश", "बट कैन यू स्पीक इन इंग्लिश",
-    "इंग्लिश में बताओ", "अंग्रेजी में बोलो",
-]
+CLASSIFIER_SYSTEM = """You classify student input for an Indian tutoring system.
+Student: Class 8, learning {subject}. Current state: {current_state}. Topic: {current_topic}.
 
-# v7.2.0: META_QUESTION patterns (BUG 4 fix)
-_META_QUESTION_PHRASES = [
-    # More examples requests
-    "any more examples", "aur examples", "aur batao",
-    "more examples", "another example", "ek aur example",
-    "aur ek example", "give me example", "example do",
-    # Chapter/topic questions
-    "which chapter", "kaun sa chapter", "kya padha rahe ho",
-    "konsa topic", "what topic", "which topic",
-    # Real-life relevance
-    "how can we use", "real life example", "real life mein",
-    "kaise use karte hain", "why is this important",
-    "iska use kya hai", "kahan use hota hai",
-    # Devanagari
-    "एनी मोर एग्जांपल्स", "और एग्ज़ांपल्स", "कौन सा चैप्टर",
-    "रियल लाइफ", "और बताइए", "और बताओ",
-    "इसका उपयोग", "क्या उपयोग",
-]
+Categories (pick EXACTLY ONE):
+- ACK: understood/agrees (yes, okay, samajh aaya, hmm, got it, theek hai, "ab samajh aaya")
+- IDK: doesn't understand (nahi samjha, I don't know, confused, "समझ में नहीं आया")
+- ANSWER: giving an answer (numbers, math expressions, factual responses, "49", "7 ka square")
+- CONCEPT_REQUEST: asks to explain something (what is this, explain, why is it called that, "kaise hota hai")
+- LANGUAGE_SWITCH: wants language change (speak in English, Hindi mein bolo, translate, "could you explain in English")
+- META_QUESTION: asks about session (which chapter, more examples, real life use, "aur examples do")
+- COMFORT: frustrated (I give up, too hard, boring, "bahut mushkil hai")
+- STOP: wants to end (bye, stop, band karo)
+- REPEAT: didn't hear (say again, phir se bolo, "sunai nahi diya")
+- UNCLEAR: cannot determine
+
+For LANGUAGE_SWITCH also return preferred_language: "english"|"hindi"|"hinglish"
+For META_QUESTION also return question_type: "examples"|"chapter_info"|"relevance"|"other"
+For ANSWER also return raw_answer with just the answer portion extracted
+
+Respond ONLY with JSON: {"category":"...","confidence":0.0-1.0,"extras":{...}}"""
 
 
-# ─── Classification Functions ────────────────────────────────────────────────
-
-def _has_match(text: str, phrases: list[str]) -> bool:
-    """Check if any phrase is a substring of the text."""
-    text_lower = text.lower().strip()
-    for phrase in phrases:
-        if phrase in text_lower:
-            return True
-    return False
+VALID_CATEGORIES = {
+    "ACK", "IDK", "ANSWER", "CONCEPT_REQUEST", "LANGUAGE_SWITCH",
+    "META_QUESTION", "COMFORT", "STOP", "REPEAT", "UNCLEAR"
+}
 
 
-def _detect_language_preference(text: str) -> str | None:
-    """Detect which language the student wants. Returns 'english', 'hindi', or None."""
+# ─── Main Classification Function ────────────────────────────────────────────
+
+async def classify(
+    text: str,
+    current_state: str = "",
+    current_topic: str = "",
+    subject: str = "Mathematics",
+    client: Optional[AsyncOpenAI] = None,
+) -> dict:
+    """Classify student input. Fast-path for obvious cases, LLM for everything else.
+
+    Args:
+        text: Transcribed student speech
+        current_state: Current FSM state (e.g., "TEACHING", "WAITING_ANSWER")
+        current_topic: Current topic being taught (e.g., "perfect_square")
+        subject: Current subject (default: Mathematics)
+        client: AsyncOpenAI client for LLM calls
+
+    Returns:
+        dict with keys:
+            - category: StudentCategory string
+            - confidence: 0.0-1.0 float
+            - extras: dict with additional info (e.g., preferred_language for LANGUAGE_SWITCH)
+    """
+    if not text or not text.strip():
+        return {"category": "REPEAT", "confidence": 0.99, "extras": {}}
+
+    normalized = text.strip().lower()
+
+    # Check for silence marker
+    if normalized == "[silence]":
+        return {"category": "SILENCE", "confidence": 1.0, "extras": {}}
+
+    # ─── Fast Path: single/two-word obvious matches ───────────────────────────
+    # Order matters: Check negative categories (IDK, STOP) before positive (ACK)
+    words = normalized.split()
+    if len(words) <= 3:
+        # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
+        if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):
+            return {"category": "IDK", "confidence": 0.99, "extras": {}}
+
+        if normalized in FAST_STOP or any(phrase in normalized for phrase in FAST_STOP):
+            return {"category": "STOP", "confidence": 0.99, "extras": {}}
+
+        if normalized in FAST_ACK or any(phrase in normalized for phrase in FAST_ACK):
+            # In WAITING_ANSWER state, "haan"/"yes" could be actual answers
+            if current_state == "WAITING_ANSWER":
+                return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
+            return {"category": "ACK", "confidence": 0.99, "extras": {}}
+
+    # ─── Fast Path: obvious numeric answers in WAITING_ANSWER state ───────────
+    if current_state == "WAITING_ANSWER":
+        # Contains digits → likely an answer
+        if re.search(r'\d', text):
+            return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
+
+    # ─── LLM Classification ───────────────────────────────────────────────────
+    if client is None:
+        # No client provided, fall back to UNCLEAR
+        return {"category": "UNCLEAR", "confidence": 0.0, "extras": {}}
+
+    prompt = CLASSIFIER_SYSTEM.format(
+        subject=subject,
+        current_state=current_state or "UNKNOWN",
+        current_topic=current_topic or "general",
+    )
+
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": text},
+            ],
+            temperature=0,
+            max_tokens=80,
+            response_format={"type": "json_object"},
+        )
+
+        result = json.loads(response.choices[0].message.content)
+    except (json.JSONDecodeError, IndexError, Exception):
+        return {"category": "UNCLEAR", "confidence": 0.0, "extras": {}}
+
+    # Validate category
+    category = result.get("category", "UNCLEAR")
+    if category not in VALID_CATEGORIES:
+        category = "UNCLEAR"
+
+    confidence = float(result.get("confidence", 0.5))
+    extras = result.get("extras", {})
+
+    # Special handling for LANGUAGE_SWITCH
+    if category == "LANGUAGE_SWITCH" and "preferred_language" not in extras:
+        extras["preferred_language"] = _detect_language_preference(text)
+
+    return {"category": category, "confidence": confidence, "extras": extras}
+
+
+def _detect_language_preference(text: str) -> str:
+    """Detect which language the student wants. Returns 'english', 'hindi', or 'hinglish'."""
     text_lower = text.lower().strip()
     english_indicators = ["english", "इंग्लिश", "अंग्रेजी", "angrez"]
     hindi_indicators = ["hindi", "हिंदी", "हिन्दी"]
@@ -208,141 +195,51 @@ def _detect_language_preference(text: str) -> str | None:
     for indicator in hindi_indicators:
         if indicator in text_lower:
             return "hindi"
-    return None
+    return "hinglish"
 
 
-def _looks_like_math_answer(text: str) -> bool:
-    """Detect if text contains a mathematical answer."""
-    text = text.strip()
-    # Contains digits
-    if re.search(r'\d', text):
-        return True
-    # Contains Hindi number words
-    hindi_numbers = [
-        "ek", "do", "teen", "char", "paanch", "panch", "chhe", "saat",
-        "aath", "nau", "das", "gyarah", "barah",
-        "एक", "दो", "तीन", "चार", "पांच", "छह", "सात", "आठ", "नौ", "दस",
-    ]
-    text_lower = text.lower()
-    for num in hindi_numbers:
-        if num in text_lower:
-            return True
-    # Contains fraction words
-    fraction_words = [
-        "half", "third", "quarter", "fifth",
-        "aadha", "tihaayi", "chauthai",
-        "by", "baata", "upon", "over",
-    ]
-    for word in fraction_words:
-        if word in text_lower:
-            return True
-    return False
-
+# ─── Synchronous Wrapper (for backward compatibility) ────────────────────────
 
 def classify_student_input(
     text: str,
     current_state: str = "",
     subject: str = "math",
-) -> StudentCategory:
-    """
-    Classify student input. Order matters — more specific checks first.
-    
-    Args:
-        text: Transcribed student speech
-        current_state: Current FSM state (affects classification)
-        subject: Current subject (affects whether text is treated as answer)
-    
-    Returns:
-        StudentCategory string
+) -> str:
+    """DEPRECATED: Synchronous fast-path only classifier for backward compatibility.
+
+    For full classification including LLM, use the async `classify()` function.
+    This function only checks fast-path and returns category string (not dict).
     """
     if not text or not text.strip():
-        return "REPEAT"  # Empty input = ask to repeat
-
-    text_lower = text.lower().strip()
-
-    # 0. SILENCE — frontend silence timer (don't send through LLM)
-    if text_lower == "[silence]":
-        return "SILENCE"
-
-    # 1. STOP — highest priority (student wants to leave)
-    if _has_match(text, _STOP_PHRASES):
-        return "STOP"
-
-    # 1.5. LANGUAGE_SWITCH — student wants to change language (BUG 2 fix)
-    if _has_match(text, _LANGUAGE_SWITCH_PHRASES):
-        return "LANGUAGE_SWITCH"
-
-    # 2. COMFORT — student is upset (must catch before generic classification)
-    if _has_match(text, _COMFORT_PHRASES):
-        return "COMFORT"
-
-    # 3. DISPUTE — student challenges Didi's verdict
-    if _has_match(text, _DISPUTE_PHRASES):
-        return "DISPUTE"
-
-    # 4. REPEAT — student didn't hear
-    if _has_match(text, _REPEAT_PHRASES):
         return "REPEAT"
 
-    # 5. HOMEWORK — student mentions homework/photo
-    if _has_match(text, _HOMEWORK_PHRASES):
-        return "HOMEWORK"
+    normalized = text.strip().lower()
 
-    # 6. SUBJECT — student names a subject (not used in MVP, math only)
-    # Kept for future multi-subject support via UI selection
-    # if current_state in ("GREETING", "DISCOVERING_TOPIC"):
-    #     for subj, phrases in _SUBJECT_PHRASES.items():
-    #         if _has_match(text, phrases):
-    #             return "SUBJECT"
+    if normalized == "[silence]":
+        return "SILENCE"
 
-    # 7. IDK — student doesn't understand
-    if _has_match(text, _IDK_PHRASES):
-        return "IDK"
+    words = normalized.split()
+    if len(words) <= 3:
+        # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
+        if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):
+            return "IDK"
 
-    # 7.5. META_QUESTION — student asks meta questions (BUG 4 fix)
-    if _has_match(text, _META_QUESTION_PHRASES):
-        return "META_QUESTION"
+        if normalized in FAST_STOP or any(phrase in normalized for phrase in FAST_STOP):
+            return "STOP"
 
-    # 8. CONCEPT — student asks for explanation (check before ACK to avoid "ha" in "hai" matching)
-    concept_phrases = [
-        # English
-        "explain", "what is", "how", "why", "what is this",
-        "explain please", "explain karo",
-        # Romanized Hindi
-        "batao", "bataiye", "kya hai", "samjhao", "samjhaiye",
-        "aap samjhaiye", "kaise", "kyun", "kaun sa", "kis",
-        "yeh kya hai", "chapter", "topic", "lesson",
-        # Devanagari Hindi - CRITICAL
-        "बताओ", "बताइये", "बताइए", "क्या है", "यह क्या है",
-        "समझाओ", "समझाइए", "समझाइये", "आप समझाइए",
-        "कैसे", "क्यों", "किस", "कौन सा", "कौन सा चैप्टर",
-    ]
-    if _has_match(text, concept_phrases):
-        return "CONCEPT"
+        if normalized in FAST_ACK or any(phrase in normalized for phrase in FAST_ACK):
+            if current_state == "WAITING_ANSWER":
+                return "ANSWER"
+            return "ACK"
 
-    # 9. ACK — student acknowledges understanding
-    if _has_match(text, _ACK_PHRASES):
-        # In WAITING_ANSWER state, "haan"/"yes" could be actual answers
-        # to yes/no questions (e.g., "Kya 49 ek perfect square hai?")
-        if current_state == "WAITING_ANSWER":
-            return "ANSWER"  # Let answer_checker evaluate it
-        return "ACK"
-
-    # 10. ANSWER — if we're waiting for an answer and text looks numeric/mathematical
+    # For backward compatibility, check for obvious answers in WAITING_ANSWER
     if current_state == "WAITING_ANSWER":
-        if _looks_like_math_answer(text):
-            return "ANSWER"
-        # During answer phase, anything that's not clearly another category
-        # is treated as an answer attempt (student might express answer in words)
-        if len(text_lower.split()) <= 10:  # Short response = likely answer
+        if re.search(r'\d', text):
             return "ANSWER"
 
-    # 11. TROLL — very short off-topic (during non-answer states)
-    if len(text_lower.split()) <= 3 and current_state != "WAITING_ANSWER":
-        return "TROLL"
-
-    # 12. Default: treat as CONCEPT request if we can't classify
-    return "CONCEPT"
+    # Cannot classify without LLM - return UNCLEAR
+    # The caller should use async classify() for full classification
+    return "UNCLEAR"
 
 
 def get_language_switch_preference(text: str) -> str:
@@ -351,37 +248,48 @@ def get_language_switch_preference(text: str) -> str:
     Returns:
         'english', 'hindi', or 'hinglish' (default if unclear)
     """
-    pref = _detect_language_preference(text)
-    return pref if pref else "hinglish"
+    return _detect_language_preference(text)
+
+
+# ─── Parent Classification (unchanged, pattern-based is fine for parents) ────
+
+_PROGRESS_PHRASES = [
+    "kaisa chal", "kaise chal", "how is", "progress", "kya padha",
+    "aaj kya", "score", "marks", "result", "report",
+]
+
+_INSTRUCTION_PHRASES = [
+    "dhyan do", "dhyan de", "focus", "zyada practice",
+    "concentrate", "weak", "improve",
+]
+
+_GOODBYE_PHRASES = [
+    "bye", "goodbye", "theek hai", "chalo", "bas",
+    "okay thanks", "thank you",
+]
+
+
+def _has_match(text: str, phrases: list) -> bool:
+    """Check if any phrase is a substring of the text."""
+    text_lower = text.lower().strip()
+    for phrase in phrases:
+        if phrase in text_lower:
+            return True
+    return False
 
 
 def classify_parent_input(text: str) -> ParentCategory:
-    """
-    Classify parent input. Simpler than student classification.
-    """
+    """Classify parent input. Pattern-based (parents have simpler needs)."""
     if not text or not text.strip():
         return "CHITCHAT"
 
-    # 1. GOODBYE
     if _has_match(text, _GOODBYE_PHRASES):
         return "GOODBYE"
 
-    # 2. INSTRUCTION — parent telling Didi what to focus on
     if _has_match(text, _INSTRUCTION_PHRASES):
         return "INSTRUCTION"
 
-    # 3. PROGRESS — parent asking about child's progress
     if _has_match(text, _PROGRESS_PHRASES):
-        return "PROGRESS"
-
-    # 4. Default: CHITCHAT
-    # But longer messages that mention academic topics → PROGRESS
-    academic_words = [
-        "padhai", "study", "exam", "test", "chapter",
-        "question", "answer", "school", "class",
-        "पढ़ाई", "परीक्षा", "स्कूल",
-    ]
-    if _has_match(text, academic_words):
         return "PROGRESS"
 
     return "CHITCHAT"
