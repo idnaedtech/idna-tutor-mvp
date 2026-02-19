@@ -518,9 +518,9 @@
 
     // Start VAD listening
     function startListening() {
+        updateVoiceUI('ready');  // Always update UI when called
         if (vadInstance && !isDidiSpeaking && !isProcessing) {
             vadInstance.start();
-            updateVoiceUI('ready');
             startInactivityTimer(); // Start silence timer when ready for input
         }
     }
