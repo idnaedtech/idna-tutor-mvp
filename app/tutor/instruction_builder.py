@@ -50,7 +50,7 @@ def _get_language_instruction(session_context: dict) -> str:
     return LANG_HINGLISH
 
 
-def build_prompt(action, session_context, question_data=None, skill_data=None, previous_didi_response=None):
+def build_prompt(action, session_context, question_data=None, skill_data=None, previous_didi_response=None, conversation_history=None):
     at = action.action_type
     builder = _BUILDERS.get(at, _build_fallback)
     messages = builder(action, session_context, question_data, skill_data, previous_didi_response)
@@ -59,6 +59,16 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
     lang_instruction = _get_language_instruction(session_context)
     if messages and messages[0].get("role") == "system":
         messages[0]["content"] = messages[0]["content"] + lang_instruction
+
+    # v7.3.0: Inject conversation history between system prompt and current instruction
+    # This gives GPT context of the ongoing dialogue for more natural responses
+    if conversation_history and len(messages) >= 2:
+        # Take last 6 entries (cap at 10 for long sessions)
+        history_slice = conversation_history[-6:] if len(conversation_history) <= 10 else conversation_history[-10:]
+        # Insert history after system prompt, before the current instruction
+        system_msg = messages[0]
+        current_instruction = messages[1:]
+        messages = [system_msg] + history_slice + current_instruction
 
     return messages
 

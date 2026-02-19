@@ -414,7 +414,12 @@ def process_message(
         "explanations_given": session.explanations_given or [],
     }
 
-    messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response)
+    # v7.3.0: Record student input to conversation history
+    if session.conversation_history is None:
+        session.conversation_history = []
+    session.conversation_history.append({"role": "user", "content": student_text})
+
+    messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response, session.conversation_history)
 
     # ── Step 7: LLM generate ─────────────────────────────────────────────
     llm = get_llm()
@@ -438,6 +443,9 @@ def process_message(
         if attempt == MAX_ENFORCE_RETRIES - 1:
             didi_text = get_safe_fallback(new_state, prev_response)
             logger.warning(f"Enforcer failed {MAX_ENFORCE_RETRIES}x, using fallback for {new_state}")
+
+    # v7.3.0: Record Didi's response to conversation history
+    session.conversation_history.append({"role": "assistant", "content": didi_text})
 
     # ── Step 9: Clean for TTS ────────────────────────────────────────────
     cleaned_text = clean_for_tts(didi_text)
@@ -628,7 +636,13 @@ async def process_message_stream(
         "questions_correct": session.questions_correct,
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
-    messages = build_prompt(action, session_ctx, question_data, None, prev_response)
+
+    # v7.3.0: Record student input to conversation history
+    if session.conversation_history is None:
+        session.conversation_history = []
+    session.conversation_history.append({"role": "user", "content": student_text})
+
+    messages = build_prompt(action, session_ctx, question_data, None, prev_response, session.conversation_history)
 
     # ── Streaming LLM + TTS ──
     llm = get_llm()
@@ -676,6 +690,9 @@ async def process_message_stream(
         yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
         yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
+
+        # v7.3.0: Record Didi's response to conversation history
+        session.conversation_history.append({"role": "assistant", "content": full_text})
 
         # Save turn to database (after streaming completes)
         turn = SessionTurn(
