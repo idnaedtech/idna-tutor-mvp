@@ -21,6 +21,20 @@ from app.config import (
 
 logger = logging.getLogger(__name__)
 
+import re
+
+# Garbled text patterns: European accented chars that indicate Whisper hallucination
+_GARBLE_PATTERN = re.compile(r'[àáâãäåæçèéêëìíîïñòóôõùúûüý]', re.IGNORECASE)
+
+
+def _is_garbled(text: str) -> bool:
+    """Detect garbled/hallucinated transcription."""
+    if not text or len(text.strip()) < 3:
+        return True
+    if _GARBLE_PATTERN.search(text.lower()):
+        return True
+    return False
+
 
 @dataclass
 class STTResult:
@@ -28,6 +42,7 @@ class STTResult:
     confidence: float
     language_detected: str
     latency_ms: int
+    garbled: bool = False  # True if transcription looks like noise/garbage
 
 
 class STTProvider(Protocol):
@@ -39,19 +54,17 @@ class STTProvider(Protocol):
 class GroqWhisperSTT:
     """Groq-hosted Whisper large-v3-turbo. Fast, good for MVP."""
 
-    def transcribe(self, audio: bytes, language: str = None) -> STTResult:
+    def transcribe(self, audio: bytes, language: str = "hi") -> STTResult:
         start = time.perf_counter()
         try:
             # Groq Whisper uses OpenAI-compatible API
-            # If language is None/empty, Whisper auto-detects (better for Hinglish)
+            # Force Hindi to avoid garbage transcriptions for Indian students
             files = {
                 "file": ("audio.webm", io.BytesIO(audio), "audio/webm"),
                 "model": (None, GROQ_WHISPER_MODEL),
                 "response_format": (None, "verbose_json"),
+                "language": (None, language or "hi"),  # Always force language
             }
-            # Only add language if explicitly specified (None = auto-detect)
-            if language:
-                files["language"] = (None, language)
             headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
 
             with httpx.Client(timeout=30.0) as client:
@@ -76,9 +89,15 @@ class GroqWhisperSTT:
 
             detected_lang = data.get("language", language)
 
+            # Garble detection: non-Hindi/English chars or too short
+            garbled = _is_garbled(text)
+            if garbled:
+                confidence = 0.0
+                logger.warning(f"STT [groq]: garbled transcription detected: '{text[:50]}'")
+
             logger.info(
                 f"STT [groq]: {elapsed}ms, conf={confidence:.2f}, "
-                f"lang={detected_lang}, text='{text[:50]}'"
+                f"lang={detected_lang}, garbled={garbled}, text='{text[:50]}'"
             )
 
             return STTResult(
@@ -86,6 +105,7 @@ class GroqWhisperSTT:
                 confidence=confidence,
                 language_detected=detected_lang,
                 latency_ms=elapsed,
+                garbled=garbled,
             )
 
         except Exception as e:
@@ -132,13 +152,17 @@ class SarvamSaarikaSTT:
             text = result.get("transcript", "").strip()
             detected = result.get("language_code", language)
 
-            logger.info(f"STT [saarika]: {elapsed}ms, lang={detected}, text='{text[:80]}'")
+            garbled = _is_garbled(text)
+            confidence = 0.0 if garbled else 0.8
+
+            logger.info(f"STT [saarika]: {elapsed}ms, lang={detected}, garbled={garbled}, text='{text[:80]}'")
 
             return STTResult(
                 text=text,
-                confidence=0.8,  # Saarika is good at code-mixed speech
+                confidence=confidence,
                 language_detected=detected,
                 latency_ms=elapsed,
+                garbled=garbled,
             )
 
         except Exception as e:
@@ -177,12 +201,16 @@ class SarvamSaarasSTT:
             text = result.get("transcript", "").strip()
             detected = result.get("language_code", language)
 
-            logger.info(f"STT [saaras]: {elapsed}ms, lang={detected}, text='{text[:50]}'")
+            garbled = _is_garbled(text)
+            confidence = 0.0 if garbled else 0.8
+
+            logger.info(f"STT [saaras]: {elapsed}ms, lang={detected}, garbled={garbled}, text='{text[:50]}'")
 
             return STTResult(
                 text=text,
-                confidence=0.8,
+                confidence=confidence,
                 language_detected=detected,
+                garbled=garbled,
                 latency_ms=elapsed,
             )
 

@@ -230,6 +230,15 @@ def process_message(
                 stt_latency=0,
             )
 
+        # Garbled transcription → ask to repeat (skip classifier)
+        if stt_result.garbled:
+            return _quick_response(
+                db, session,
+                "Ek baar phir boliye?",
+                student_text="[garbled]",
+                stt_latency=stt_latency,
+            )
+
         # Low confidence → ask to repeat
         if is_low_confidence(stt_result):
             return _quick_response(
@@ -518,15 +527,31 @@ async def process_message_stream(
 
     # ── STT ──
     stt_latency = 0
+    stt_garbled = False
     if audio_b64:
         audio_bytes = base64.b64decode(audio_b64)
         stt = get_stt()
-        # Auto-detect language (don't force - students speak Hinglish)
         stt_result = stt.transcribe(audio_bytes)
         student_text = stt_result.text
         stt_latency = stt_result.latency_ms
+        stt_garbled = stt_result.garbled
     else:
         student_text = text_input or ""
+
+    # Handle garbled transcription
+    if stt_garbled:
+        nudge = "Ek baar phir boliye?"
+        tts = get_tts()
+        tts_result = tts.synthesize(nudge, session.language)
+        audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+
+        async def garbled_stream():
+            yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
+            yield f"data: {json.dumps({'type': 'text', 'content': nudge})}\n\n"
+            yield f"data: {json.dumps({'type': 'transcript', 'content': '[garbled]'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'state': session.state})}\n\n"
+
+        return StreamingResponse(garbled_stream(), media_type="text/event-stream")
 
     # ── Classify ──
     category = classify_student_input(
