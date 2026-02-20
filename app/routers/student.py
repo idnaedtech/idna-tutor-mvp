@@ -1,9 +1,10 @@
 """
-IDNA EdTech v7.1 — Student Session Router
+IDNA EdTech v7.3 — Student Session Router
 The main interaction loop. Full pipeline:
 STT → classify → state machine → answer check → instruction build → LLM → enforce → clean → TTS
 
 v7.1: Added streaming endpoint for sentence-level TTS (reduces perceived latency).
+v7.3: Async LLM classifier, conversation history, run_in_threadpool for DB calls.
 """
 
 import logging

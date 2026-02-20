@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.1 — LLM Abstraction Layer
+IDNA EdTech v7.3 — LLM Abstraction Layer
 Supports both sync and async streaming for sentence-level TTS.
 """
 
