@@ -32,7 +32,7 @@ from app.routers.auth import get_current_user
 
 from app.voice.stt import get_stt, is_low_confidence
 from app.voice.tts import get_tts
-from app.voice.clean_for_tts import clean_for_tts
+from app.voice.clean_for_tts import clean_for_tts, digits_to_english_words
 
 from app.tutor.input_classifier import classify
 from openai import AsyncOpenAI
@@ -58,6 +58,19 @@ def get_tts_language(session) -> str:
         return 'en-IN'
     # For hindi and hinglish, use the session's default language (usually hi-IN)
     return session.language or 'hi-IN'
+
+
+def prepare_for_tts(text: str, session) -> str:
+    """
+    v7.3.20: Prepare text for TTS with language-specific cleaning.
+    1. Always apply clean_for_tts (math symbols → words)
+    2. If language_pref is 'english', also convert digits to English words
+    """
+    cleaned = clean_for_tts(text)
+    pref = getattr(session, 'language_pref', None) or 'hinglish'
+    if pref == 'english':
+        cleaned = digits_to_english_words(cleaned)
+    return cleaned
 
 # Module-level singleton for OpenAI client (Fix 3: avoid creating per request)
 _openai_client: AsyncOpenAI = None
@@ -489,7 +502,7 @@ async def process_message(
     flag_modified(session, "conversation_history")
 
     # ── Step 9: Clean for TTS ────────────────────────────────────────────
-    cleaned_text = clean_for_tts(didi_text)
+    cleaned_text = prepare_for_tts(didi_text, session)
 
     # ── Step 10: TTS ─────────────────────────────────────────────────────
     tts = get_tts()
@@ -739,8 +752,8 @@ async def process_message_stream(
         # Fix 2: Wrap in try/finally to persist state on cancellation
         try:
             async for sentence in llm.generate_streaming(messages):
-                # Clean for TTS
-                cleaned = clean_for_tts(sentence)
+                # Clean for TTS (v7.3.20: includes digits→words for English)
+                cleaned = prepare_for_tts(sentence, session)
 
                 # v7.3.16 Fix 2: Light enforce per chunk (only banned phrases)
                 # Do NOT run full enforce() here — it breaks length/sentence rules mid-stream
@@ -882,7 +895,7 @@ def _quick_response(
     """Quick response without full pipeline (for low confidence, empty input)."""
     tts = get_tts()
     try:
-        tts_result = tts.synthesize(clean_for_tts(text), get_tts_language(session))
+        tts_result = tts.synthesize(prepare_for_tts(text, session), get_tts_language(session))
         audio_b64 = base64.b64encode(tts_result.audio_bytes).decode()
     except Exception:
         audio_b64 = ""

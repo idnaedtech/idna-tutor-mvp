@@ -9,6 +9,53 @@ This is a PURE FUNCTION — no side effects, no imports beyond stdlib.
 import re
 
 
+# ─── English Number Words (0-100) ─────────────────────────────────────────────
+
+_ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+         "seventeen", "eighteen", "nineteen"]
+_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+
+
+def _number_to_words(n: int) -> str:
+    """Convert integer 0-100 to English words."""
+    if n < 0 or n > 100:
+        return str(n)  # Out of range, return as-is
+    if n < 20:
+        return _ONES[n]
+    if n == 100:
+        return "one hundred"
+    tens, ones = divmod(n, 10)
+    if ones == 0:
+        return _TENS[tens]
+    return f"{_TENS[tens]}-{_ONES[ones]}"
+
+
+def digits_to_english_words(text: str) -> str:
+    """
+    v7.3.20: Convert digits 0-100 to English words for TTS.
+    Use when language_pref == 'english' so Sarvam TTS speaks numbers in English.
+
+    Examples:
+        "7 times 7 equals 49" → "seven times seven equals forty-nine"
+        "5 plus 3" → "five plus three"
+    """
+    if not text:
+        return text
+
+    # Replace numbers 0-100 with words (process larger numbers first to avoid partial matches)
+    def replace_number(match):
+        num = int(match.group(0))
+        if 0 <= num <= 100:
+            return _number_to_words(num)
+        return match.group(0)
+
+    # Match standalone numbers (not part of larger numbers or words)
+    result = re.sub(r'\b(\d{1,3})\b', replace_number, text)
+
+    return result
+
+
 def clean_for_tts(text: str) -> str:
     """
     Clean text for TTS consumption.
