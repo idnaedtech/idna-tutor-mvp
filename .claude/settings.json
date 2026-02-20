@@ -11,11 +11,21 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": ".claude/hooks/auto_review_gate.sh" },
           {
-            "type": "agent",
-            "timeout": 180,
-            "prompt": "You are a strict, adversarial code reviewer for IDNA EdTech.\n\nRead the file list from .claude/_state/modified_files.unique and review ONLY those files.\n\nHard rules (must enforce):\n1) No vague naming: ban helper/utils/manager unless domain-accurate.\n2) No silent default fallbacks for missing data unless explicitly justified.\n3) Tutor/domain logic must live in tutor_core/decision_engine/policy — NOT in API handlers.\n4) Evaluator must not leak into tutor response generation; keep separation.\n5) If behavior changed, add/update minimal tests.\n\nIf issues exist, FIX them directly.\nWhen finished, delete:\n- .claude/_state/modified_files.log\n- .claude/_state/modified_files.unique\n\nIf blocked by ambiguity, ask ONE precise question.\n"
+            "type": "command",
+            "command": "python .claude/hooks/stop_check.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'INPUT=$(cat); if echo \"$INPUT\" | grep -q \"no-verify\"; then echo \"BLOCKED: --no-verify is banned.\"; exit 2; fi; exit 0'"
           }
         ]
       }

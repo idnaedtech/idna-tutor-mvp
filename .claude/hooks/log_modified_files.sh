@@ -3,12 +3,12 @@ set -euo pipefail
 
 payload="$(cat)"
 
-# Extract file_path without jq dependency
+# Extract file_path without jq dependency (Windows-compatible, no grep -P)
 # Try file_path, then path, then target_file
 file_path=""
 for key in file_path path target_file; do
-  # Match "key": "value" pattern and extract value
-  match=$(echo "$payload" | grep -oP "\"${key}\"\\s*:\\s*\"[^\"]+\"" | head -1 | sed 's/.*: *"//' | sed 's/"$//')
+  # Use sed to extract value - works on Windows Git Bash
+  match=$(echo "$payload" | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1)
   if [[ -n "$match" ]]; then
     file_path="$match"
     break

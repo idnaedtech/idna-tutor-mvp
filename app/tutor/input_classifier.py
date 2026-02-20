@@ -76,7 +76,7 @@ For LANGUAGE_SWITCH also return preferred_language: "english"|"hindi"|"hinglish"
 For META_QUESTION also return question_type: "examples"|"chapter_info"|"relevance"|"other"
 For ANSWER also return raw_answer with just the answer portion extracted
 
-Respond ONLY with JSON: {"category":"...","confidence":0.0-1.0,"extras":{...}}"""
+Respond ONLY with JSON: {{"category":"...","confidence":0.0-1.0,"extras":{{...}}}}"""
 
 
 VALID_CATEGORIES = {

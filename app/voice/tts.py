@@ -101,7 +101,7 @@ class SarvamBulbulTTS:
                 logger.warning(f"TTS text truncated to 2000 chars")
 
             payload = {
-                "inputs": [text],
+                "text": text,  # Sarvam prefers 'text' over deprecated 'inputs'
                 "target_language_code": language,
                 "speaker": speaker,
                 "model": TTS_MODEL,
@@ -182,7 +182,7 @@ class SarvamBulbulTTS:
                 logger.warning(f"TTS text truncated to 2000 chars")
 
             payload = {
-                "inputs": [text],
+                "text": text,  # Sarvam prefers 'text' over deprecated 'inputs'
                 "target_language_code": language,
                 "speaker": speaker,
                 "model": TTS_MODEL,

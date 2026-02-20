@@ -55,7 +55,8 @@ class OpenAIGPT4o:
                 temperature=temperature,
             )
             elapsed = int((time.perf_counter() - start) * 1000)
-            text = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            text = (content or "").strip()
             usage = {
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
