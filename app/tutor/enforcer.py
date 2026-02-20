@@ -127,11 +127,33 @@ def _check_no_false_praise(text: str, verdict: Optional[str]) -> tuple[bool, str
         return True, text  # Praise is allowed when correct
 
     text_lower = text.lower()
+    words = text_lower.split()
     found_praise = []
+
+    # Negation words that negate praise (Hindi + English)
+    negation_words = {"nahi", "nah", "na", "galat", "not", "isn't", "wrong", "no", "नहीं", "गलत"}
+
+    def is_negated(praise_phrase: str, full_text: str) -> bool:
+        """Check if praise phrase is preceded within 3 words by a negation word."""
+        praise_lower = praise_phrase.lower()
+        idx = full_text.lower().find(praise_lower)
+        if idx == -1:
+            return False
+        # Get the 3 words before the praise phrase
+        text_before = full_text[:idx].strip()
+        words_before = text_before.split()[-3:]  # Last 3 words before praise
+        for word in words_before:
+            # Clean punctuation from word
+            clean_word = re.sub(r'[^\w]', '', word.lower())
+            if clean_word in negation_words:
+                return True
+        return False
 
     for praise in ALL_PRAISE:
         if praise.lower() in text_lower:
-            found_praise.append(praise)
+            # Only flag praise if it's NOT negated
+            if not is_negated(praise, text):
+                found_praise.append(praise)
 
     if found_praise:
         # Remove praise words

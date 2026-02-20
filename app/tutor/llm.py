@@ -121,6 +121,10 @@ class OpenAIGPT4o:
         # Avoid splitting on: Dr. Mr. Rs. etc.
         for i, char in enumerate(text):
             if char in '.?!।' and i > 0:
+                # Skip decimal numbers (e.g., "1.5" — period between digits)
+                if char == '.' and i > 0 and i < len(text) - 1:
+                    if text[i - 1].isdigit() and text[i + 1].isdigit():
+                        continue
                 # Check it's not an abbreviation
                 before = text[:i].strip()
                 if before and len(before) > 2:
