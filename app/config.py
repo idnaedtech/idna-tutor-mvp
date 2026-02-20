@@ -66,8 +66,9 @@ GROQ_WHISPER_MODEL = "whisper-large-v3-turbo"
 GROQ_STT_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text"
 STT_CONFIDENCE_THRESHOLD = float(os.getenv("STT_CONFIDENCE_THRESHOLD", "0.4"))
-# Force Hindi for student sessions (prevents English garbage from Hindi speech)
-STT_DEFAULT_LANGUAGE = "hi"
+# Auto-detect language for Hinglish (code-mixed Hindi-English) speakers
+# Valid Sarvam values: unknown, hi-IN, bn-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN, en-IN, gu-IN
+STT_DEFAULT_LANGUAGE = "unknown"
 
 # ─── LLM Settings ────────────────────────────────────────────────────────────
 # Didi tutor LLM - gpt-4.1-mini for better instruction following
