@@ -83,7 +83,8 @@ def _get_language_instruction(session_context: dict) -> str:
 
 
 def _get_chapter_context(session_context: dict, question_data: dict = None) -> str:
-    """v7.3.22 Fix 1: Build chapter metadata for system prompt."""
+    """v7.3.22 Fix 1: Build chapter metadata for system prompt.
+    v7.3.28: Enhanced with explicit chapter response instruction."""
     chapter_key = session_context.get("chapter", "")
     chapter_name = CHAPTER_NAMES.get(chapter_key, "")
 
@@ -93,7 +94,9 @@ def _get_chapter_context(session_context: dict, question_data: dict = None) -> s
         skill_name = question_data.get("target_skill", "")
 
     if chapter_name:
-        ctx = f'\nCURRENT TOPIC: {chapter_name} (NCERT Class 8 Math)'
+        # v7.3.28: Make chapter info explicit with instruction
+        ctx = f'\nYOU ARE TEACHING: {chapter_name} (NCERT Class 8 Mathematics)'
+        ctx += f'\nIf student asks "which chapter" or "what topic", tell them: "{chapter_name}"'
         if skill_name:
             # Make skill name human-readable
             skill_display = skill_name.replace("_", " ").title()

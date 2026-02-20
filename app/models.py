@@ -99,6 +99,9 @@ class Session(Base):
     # v7.2.0: Language preference persistence (BUG 2 fix)
     language_pref: Mapped[str] = mapped_column(String(10), default="hinglish")  # hinglish/english/hindi
 
+    # v7.3.28: Empathy one-turn-max flag (Fix 3)
+    empathy_given: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # v7.3.0: Conversation history for multi-turn context (CHANGE 2)
     conversation_history: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # [{"role": "user"|"assistant", "content": str}]
 

@@ -259,6 +259,72 @@ def _extract_numeric_value(text: str) -> Optional[Fraction]:
     return None
 
 
+# ─── v7.3.28: Perfect Square Root Detection ──────────────────────────────────
+
+def _check_perfect_square_root(student_text: str, correct_answer: str, variants: list) -> Optional[Verdict]:
+    """
+    v7.3.28 Fix 2: For "Is X a perfect square?" questions, accept square root as answer.
+    If expected answer is "yes" and student says the square root (e.g., "7" for 49),
+    verify and mark correct - student demonstrates deeper understanding.
+    """
+    # Only applies to yes/no perfect square questions
+    correct_lower = correct_answer.lower().strip()
+    if correct_lower not in ("yes", "haan", "ha", "sahi", "true"):
+        return None
+
+    # Check if variants contain "X ka square" pattern to find the target number
+    target_number = None
+    for v in variants:
+        v_lower = v.lower()
+        # Pattern: "7 ka square" or "seven ka square"
+        if "ka square" in v_lower or "squared" in v_lower:
+            parts = v_lower.replace("ka square", "").replace("squared", "").strip()
+            num = _parse_number_word(parts)
+            if num is not None:
+                target_number = num
+                break
+
+    if target_number is None:
+        return None
+
+    # Parse student's answer as a number
+    student_val = _extract_numeric_value(student_text)
+    if student_val is None:
+        return None
+
+    # Check if student's number squared equals target_number squared
+    # (i.e., student gave the square root)
+    student_int = int(student_val) if student_val.denominator == 1 else None
+    if student_int is not None and student_int == target_number:
+        return Verdict(
+            correct=True,
+            verdict="CORRECT",
+            student_parsed=str(student_int),
+            correct_display=correct_answer,
+            diagnostic=f"Student correctly identified {target_number} as the square root"
+        )
+
+    # Also check "7 times 7" or "7 by 7" patterns
+    student_lower = student_text.lower()
+    times_patterns = ["times", "by", "×", "x", "into"]
+    for pattern in times_patterns:
+        if pattern in student_lower:
+            parts = student_lower.split(pattern)
+            if len(parts) == 2:
+                num1 = _parse_number_word(parts[0].strip())
+                num2 = _parse_number_word(parts[1].strip())
+                if num1 is not None and num2 is not None and num1 == num2 == target_number:
+                    return Verdict(
+                        correct=True,
+                        verdict="CORRECT",
+                        student_parsed=student_text,
+                        correct_display=correct_answer,
+                        diagnostic=f"Student correctly showed {target_number} × {target_number}"
+                    )
+
+    return None
+
+
 # ─── Main Answer Checker ─────────────────────────────────────────────────────
 
 def check_math_answer(
@@ -289,13 +355,18 @@ def check_math_answer(
 
     student_text = student_answer.strip()
 
-    # Step 1: Exact string match against correct + variants
-    # Fix 3: Ensure answer_variants is a list and all values are strings
+    # v7.3.28 Fix 2: Check for square root answer on perfect square questions
+    # Do this early - student showing understanding via square root is valid
     variants = answer_variants or []
     if isinstance(variants, str):
         variants = [variants]
     elif not isinstance(variants, list):
         variants = []
+    sqrt_verdict = _check_perfect_square_root(student_text, correct_answer, variants)
+    if sqrt_verdict is not None:
+        return sqrt_verdict
+
+    # Step 1: Exact string match against correct + variants
     all_accepted = [str(correct_answer)] + [str(v) for v in variants]
     for accepted in all_accepted:
         if student_text.lower().strip() == accepted.lower().strip():

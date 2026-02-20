@@ -97,6 +97,8 @@ def run_migrations():
         'conversation_history': f"ALTER TABLE sessions ADD COLUMN conversation_history {json_type} DEFAULT '[]'",
         'current_concept_id': f"ALTER TABLE sessions ADD COLUMN current_concept_id VARCHAR(100)",
         'concept_mastery': f"ALTER TABLE sessions ADD COLUMN concept_mastery {json_type} DEFAULT '{{}}'",
+        # v7.3.28: Empathy one-turn-max flag
+        'empathy_given': f"ALTER TABLE sessions ADD COLUMN empathy_given BOOLEAN DEFAULT 0",
     }
 
     with engine.begin() as conn:

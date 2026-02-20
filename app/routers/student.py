@@ -318,6 +318,13 @@ async def process_message(
     # Handle LANGUAGE_SWITCH preference from classifier
     if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
         session.language_pref = classify_result["extras"]["preferred_language"]
+
+    # v7.3.28 Fix 3: Empathy one turn max
+    # If we already gave empathy, force next message to be ACK and go to TEACHING
+    if getattr(session, 'empathy_given', False) and category == "COMFORT":
+        category = "ACK"
+        logger.info(f"v7.3.28: empathy_given=True, overriding COMFORT → ACK")
+
     logger.info(f"Input: '{student_text[:50]}' → category={category}, state={session.state}")
 
     # Handle SILENCE without LLM — just give a gentle nudge
@@ -354,6 +361,15 @@ async def process_message(
 
     state_before = session.state
     new_state, action = transition(session.state, category, ctx)
+
+    # v7.3.28 Fix 3: Track empathy state
+    # Set empathy_given after COMFORT response, reset when entering TEACHING
+    if new_state == "COMFORT":
+        session.empathy_given = True
+        logger.info("v7.3.28: Entering COMFORT, setting empathy_given=True")
+    elif new_state == "TEACHING":
+        session.empathy_given = False
+        logger.info("v7.3.28: Entering TEACHING, resetting empathy_given=False")
 
     # ── Step 4: Answer evaluation (if needed) ─────────────────────────────
     verdict_obj = None
@@ -658,6 +674,12 @@ async def process_message_stream(
     if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
         session.language_pref = classify_result["extras"]["preferred_language"]
 
+    # v7.3.28 Fix 3: Empathy one turn max (streaming endpoint)
+    # If we already gave empathy, force next message to be ACK and go to TEACHING
+    if getattr(session, 'empathy_given', False) and category == "COMFORT":
+        category = "ACK"
+        logger.info(f"v7.3.28: empathy_given=True, overriding COMFORT → ACK")
+
     # Handle silence without LLM
     if category == "SILENCE":
         nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
@@ -703,6 +725,14 @@ async def process_message_stream(
         "language_pref": session.language_pref or "hinglish",
     }
     new_state, action = transition(session.state, category, ctx)
+
+    # v7.3.28 Fix 3: Track empathy state (streaming endpoint)
+    if new_state == "COMFORT":
+        session.empathy_given = True
+        logger.info("v7.3.28: Entering COMFORT, setting empathy_given=True")
+    elif new_state == "TEACHING":
+        session.empathy_given = False
+        logger.info("v7.3.28: Entering TEACHING, resetting empathy_given=False")
 
     # ── Answer check (if ANSWER) ──
     verdict = None
