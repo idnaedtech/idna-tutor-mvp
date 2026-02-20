@@ -113,7 +113,7 @@ def _seed_test_student(db):
 app = FastAPI(
     title="IDNA Didi v7.3",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="7.3.17",
+    version="7.3.18",
     lifespan=lifespan,
 )
 
@@ -159,4 +159,4 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "7.3.17"}
+    return {"status": "ok", "version": "7.3.18"}
