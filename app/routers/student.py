@@ -474,6 +474,13 @@ async def process_message(
 
     messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response, session.conversation_history)
 
+    # v7.3.20-debug: Log diagnostic info before LLM call
+    logger.info(f"DEBUG_PRE_LLM: state={state_before}→{new_state} | classifier={category} | action={action.action_type} | lang_pref={session.language_pref}")
+    if messages and len(messages) > 1:
+        # Log the user instruction (last message to LLM)
+        last_msg = messages[-1]
+        logger.info(f"DEBUG_USER_MSG: {last_msg.get('content', '')[:200]}")
+
     # ── Step 7: LLM generate ─────────────────────────────────────────────
     llm = get_llm()
     llm_result = llm.generate(messages)
@@ -738,6 +745,12 @@ async def process_message_stream(
     flag_modified(session, "conversation_history")
 
     messages = build_prompt(action, session_ctx, question_data, None, prev_response, session.conversation_history)
+
+    # v7.3.20-debug: Log diagnostic info before LLM call (streaming)
+    logger.info(f"DEBUG_PRE_LLM_STREAM: state={state_before}→{new_state} | classifier={category} | action={action.action_type} | lang_pref={session.language_pref}")
+    if messages and len(messages) > 1:
+        last_msg = messages[-1]
+        logger.info(f"DEBUG_USER_MSG_STREAM: {last_msg.get('content', '')[:200]}")
 
     # ── Streaming LLM + TTS ──
     llm = get_llm()
