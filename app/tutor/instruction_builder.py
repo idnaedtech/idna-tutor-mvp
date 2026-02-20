@@ -12,12 +12,9 @@ CRITICAL RULES (enforced in every prompt):
 6. Reference student's specific answer when evaluating
 """
 
-import logging
 from typing import Optional
 from app.tutor.state_machine import Action
 from app.tutor.answer_checker import Verdict
-
-logger = logging.getLogger(__name__)
 
 DIDI_BASE = """You are Didi, a caring Hindi-speaking tutor for Class 8 Math.
 
@@ -134,10 +131,6 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
         system_msg = messages[0]
         current_instruction = messages[1:]
         messages = [system_msg] + history_slice + current_instruction
-
-    # v7.3.20-debug: Log full system prompt for debugging
-    if messages and messages[0].get("role") == "system":
-        logger.info(f"FULL_PROMPT_SENT: {messages[0]['content']}")
 
     return messages
 
