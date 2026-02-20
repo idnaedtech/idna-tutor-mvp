@@ -37,7 +37,6 @@ from app.voice.clean_for_tts import clean_for_tts
 from app.tutor.input_classifier import classify
 from openai import AsyncOpenAI
 from app.config import OPENAI_API_KEY
-import asyncio
 from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer
 from app.tutor.instruction_builder import build_prompt
@@ -47,6 +46,15 @@ from app.tutor import memory
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/student", tags=["student"])
+
+# Module-level singleton for OpenAI client (Fix 3: avoid creating per request)
+_openai_client: AsyncOpenAI = None
+
+def get_openai_client() -> AsyncOpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    return _openai_client
 
 
 # ─── Request/Response Models ─────────────────────────────────────────────────
@@ -273,13 +281,12 @@ async def process_message(
     # ── Step 2: Classify input ────────────────────────────────────────────
     # MVP: No topic discovery (math only). Subject detection removed.
 
-    # v7.3.0: Use async LLM classifier
-    openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    # v7.3.0: Use async LLM classifier (module-level singleton)
     classify_result = await classify(
         student_text,
         current_state=session.state,
         subject=session.subject or "math",
-        client=openai_client,
+        client=get_openai_client(),
     )
     category = classify_result["category"]
     logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
@@ -483,11 +490,12 @@ async def process_message(
         audio_b64 = ""  # Text fallback
         tts_latency = 0
 
-    # ── Step 11: Save turn and update session ─────────────────────────────
-    turn_number = len(session.turns) + 1
-    turn = SessionTurn(
+    # ── Step 11: Save turns and update session ─────────────────────────────
+    # Fix 5: Create separate turns for student input and didi response
+    turn_base = len(session.turns) + 1
+    student_turn = SessionTurn(
         session_id=session.id,
-        turn_number=turn_number,
+        turn_number=turn_base,
         speaker="student",
         transcript=student_text,
         input_category=category,
@@ -495,19 +503,29 @@ async def process_message(
         state_after=new_state,
         question_id=session.current_question_id,
         verdict=verdict_str,
+        stt_latency_ms=stt_latency,
+    )
+    await run_in_threadpool(lambda: db.add(student_turn))
+
+    didi_turn = SessionTurn(
+        session_id=session.id,
+        turn_number=turn_base + 1,
+        speaker="didi",
+        state_before=state_before,
+        state_after=new_state,
+        question_id=session.current_question_id,
         didi_response=didi_text,
         llm_latency_ms=llm_result.latency_ms,
         tts_latency_ms=tts_latency,
-        stt_latency_ms=stt_latency,
     )
-    await run_in_threadpool(lambda: db.add(turn))
+    await run_in_threadpool(lambda: db.add(didi_turn))
 
     session.state = new_state
     await run_in_threadpool(lambda: db.commit())
 
     total_ms = int((time.perf_counter() - t_start) * 1000)
     logger.info(
-        f"Turn {turn_number}: {total_ms}ms total | "
+        f"Turn {turn_base}: {total_ms}ms total | "
         f"STT={stt_latency}ms LLM={llm_result.latency_ms}ms TTS={tts_latency}ms | "
         f"{state_before}→{new_state} [{category}]"
     )
@@ -579,6 +597,14 @@ async def process_message_stream(
         tts_result = tts.synthesize(nudge, session.language)
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
 
+        # Fix 4: Update conversation_history for early returns
+        if session.conversation_history is None:
+            session.conversation_history = []
+        session.conversation_history.append({"role": "user", "content": "[garbled]"})
+        session.conversation_history.append({"role": "assistant", "content": nudge})
+        flag_modified(session, "conversation_history")
+        await run_in_threadpool(lambda: db.commit())
+
         async def garbled_stream():
             yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
             yield f"data: {json.dumps({'type': 'text', 'content': nudge})}\n\n"
@@ -588,13 +614,12 @@ async def process_message_stream(
         return StreamingResponse(garbled_stream(), media_type="text/event-stream")
 
     # ── Classify ──
-    # v7.3.0: Use async LLM classifier
-    openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    # v7.3.0: Use async LLM classifier (module-level singleton)
     classify_result = await classify(
         student_text,
         current_state=session.state,
         subject=session.subject or "math",
-        client=openai_client,
+        client=get_openai_client(),
     )
     category = classify_result["category"]
     logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
@@ -608,6 +633,14 @@ async def process_message_stream(
         tts = get_tts()
         tts_result = tts.synthesize(nudge, session.language)
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+
+        # Fix 4: Update conversation_history for early returns
+        if session.conversation_history is None:
+            session.conversation_history = []
+        session.conversation_history.append({"role": "user", "content": "[silence]"})
+        session.conversation_history.append({"role": "assistant", "content": nudge})
+        flag_modified(session, "conversation_history")
+        await run_in_threadpool(lambda: db.commit())
 
         async def silence_stream():
             yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
@@ -689,66 +722,94 @@ async def process_message_stream(
         """SSE: stream audio chunks as sentences complete."""
         full_text = ""
         sentence_index = 0
-        tts_tasks = []
+        cancelled = False
 
-        async for sentence in llm.generate_streaming(messages):
-            # Clean for TTS
-            cleaned = clean_for_tts(sentence)
+        # Fix 2: Wrap in try/finally to persist state on cancellation
+        try:
+            async for sentence in llm.generate_streaming(messages):
+                # Clean for TTS
+                cleaned = clean_for_tts(sentence)
 
-            # Enforce rules on each sentence
-            enforce_result = enforce(
-                cleaned, new_state,
+                # Enforce rules on each sentence
+                enforce_result = enforce(
+                    cleaned, new_state,
+                    verdict=verdict_str,
+                    student_answer=student_text,
+                    language=session.language,
+                    previous_response=prev_response,
+                )
+                cleaned = enforce_result.text
+                full_text += " " + cleaned
+
+                # Generate TTS for this sentence
+                try:
+                    tts_result = await tts.synthesize_async(cleaned, session.language)
+                    audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+
+                    # Stream audio chunk to frontend
+                    yield f"data: {json.dumps({'type': 'audio_chunk', 'index': sentence_index, 'audio': audio_chunk, 'is_last': False})}\n\n"
+                    sentence_index += 1
+                except Exception as e:
+                    logger.error(f"TTS error for sentence: {e}")
+
+            # Mark last chunk
+            if sentence_index > 0:
+                yield f"data: {json.dumps({'type': 'last_chunk'})}\n\n"
+
+            # Send full text and metadata
+            full_text = full_text.strip()
+            yield f"data: {json.dumps({'type': 'text', 'content': full_text})}\n\n"
+            yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
+            yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
+
+        except asyncio.CancelledError:
+            # Fix 2: Handle cancellation gracefully - persist partial state
+            cancelled = True
+            logger.info(f"Stream cancelled after {sentence_index} sentences, persisting partial state")
+
+        finally:
+            # Fix 2: Always persist state in finally block
+            full_text = full_text.strip()
+
+            # Record Didi's response to conversation history (even if partial)
+            if full_text:
+                session.conversation_history.append({"role": "assistant", "content": full_text})
+                flag_modified(session, "conversation_history")
+
+            # Fix 5: Create separate turns for student and didi
+            turn_base = len(session.turns) + 1
+            student_turn = SessionTurn(
+                session_id=session.id,
+                turn_number=turn_base,
+                speaker="student",
+                transcript=student_text,
+                input_category=category,
+                state_before=state_before,
+                state_after=new_state,
+                question_id=session.current_question_id,
                 verdict=verdict_str,
-                student_answer=student_text,
-                language=session.language,
-                previous_response=prev_response,
+                stt_latency_ms=stt_latency,
             )
-            cleaned = enforce_result.text
-            full_text += " " + cleaned
+            await run_in_threadpool(lambda: db.add(student_turn))
 
-            # Generate TTS for this sentence
-            try:
-                tts_result = await tts.synthesize_async(cleaned, session.language)
-                audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+            if full_text:
+                didi_turn = SessionTurn(
+                    session_id=session.id,
+                    turn_number=turn_base + 1,
+                    speaker="didi",
+                    state_before=state_before,
+                    state_after=new_state,
+                    question_id=session.current_question_id,
+                    didi_response=full_text,
+                )
+                await run_in_threadpool(lambda: db.add(didi_turn))
 
-                # Stream audio chunk to frontend
-                yield f"data: {json.dumps({'type': 'audio_chunk', 'index': sentence_index, 'audio': audio_chunk, 'is_last': False})}\n\n"
-                sentence_index += 1
-            except Exception as e:
-                logger.error(f"TTS error for sentence: {e}")
+            session.state = new_state
+            await run_in_threadpool(lambda: db.commit())
 
-        # Mark last chunk
-        if sentence_index > 0:
-            yield f"data: {json.dumps({'type': 'last_chunk'})}\n\n"
-
-        # Send full text and metadata
-        full_text = full_text.strip()
-        yield f"data: {json.dumps({'type': 'text', 'content': full_text})}\n\n"
-        yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
-        yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
-        yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
-
-        # v7.3.0: Record Didi's response to conversation history
-        session.conversation_history.append({"role": "assistant", "content": full_text})
-        flag_modified(session, "conversation_history")
-
-        # Save turn to database (after streaming completes)
-        turn = SessionTurn(
-            session_id=session.id,
-            turn_number=len(session.turns) + 1,
-            speaker="student",
-            transcript=student_text,
-            input_category=category,
-            state_before=state_before,
-            state_after=new_state,
-            question_id=session.current_question_id,
-            verdict=verdict_str,
-            didi_response=full_text,
-            stt_latency_ms=stt_latency,
-        )
-        await run_in_threadpool(lambda: db.add(turn))
-        session.state = new_state
-        await run_in_threadpool(lambda: db.commit())
+            if cancelled:
+                raise asyncio.CancelledError()
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
@@ -810,17 +871,34 @@ def _quick_response(
     except Exception:
         audio_b64 = ""
 
-    turn = SessionTurn(
+    # Fix 1: Update conversation_history before commit
+    if session.conversation_history is None:
+        session.conversation_history = []
+    session.conversation_history.append({"role": "user", "content": student_text})
+    session.conversation_history.append({"role": "assistant", "content": text})
+    flag_modified(session, "conversation_history")
+
+    # Fix 5: Create separate turns for student input and didi response
+    student_turn = SessionTurn(
         session_id=session.id,
         turn_number=len(session.turns) + 1,
         speaker="student",
         transcript=student_text,
         state_before=session.state,
         state_after=session.state,
-        didi_response=text,
         stt_latency_ms=stt_latency,
     )
-    db.add(turn)
+    db.add(student_turn)
+
+    didi_turn = SessionTurn(
+        session_id=session.id,
+        turn_number=len(session.turns) + 2,
+        speaker="didi",
+        state_before=session.state,
+        state_after=session.state,
+        didi_response=text,
+    )
+    db.add(didi_turn)
     db.commit()
 
     return MessageResponse(
