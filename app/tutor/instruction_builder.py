@@ -245,10 +245,13 @@ def _build_read_question(a, ctx, q, sk, prev):
         done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke saare questions ho gaye! Bahut achhi practice hui."
         return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'No more questions. Say: "{done_msg}"'}]
     if a.extra.get("nudge"):
-        return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". Gently nudge them to try.'}]
+        nudge_lang = "Present in English." if use_english else ""
+        return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". {nudge_lang} Gently nudge them to try.'}]
     d = "This is an easier question. " if a.extra.get("difficulty") == "easy" else ""
     ask_prompt = 'End: "Tell me, what is the answer?"' if use_english else 'End: "Batao, kya answer hai?"'
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'{d}Read this question naturally: "{q["question_voice"]}". {ask_prompt}'}]
+    # v7.3.25: Tell LLM to present question in session language
+    lang_instruction = "Present this question in English (translate any Hindi)." if use_english else "Read this question naturally."
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'{d}{lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
 
 
 def _build_evaluate_answer(a, ctx, q, sk, prev):
@@ -312,14 +315,16 @@ def _build_pick_next_question(a, ctx, q, sk, prev):
     use_english = lang_pref == "english"
     transition = "Let's try another one." if use_english else "Chalo, ek aur try karte hain."
     done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke questions ho gaye! Bahut achhi practice hui."
+    # v7.3.25: Tell LLM to present question in session language
+    q_lang = "Present question in English (translate any Hindi)." if use_english else ""
 
     if a.extra.get("follow_up"):
         if q:
-            return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "{transition}" Then read: "{q["question_voice"]}"'}]
+            return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "{transition}" Then read: "{q["question_voice"]}". {q_lang}'}]
         return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, say briefly: "{transition}"'}]
     if q:
         # Include praise for correct answer + the next question
-        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}"'}]
+        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}". {q_lang}'}]
     return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'No more questions available. Say: "{done_msg}"'}]
 
 
