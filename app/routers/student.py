@@ -47,6 +47,18 @@ from app.tutor import memory
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/student", tags=["student"])
 
+
+def get_tts_language(session) -> str:
+    """
+    v7.3.19 Fix 1: Map language_pref to TTS language code.
+    If student switched to English, use en-IN for TTS so numbers are spoken in English.
+    """
+    pref = getattr(session, 'language_pref', None) or 'hinglish'
+    if pref == 'english':
+        return 'en-IN'
+    # For hindi and hinglish, use the session's default language (usually hi-IN)
+    return session.language or 'hi-IN'
+
 # Module-level singleton for OpenAI client (Fix 3: avoid creating per request)
 _openai_client: AsyncOpenAI = None
 
@@ -460,7 +472,7 @@ async def process_message(
             didi_text, new_state,
             verdict=verdict_str,
             student_answer=student_text,
-            language=session.language,
+            language=get_tts_language(session),
             previous_response=prev_response,
         )
         if enforce_result.passed:
@@ -482,7 +494,7 @@ async def process_message(
     # ── Step 10: TTS ─────────────────────────────────────────────────────
     tts = get_tts()
     try:
-        tts_result = tts.synthesize(cleaned_text, session.language)
+        tts_result = tts.synthesize(cleaned_text, get_tts_language(session))
         audio_b64 = base64.b64encode(tts_result.audio_bytes).decode()
         tts_latency = tts_result.latency_ms
     except Exception as e:
@@ -594,7 +606,7 @@ async def process_message_stream(
     if stt_garbled:
         nudge = "Ek baar phir boliye?"
         tts = get_tts()
-        tts_result = tts.synthesize(nudge, session.language)
+        tts_result = tts.synthesize(nudge, get_tts_language(session))
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
 
         # Fix 4: Update conversation_history for early returns
@@ -631,7 +643,7 @@ async def process_message_stream(
     if category == "SILENCE":
         nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
         tts = get_tts()
-        tts_result = tts.synthesize(nudge, session.language)
+        tts_result = tts.synthesize(nudge, get_tts_language(session))
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
 
         # Fix 4: Update conversation_history for early returns
@@ -737,7 +749,7 @@ async def process_message_stream(
 
                 # Generate TTS for this sentence
                 try:
-                    tts_result = await tts.synthesize_async(cleaned, session.language)
+                    tts_result = await tts.synthesize_async(cleaned, get_tts_language(session))
                     audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
 
                     # Stream audio chunk to frontend
@@ -756,7 +768,7 @@ async def process_message_stream(
                 full_text, new_state,
                 verdict=verdict_str,
                 student_answer=student_text,
-                language=session.language,
+                language=get_tts_language(session),
                 previous_response=prev_response,
             )
             full_text = enforce_result.text
@@ -843,7 +855,7 @@ def end_session(
     # TTS for summary
     tts = get_tts()
     try:
-        tts_result = tts.synthesize(summary, session.language)
+        tts_result = tts.synthesize(summary, get_tts_language(session))
         audio_b64 = base64.b64encode(tts_result.audio_bytes).decode()
     except Exception:
         audio_b64 = ""
@@ -870,7 +882,7 @@ def _quick_response(
     """Quick response without full pipeline (for low confidence, empty input)."""
     tts = get_tts()
     try:
-        tts_result = tts.synthesize(clean_for_tts(text), session.language)
+        tts_result = tts.synthesize(clean_for_tts(text), get_tts_language(session))
         audio_b64 = base64.b64encode(tts_result.audio_bytes).decode()
     except Exception:
         audio_b64 = ""
