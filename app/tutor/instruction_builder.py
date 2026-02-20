@@ -396,20 +396,23 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
     lang_pref = ctx.get("language_pref", "hinglish")
     use_english = lang_pref == "english"
     meta_type = a.extra.get("meta_type", "more_examples")
-    ch = ctx.get("chapter", "rational numbers")
+    ch_key = ctx.get("chapter", "")
+    # v7.3.28 Fix 1: Use human-readable chapter name
+    ch = CHAPTER_NAMES.get(ch_key, ch_key.replace("_", " ").title())
 
     # Get teaching content for more examples
     from app.content.seed_questions import SKILL_TEACHING
     skill_key = q.get("target_skill", "") if q else ""
     lesson = SKILL_TEACHING.get(skill_key, {})
 
-    if "example" in a.student_text.lower() or meta_type == "more_examples":
+    # v7.3.28 Fix 1: Check chapter/topic FIRST since meta_type is always "more_examples"
+    if "chapter" in a.student_text.lower() or "topic" in a.student_text.lower():
+        # v7.3.28 Fix 1: Use proper chapter name from CHAPTER_NAMES
+        chapter_response = f"We're learning {ch}." if use_english else f"Hum {ch} padh rahe hain."
+        msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}" Nothing else.'
+    elif "example" in a.student_text.lower() or meta_type == "more_examples":
         examples = lesson.get("indian_example") or lesson.get("examples", "")
         msg = f'Student wants more examples. Give 2-3 NEW examples for {skill_key}. DO NOT repeat the definition. Do NOT reuse: "{prev or ""}". Use fresh examples: {examples if examples else "laddoo, cricket score, rangoli squares"}. 2 sentences.'
-    elif "chapter" in a.student_text.lower() or "topic" in a.student_text.lower():
-        title = lesson.get("title_hi") or lesson.get("name") or ch
-        chapter_response = f"This is the {title} chapter, from Class 8 Math." if use_english else f"Yeh {title} chapter hai, Class 8 Math se."
-        msg = f'Student asked which chapter. Say: "{chapter_response}" 1 sentence.'
     elif "real life" in a.student_text.lower() or "use" in a.student_text.lower():
         msg = f'Student asked about real-life use. Give 1-2 practical examples: architecture, cooking, shopping. How {ch} is used in daily life. 2 sentences.'
     else:
