@@ -16,8 +16,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import (
     SESSION_TIMEOUT_MINUTES, STT_CONFIDENCE_THRESHOLD, MAX_ENFORCE_RETRIES,
@@ -200,14 +202,18 @@ async def process_message(
     if user.get("role") != "student":
         raise HTTPException(403, "Student access only")
 
-    # Load session
-    session = db.query(Session).filter(Session.id == session_id).first()
+    # Load session (wrapped in threadpool to avoid blocking event loop)
+    session = await run_in_threadpool(
+        lambda: db.query(Session).filter(Session.id == session_id).first()
+    )
     if not session:
         raise HTTPException(404, "Session not found")
     if session.ended_at:
         raise HTTPException(400, "Session already ended")
 
-    student = db.query(Student).filter(Student.id == session.student_id).first()
+    student = await run_in_threadpool(
+        lambda: db.query(Student).filter(Student.id == session.student_id).first()
+    )
 
     # ── Step 1: STT (if audio) ────────────────────────────────────────────
     stt_latency = 0
@@ -322,9 +328,11 @@ async def process_message(
     diagnostic = None
 
     if action.action_type == "evaluate_answer" and session.current_question_id:
-        question = db.query(Question).filter(
-            Question.id == session.current_question_id
-        ).first()
+        question = await run_in_threadpool(
+            lambda: db.query(Question).filter(
+                Question.id == session.current_question_id
+            ).first()
+        )
 
         if question:
             verdict_obj = check_math_answer(
@@ -429,6 +437,7 @@ async def process_message(
     if session.conversation_history is None:
         session.conversation_history = []
     session.conversation_history.append({"role": "user", "content": student_text})
+    flag_modified(session, "conversation_history")
 
     messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response, session.conversation_history)
 
@@ -457,6 +466,7 @@ async def process_message(
 
     # v7.3.0: Record Didi's response to conversation history
     session.conversation_history.append({"role": "assistant", "content": didi_text})
+    flag_modified(session, "conversation_history")
 
     # ── Step 9: Clean for TTS ────────────────────────────────────────────
     cleaned_text = clean_for_tts(didi_text)
@@ -489,10 +499,10 @@ async def process_message(
         tts_latency_ms=tts_latency,
         stt_latency_ms=stt_latency,
     )
-    db.add(turn)
+    await run_in_threadpool(lambda: db.add(turn))
 
     session.state = new_state
-    db.commit()
+    await run_in_threadpool(lambda: db.commit())
 
     total_ms = int((time.perf_counter() - t_start) * 1000)
     logger.info(
@@ -537,11 +547,15 @@ async def process_message_stream(
     audio_b64 = body.get("audio")
     text_input = body.get("text")
 
-    session = db.query(Session).filter(Session.id == session_id).first()
+    session = await run_in_threadpool(
+        lambda: db.query(Session).filter(Session.id == session_id).first()
+    )
     if not session:
         raise HTTPException(404, "Session not found")
 
-    student = db.query(Student).filter(Student.id == session.student_id).first()
+    student = await run_in_threadpool(
+        lambda: db.query(Student).filter(Student.id == session.student_id).first()
+    )
     state_before = session.state
 
     # ── STT ──
@@ -629,9 +643,11 @@ async def process_message_stream(
     verdict = None
     verdict_str = None
     if action.action_type == "evaluate_answer" and session.current_question_id:
-        question = db.query(Question).filter(
-            Question.id == session.current_question_id
-        ).first()
+        question = await run_in_threadpool(
+            lambda: db.query(Question).filter(
+                Question.id == session.current_question_id
+            ).first()
+        )
         if question:
             verdict = check_math_answer(
                 student_text,
@@ -660,6 +676,7 @@ async def process_message_stream(
     if session.conversation_history is None:
         session.conversation_history = []
     session.conversation_history.append({"role": "user", "content": student_text})
+    flag_modified(session, "conversation_history")
 
     messages = build_prompt(action, session_ctx, question_data, None, prev_response, session.conversation_history)
 
@@ -712,6 +729,7 @@ async def process_message_stream(
 
         # v7.3.0: Record Didi's response to conversation history
         session.conversation_history.append({"role": "assistant", "content": full_text})
+        flag_modified(session, "conversation_history")
 
         # Save turn to database (after streaming completes)
         turn = SessionTurn(
@@ -727,9 +745,9 @@ async def process_message_stream(
             didi_response=full_text,
             stt_latency_ms=stt_latency,
         )
-        db.add(turn)
+        await run_in_threadpool(lambda: db.add(turn))
         session.state = new_state
-        db.commit()
+        await run_in_threadpool(lambda: db.commit())
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
