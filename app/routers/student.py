@@ -723,6 +723,50 @@ async def process_message_stream(
             )
             action.verdict = verdict
 
+            # v7.3.26: Update session counters (same as non-streaming)
+            session.questions_attempted += 1
+            if verdict.correct:
+                session.questions_correct += 1
+                session.current_hint_level = 0
+            else:
+                session.current_hint_level += 1
+                session.total_hints_used += 1
+
+    # v7.3.26: Pick next question (if needed) — CRITICAL FIX
+    # This was missing, causing correct answers to not advance to next question
+    if action.action_type in ("read_question", "pick_next_question"):
+        if session.current_question_id and action.action_type != "pick_next_question":
+            # Re-read current question
+            question_data = _load_question(db, session.current_question_id)
+        else:
+            # Add current question to asked_ids to avoid repeating it
+            asked_ids = [
+                t.question_id for t in session.turns
+                if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
+            ]
+            if session.current_question_id and session.current_question_id not in asked_ids:
+                asked_ids.append(session.current_question_id)
+            # Pick new question
+            q = memory.pick_next_question(
+                db, session.student_id,
+                session.subject or "math",
+                session.chapter or "ch1_square_and_cube",
+                asked_ids,
+                difficulty_preference=action.extra.get("difficulty"),
+            )
+            if q:
+                question_data = q
+                session.current_question_id = q["id"]
+                session.current_hint_level = 0
+            else:
+                # No more questions → end session
+                new_state = "SESSION_COMPLETE"
+                action = Action("end_session", student_text=student_text)
+    elif action.action_type in ("give_hint", "show_solution", "teach_concept"):
+        # Load question for hints, solutions, and teaching
+        if session.current_question_id:
+            question_data = _load_question(db, session.current_question_id)
+
     # ── Build prompt ──
     # v7.3.22 Fix 2: Include language_pref in session_ctx for streaming endpoint
     session_ctx = {
