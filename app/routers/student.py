@@ -501,7 +501,8 @@ async def process_message(
         # Failed — try re-prompting with stricter instructions
         didi_text = enforce_result.text  # Use partially cleaned version
         if attempt == MAX_ENFORCE_RETRIES - 1:
-            didi_text = get_safe_fallback(new_state, prev_response)
+            # v7.3.21 Fix 3: Pass language_pref for language-aware fallbacks
+            didi_text = get_safe_fallback(new_state, prev_response, session.language_pref or "hinglish")
             logger.warning(f"Enforcer failed {MAX_ENFORCE_RETRIES}x, using fallback for {new_state}")
 
     # v7.3.0: Record Didi's response to conversation history

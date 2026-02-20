@@ -364,10 +364,11 @@ class TestStateMachine:
         assert action.language_pref == "english"
 
     def test_language_switch_from_waiting_answer(self):
-        """BUG 2: LANGUAGE_SWITCH should work from any state."""
+        """v7.3.21: LANGUAGE_SWITCH transitions to TEACHING to re-present in new language."""
         ctx = {"student_text": "hindi mein bolo"}
         new_state, action = self.transition("WAITING_ANSWER", "LANGUAGE_SWITCH", ctx)
-        assert new_state == "WAITING_ANSWER"
+        # v7.3.21 Fix 2: Now transitions to TEACHING instead of staying in current state
+        assert new_state == "TEACHING"
         assert action.language_pref == "hindi"
 
     def test_meta_question_in_teaching(self):

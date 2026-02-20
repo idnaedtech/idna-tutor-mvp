@@ -91,10 +91,10 @@ def transition(
     if category == "STOP":
         return "SESSION_COMPLETE", Action("end_session", student_text=text)
 
-    # v7.2.0: LANGUAGE_SWITCH — stay in current state, just acknowledge switch (BUG 2)
+    # v7.3.21 Fix 2: LANGUAGE_SWITCH — transition to TEACHING to re-present in new language
     if category == "LANGUAGE_SWITCH":
         pref = get_language_switch_preference(text)
-        return current_state, Action(
+        return "TEACHING", Action(
             "acknowledge_language_switch", student_text=text,
             language_pref=pref,
             extra={"new_language": pref},

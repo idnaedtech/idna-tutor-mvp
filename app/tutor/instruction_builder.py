@@ -268,14 +268,15 @@ def _build_ask_repeat(a, ctx, q, sk, prev):
 # v7.2.0: New builders for language switch and meta questions
 
 def _build_acknowledge_language_switch(a, ctx, q, sk, prev):
-    """Acknowledge language switch and continue in new language."""
+    """Acknowledge language switch and CONTINUE teaching in new language."""
     new_lang = a.extra.get("new_language", "hinglish")
+    # v7.3.21 Fix 1: Continue teaching instead of asking "what would you like to know"
     if new_lang == "english":
-        msg = 'Student asked to switch to English. Say: "Sure, I can speak in English. What would you like to know?" 1 sentence.'
+        msg = 'Student switched to English. Acknowledge briefly ("Sure, English it is.") and CONTINUE teaching the current topic in English. Do NOT ask what they want to learn. 2 sentences max.'
     elif new_lang == "hindi":
-        msg = 'Student asked for Hindi. Say: "ठीक है, मैं हिंदी में बोलती हूं। आगे बढ़ें?" 1 sentence.'
+        msg = 'Student switched to Hindi. Acknowledge briefly ("ठीक है, हिंदी में") and CONTINUE teaching the current topic in Hindi. Do NOT ask what they want. 2 sentences max.'
     else:
-        msg = 'Student asked for Hinglish. Say: "Theek hai, hum Hinglish mein baat karte hain. Aage badhein?" 1 sentence.'
+        msg = 'Student switched to Hinglish. Acknowledge briefly ("Theek hai") and CONTINUE teaching the current topic in Hinglish. Do NOT ask what they want. 2 sentences max.'
     return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
 
 

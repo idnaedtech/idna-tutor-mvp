@@ -60,6 +60,23 @@ SAFE_FALLBACKS = {
     "SESSION_COMPLETE": "Aaj ki padhai ho gayi! Bahut achha kaam kiya. Kal phir milte hain.",
 }
 
+# v7.3.21 Fix 3: English fallbacks for when language_pref == "english"
+SAFE_FALLBACKS_EN = {
+    "GREETING": "Hello! What would you like to study today?",
+    "DISCOVERING_TOPIC": "Let's start with math. Have you studied rational numbers?",
+    "CHECKING_UNDERSTANDING": "Let's see how much you understood. I'll ask a question.",
+    "TEACHING": "Let me explain this with an example.",
+    "WAITING_ANSWER": "I couldn't hear your answer. Could you please repeat?",
+    "EVALUATING": "I had trouble checking that. Please try again.",
+    "HINT_1": "Think step by step. What's the first step?",
+    "HINT_2": "Here's another hint. Listen carefully.",
+    "FULL_SOLUTION": "No problem, let's solve this together.",
+    "NEXT_QUESTION": "Let's move to the next question.",
+    "HOMEWORK_HELP": "Could you read the homework question again?",
+    "COMFORT": "It's okay. This is difficult, isn't it? Taking a break to practice is fine.",
+    "SESSION_COMPLETE": "Today's study is done! Great work. See you tomorrow.",
+}
+
 # Varied fallbacks to avoid repetition (cycle through these)
 VARIED_FALLBACKS = {
     "HINT_1": [
@@ -76,6 +93,25 @@ VARIED_FALLBACKS = {
         "Isko samjhne ke liye ek example lete hain.",
         "Dekhiye, main isko simple tarike se samjhati hoon.",
         "Chalo, ek Indian example se samjhte hain.",
+    ],
+}
+
+# v7.3.21 Fix 3: English varied fallbacks
+VARIED_FALLBACKS_EN = {
+    "HINT_1": [
+        "Think step by step. What's the first step?",
+        "Let's start with a simple example.",
+        "Let me explain this a different way.",
+    ],
+    "HINT_2": [
+        "Here's another hint. Listen carefully.",
+        "Let me help you a bit more.",
+        "Look, think of it this way.",
+    ],
+    "TEACHING": [
+        "Let me explain this with an example.",
+        "Let me explain this in a simple way.",
+        "Let's understand this with a real-life example.",
     ],
 }
 
@@ -392,17 +428,24 @@ def enforce(
 
 import random
 
-def get_safe_fallback(state: str, previous_response: Optional[str] = None) -> str:
+def get_safe_fallback(state: str, previous_response: Optional[str] = None, language_pref: str = "hinglish") -> str:
     """Get a pre-written safe response for a given state.
     Used when enforcement fails after MAX_RETRIES.
-    Avoids returning the same response as previous turn."""
+    Avoids returning the same response as previous turn.
+    v7.3.21 Fix 3: Language-aware fallbacks."""
+    # v7.3.21: Select fallback dict based on language preference
+    use_english = language_pref == "english"
+    fallbacks = SAFE_FALLBACKS_EN if use_english else SAFE_FALLBACKS
+    varied = VARIED_FALLBACKS_EN if use_english else VARIED_FALLBACKS
+    default_fallback = "One moment, let me think." if use_english else "Ek minute rukiye, main soch rahi hoon."
+
     # Check for varied fallbacks first
-    if state in VARIED_FALLBACKS:
-        options = VARIED_FALLBACKS[state]
+    if state in varied:
+        options = varied[state]
         # Filter out the previous response to avoid repetition
         if previous_response:
             options = [opt for opt in options if opt.lower() != previous_response.strip().lower()]
         if options:
             return random.choice(options)
 
-    return SAFE_FALLBACKS.get(state, "Ek minute rukiye, main soch rahi hoon.")
+    return fallbacks.get(state, default_fallback)
