@@ -44,7 +44,7 @@ AI-powered voice-based tutor for K-12 students in India, starting with Class 8 M
 | 3-attempt hint system | P0 | ✅ DONE |
 | AI-generated encouragement | P0 | ✅ DONE |
 | Chapter selection | P0 | ✅ DONE |
-| Voice input (Whisper) | P0 | 🔄 NEXT |
+| Voice input (Sarvam Saarika) | P0 | ✅ DONE |
 | Voice output (TTS) | P0 | ⏳ PENDING |
 | Web interface | P1 | ⏳ PENDING |
 | Parent dashboard | P2 | ⏳ PENDING |
@@ -79,8 +79,8 @@ AI-powered voice-based tutor for K-12 students in India, starting with Class 8 M
 │              (Python/FastAPI)                    │
 ├─────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────┐ │
-│  │   Whisper   │  │     FSM     │  │   TTS   │ │
-│  │   (STT)     │  │   (Logic)   │  │ (Speech)│ │
+│  │   Sarvam    │  │     FSM     │  │ Sarvam  │ │
+│  │  Saarika    │  │   (Logic)   │  │ Bulbul  │ │
 │  └─────────────┘  └─────────────┘  └─────────┘ │
 ├─────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐              │
@@ -119,7 +119,7 @@ END
 
 ## 3.4 Data Flow
 ```
-Student speaks → Whisper (STT) → Text
+Student speaks → Sarvam Saarika (STT) → Text
     ↓
 Text → FSM (decides action)
     ↓
@@ -133,9 +133,9 @@ Audio → Student hears
 ## 3.5 APIs Used
 | Service | Purpose | Model/Version |
 |---------|---------|---------------|
-| OpenAI | Text generation | gpt-4o-mini |
-| OpenAI | Speech-to-text | whisper-1 |
-| OpenAI | Text-to-speech | tts-1 |
+| OpenAI | Text generation | gpt-4.1-mini |
+| Sarvam | Speech-to-text | Saarika v2.5 |
+| Sarvam | Text-to-speech | Bulbul v3 |
 
 ## 3.6 Future Considerations (Post-MVP)
 - Sarvam AI for Indic languages (Saarika ASR, Bulbul TTS)
@@ -154,7 +154,7 @@ idna/
 ├── questions.py            # Question bank (50 questions)
 ├── tutor.py               # Main tutor application
 ├── fsm.py                 # Finite State Machine (to integrate)
-├── voice_input.py         # Whisper integration (to build)
+├── voice_input.py         # Sarvam Saarika STT integration
 ├── voice_output.py        # TTS integration (to build)
 ├── web/                   # Web interface (to build)
 │   ├── index.html
@@ -231,7 +231,7 @@ idna/
 | Week | Focus | Deliverable |
 |------|-------|-------------|
 | 1 | Core + Questions | ✅ DONE - Working text tutor |
-| 2 | Voice Input | Whisper integration |
+| 2 | Voice Input | Sarvam Saarika integration |
 | 3 | Voice Output | TTS integration |
 | 4 | Web Interface | Browser-based tutor |
 | 5 | Parent View | Basic progress dashboard |
@@ -313,8 +313,9 @@ python tutor.py
 - IndiaAI: https://indiaai.gov.in (future)
 
 ## 12.2 Documentation
-- OpenAI Whisper: https://platform.openai.com/docs/guides/speech-to-text
-- OpenAI TTS: https://platform.openai.com/docs/guides/text-to-speech
+- Sarvam AI: https://docs.sarvam.ai
+- Sarvam Saarika STT: https://docs.sarvam.ai/api-reference-docs/speech-to-text
+- Sarvam Bulbul TTS: https://docs.sarvam.ai/api-reference-docs/text-to-speech
 
 ---
 

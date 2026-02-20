@@ -11,7 +11,7 @@
 
 **Developer:** Solo (Hemant Ghosh)
 
-**Tech Stack:** Python, OpenAI GPT-4o-mini, Whisper, TTS, FastAPI, HTML/CSS/JS
+**Tech Stack:** Python, OpenAI GPT-4.1-mini, Sarvam Saarika STT, Sarvam Bulbul TTS, FastAPI, HTML/CSS/JS
 
 ---
 
@@ -25,7 +25,7 @@
 - ✅ Chapter selection
 
 ## Voice Capabilities
-- ✅ Voice Input: Student speaks answers (OpenAI Whisper)
+- ✅ Voice Input: Student speaks answers (Sarvam Saarika)
 - ✅ Voice Output: Tutor speaks questions and feedback (OpenAI TTS)
 - ✅ Auto-submit after voice input
 - ✅ Natural language understanding ("x equals 7", "the answer is seven")
@@ -54,8 +54,8 @@
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │   Whisper   │  │  Question   │  │      TTS        │ │
-│  │    (STT)    │  │    Bank     │  │   (Speech)      │ │
+│  │  Sarvam    │  │  Question   │  │   Sarvam        │ │
+│  │  Saarika   │  │    Bank     │  │   Bulbul        │ │
 │  │             │  │  50 items   │  │                 │ │
 │  └─────────────┘  └─────────────┘  └─────────────────┘ │
 │                                                         │
@@ -79,7 +79,7 @@ idna/
 ├── questions.py            # Question bank (50 questions, 5 chapters)
 ├── tutor.py               # Text-based tutor (terminal)
 ├── voice_tutor.py         # Voice-enabled tutor (terminal)
-├── voice_input.py         # Whisper STT module
+├── voice_input.py         # Sarvam Saarika STT module
 ├── voice_output.py        # TTS module
 ├── web_server.py          # FastAPI backend
 ├── web/
@@ -253,7 +253,7 @@ py -3.11 tutor.py
 | Question loading | ✅ Working |
 | Answer evaluation | ✅ Working |
 | Hint system | ✅ Working |
-| Voice input (Whisper) | ✅ Working |
+| Voice input (Sarvam Saarika) | ✅ Working |
 | Voice output (TTS) | ✅ Working |
 | Web interface | ✅ Working |
 | Auto-submit on voice | ✅ Working |

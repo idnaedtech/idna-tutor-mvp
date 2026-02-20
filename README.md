@@ -76,8 +76,8 @@ docker-compose up --build
 ## Architecture
 
 ```
-Student speaks → Groq Whisper (STT) → Input Classifier → State Machine
-→ Answer Checker → Instruction Builder → GPT-4o → Enforcer → Clean for TTS
+Student speaks → Sarvam Saarika v2.5 (STT) → Input Classifier → State Machine
+→ Answer Checker → Instruction Builder → GPT-4.1-mini → Enforcer → Clean for TTS
 → Sarvam Bulbul v3 (TTS) → Student hears Didi
 ```
 
@@ -101,7 +101,7 @@ app/
 │   ├── llm.py             # OpenAI abstraction (swappable)
 │   └── memory.py          # Skill mastery read/write, adaptive questions
 ├── voice/
-│   ├── stt.py             # Groq Whisper / Sarvam Saarika / Saaras
+│   ├── stt.py             # Sarvam Saarika v2.5 (default STT)
 │   ├── tts.py             # Sarvam Bulbul v3, caching
 │   └── clean_for_tts.py   # Symbol→word conversion for TTS
 ├── content/
@@ -120,6 +120,5 @@ pytest tests/ -v
 ```
 
 ## API Keys Needed
-- **OPENAI_API_KEY**: For GPT-4o (Didi's brain)
-- **GROQ_API_KEY**: For Whisper STT (speech recognition)
-- **SARVAM_API_KEY**: For Bulbul v3 TTS (Didi's voice)
+- **OPENAI_API_KEY**: For GPT-4.1-mini (Didi's brain)
+- **SARVAM_API_KEY**: For Sarvam Saarika STT + Bulbul TTS (Didi's ears and voice)
