@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0.2 — Seed Questions
+IDNA EdTech v7.3 — Seed Questions
 Class 8 NCERT Math Chapters:
   - Chapter 1: Rational Numbers (10 questions)
   - Chapter 1: A Square and A Cube (50 questions) — Ganita Prakash 2025

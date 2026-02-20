@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — TTS Text Cleaner
+IDNA EdTech v7.3 — TTS Text Cleaner
 Converts mathematical notation, fractions, symbols to spoken text.
 Proven working from v6.2.4. Preserved and extended.
 

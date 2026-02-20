@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Response Enforcer
+IDNA EdTech v7.3 — Response Enforcer
 Every LLM response passes through here BEFORE reaching TTS.
 7 rules. Non-negotiable. No exceptions.
 

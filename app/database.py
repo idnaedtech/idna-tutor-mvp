@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Database Engine
+IDNA EdTech v7.3 — Database Engine
 SQLAlchemy async-compatible setup. Works with SQLite (dev) and PostgreSQL (prod).
 """
 

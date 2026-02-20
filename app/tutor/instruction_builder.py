@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Instruction Builder
+IDNA EdTech v7.3 — Instruction Builder
 Builds the exact LLM prompt for each state+action combination.
 Didi's personality, tone, and rules are embedded here.
 

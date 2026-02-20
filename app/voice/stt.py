@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0.1 — STT Abstraction Layer
+IDNA EdTech v7.3 — STT Abstraction Layer
 Swap providers by changing config.STT_PROVIDER.
 Default: Sarvam Saarika v2.5 (handles Hindi-English code-mixing natively).
 Fallback: Groq Whisper (set STT_PROVIDER=groq_whisper).

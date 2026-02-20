@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Authentication Router
+IDNA EdTech v7.3 — Authentication Router
 PIN-based login for students and parents. JWT tokens.
 Rate limited: 5 failed attempts = 15 min lockout.
 """

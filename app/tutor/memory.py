@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Memory (Skill Mastery Read/Write)
+IDNA EdTech v7.3 — Memory (Skill Mastery Read/Write)
 Updates student's long-term skill data after every answer evaluation.
 Also reads data for adaptive question selection and parent reports.
 """

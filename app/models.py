@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — ORM Models
+IDNA EdTech v7.3 — ORM Models
 Every table from the tech spec. UUID primary keys. Proper relationships.
 """
 

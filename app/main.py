@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Main Application
+IDNA EdTech v7.3 — Main Application
 FastAPI app. Mounts routers, CORS, serves static files.
 Database initialization and question bank seeding on startup.
 """
@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    logger.info("IDNA Didi v7.0 ready")
+    logger.info("IDNA Didi v7.3 ready")
     yield
     logger.info("Shutting down")
 
@@ -111,9 +111,9 @@ def _seed_test_student(db):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v7.0",
+    title="IDNA Didi v7.3",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="7.0.0",
+    version="7.3.6",
     lifespan=lifespan,
 )
 
@@ -159,4 +159,4 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "7.0.0"}
+    return {"status": "ok", "version": "7.3.6"}

@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Student Session State Machine
+IDNA EdTech v7.3 — Student Session State Machine
 THE BRAIN. Every state, every transition, deterministic.
 Python decides what happens. LLM only generates spoken words.
 

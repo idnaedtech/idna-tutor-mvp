@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Configuration
+IDNA EdTech v7.3 — Configuration
 All environment variables and constants. Single source of truth.
 No other file reads os.environ directly.
 """

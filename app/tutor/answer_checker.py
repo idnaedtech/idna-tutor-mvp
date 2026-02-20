@@ -1,5 +1,5 @@
 """
-IDNA EdTech v7.0 — Answer Checker
+IDNA EdTech v7.3 — Answer Checker
 Evaluates student answers against correct answers.
 
 Math: DETERMINISTIC PYTHON. No LLM. Handles:
