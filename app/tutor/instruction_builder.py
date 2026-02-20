@@ -140,26 +140,43 @@ def _sys(extra=""):
 
 
 def _build_ask_topic(a, ctx, q, sk, prev):
+    # v7.3.24: Language-aware topic asking
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
     if a.extra.get("retry"):
-        msg = f'Student said: "{a.student_text}". Couldn\'t identify subject. Ask specifically: "Aaj school mein kaunsa subject padha? Math, Science, ya Hindi?"'
+        retry_ask = "What subject did you study in school today? Math, Science, or Hindi?" if use_english else "Aaj school mein kaunsa subject padha? Math, Science, ya Hindi?"
+        msg = f'Student said: "{a.student_text}". Couldn\'t identify subject. Ask specifically: "{retry_ask}"'
     else:
         msg = "Student just logged in. Ask warmly what they studied in school today. Ask about their day first, then the subject."
     return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
 
 
 def _build_apologize_no_subject(a, ctx, q, sk, prev):
+    # v7.3.24: Language-aware apology
+    lang_pref = ctx.get("language_pref", "hinglish")
     s = a.detected_subject or "that subject"
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student wants {s}, but only Math available. Say warmly: "Abhi mere paas sirf Math hai, lekin jaldi {s} bhi aa jayega! Chalo math practice karte hain?"'}]
+    if lang_pref == "english":
+        apology = f"Right now I only have Math, but {s} is coming soon! Want to practice math?"
+    else:
+        apology = f"Abhi mere paas sirf Math hai, lekin jaldi {s} bhi aa jayega! Chalo math practice karte hain?"
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student wants {s}, but only Math available. Say warmly: "{apology}"'}]
 
 
 def _build_probe_understanding(a, ctx, q, sk, prev):
+    # v7.3.24: Language-aware probing
+    lang_pref = ctx.get("language_pref", "hinglish")
     ch = ctx.get("chapter", "rational numbers")
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student studied {ch}. Ask ONE simple concept-check question (not calculation). Example for fractions: "Agar denominator same hai, toh add kaise karte hain?"'}]
+    example = "If the denominator is the same, how do you add?" if lang_pref == "english" else "Agar denominator same hai, toh add kaise karte hain?"
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student studied {ch}. Ask ONE simple concept-check question (not calculation). Example for fractions: "{example}"'}]
 
 
 def _build_teach_concept(a, ctx, q, sk, prev):
     ch = ctx.get("chapter", "rational numbers")
     extra = ""
+
+    # v7.3.24: Language-aware teaching
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
 
     # v7.2.0: Phase-based teaching with teaching_turn (BUG 1/3 fix)
     teaching_turn = getattr(a, 'teaching_turn', 0) or a.reteach_count
@@ -191,47 +208,62 @@ def _build_teach_concept(a, ctx, q, sk, prev):
 
     approach = a.extra.get("approach", "fresh")
 
+    # v7.3.24: Language-aware phrases
+    transition_phrase = "No problem, let's try a question." if use_english else "Koi baat nahi, chaliye ek sawaal try karte hain."
+    understand_check = "Does that make sense?" if use_english else "Ab samajh aaya?"
+    understand_short = "Make sense?" if use_english else "Samajh aaya?"
+    lang_mode = "English" if use_english else "Hinglish"
+
     # v7.2.0: Phase-based prompts (BUG 1 fix)
     if a.extra.get("forced_transition"):
         # Turn 3+: Force to question with gentle transition
-        msg = 'Say: "Koi baat nahi, chaliye ek sawaal try karte hain." Then read the question.'
+        msg = f'Say: "{transition_phrase}" Then read the question.'
     elif approach == "answer_question":
         msg = f'Student asked: "{a.student_text}". Answer their question about {ch}. {teach_content if teach_content else "Use simple example."} 2 sentences.'
     elif approach == "different_example":
         if teaching_turn == 1:
-            msg = f'Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. End: "Ab samajh aaya?"'
+            msg = f'Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. End: "{understand_check}"'
         elif teaching_turn >= 2:
             # Simplest version
-            msg = f"Student still doesn't understand. Give the SIMPLEST explanation possible: \"{teach_content}\" 2 sentences. End: \"Ab samajh aaya?\""
+            msg = f"Student still doesn't understand. Give the SIMPLEST explanation possible: \"{teach_content}\" 2 sentences. End: \"{understand_check}\""
         else:
-            msg = f"Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"Ab samajh aaya?\""
+            msg = f"Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"{understand_check}\""
     else:
         # Turn 0: Initial teaching
         if teach_content:
-            msg = f'Teach this concept naturally in Hinglish: "{teach_content}". 2 sentences. End: "Samajh aaya?"'
+            msg = f'Teach this concept naturally in {lang_mode}: "{teach_content}". 2 sentences. End: "{understand_short}"'
         else:
-            msg = f"Teach one concept from {ch}. Use Indian example. 2 sentences. End: \"Samajh aaya?\""
+            msg = f"Teach one concept from {ch}. Use Indian example. 2 sentences. End: \"{understand_short}\""
     return [{"role": "system", "content": _sys(extra)}, {"role": "user", "content": msg}]
 
 
 def _build_read_question(a, ctx, q, sk, prev):
+    # v7.3.24: Language-aware question reading
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
     if not q:
-        return [{"role": "system", "content": _sys()}, {"role": "user", "content": 'No more questions. Say: "Is topic ke saare questions ho gaye! Bahut achhi practice hui."'}]
+        done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke saare questions ho gaye! Bahut achhi practice hui."
+        return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'No more questions. Say: "{done_msg}"'}]
     if a.extra.get("nudge"):
         return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". Gently nudge them to try.'}]
     d = "This is an easier question. " if a.extra.get("difficulty") == "easy" else ""
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'{d}Read this question naturally: "{q["question_voice"]}". End: "Batao, kya answer hai?"'}]
+    ask_prompt = 'End: "Tell me, what is the answer?"' if use_english else 'End: "Batao, kya answer hai?"'
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'{d}Read this question naturally: "{q["question_voice"]}". {ask_prompt}'}]
 
 
 def _build_evaluate_answer(a, ctx, q, sk, prev):
     v = a.verdict
     if not v:
         return _build_fallback(a, ctx, q, sk, prev)
+    # v7.3.24: Language-aware evaluation response
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
     # Note: When correct, route_after_evaluation changes action_type to pick_next_question,
     # so this "correct" branch rarely executes. Kept for edge cases.
     if v.correct:
         return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". CORRECT. Praise briefly referencing their answer. 1 sentence only.'}]
-    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". Diagnostic: "{v.diagnostic}". Tell what went wrong. Say "Aapne ... bola". Do NOT reveal answer. 2 sentences.'}]
+    reference = 'Say "You said..."' if use_english else 'Say "Aapne ... bola"'
+    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". Diagnostic: "{v.diagnostic}". Tell what went wrong. {reference}. Do NOT reveal answer. 2 sentences.'}]
 
 
 def _build_give_hint(a, ctx, q, sk, prev):
@@ -239,65 +271,100 @@ def _build_give_hint(a, ctx, q, sk, prev):
         return _build_fallback(a, ctx, q, sk, prev)
     hints = q.get("hints") or []
 
+    # v7.3.24: Check language preference for hint language
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
+
     # Get actual hint or build from question context
     if a.hint_level <= len(hints):
         h = hints[a.hint_level - 1]
     else:
         # No more hints — build contextual hint from question and answer
-        answer = q.get("answer", "")
         skill = q.get("target_skill", "")
         if "perfect_square" in skill:
-            h = f"Sochiye: kaunsa number khud se multiply karke yeh answer dega?"
+            h = "Think: which number multiplied by itself gives this answer?" if use_english else "Sochiye: kaunsa number khud se multiply karke yeh answer dega?"
         elif "cube" in skill:
-            h = f"Sochiye: kaunsa number teen baar multiply karke yeh answer dega?"
+            h = "Think: which number multiplied three times gives this answer?" if use_english else "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?"
         elif "fraction" in skill.lower():
-            h = f"Pehle numerators ko dekho, phir denominators ko."
+            h = "First look at the numerators, then the denominators." if use_english else "Pehle numerators ko dekho, phir denominators ko."
         else:
             # Generic hint based on answer type
-            h = f"Is sawaal ka jawab ek number hai. Sochiye step by step."
+            h = "The answer is a number. Think step by step." if use_english else "Is sawaal ka jawab ek number hai. Sochiye step by step."
 
-    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". Say naturally in Hinglish. Ask to try again. 2 sentences.'}]
+    # v7.3.24: Use appropriate language instruction
+    lang_instruction = "Say naturally in English." if use_english else "Say naturally in Hinglish."
+    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
 
 
 def _build_show_solution(a, ctx, q, sk, prev):
     if not q:
         return _build_fallback(a, ctx, q, sk, prev)
     sol = q.get("solution", "Solution not available.")
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'3rd wrong. Show solution: "{sol}". Walk through in 2-3 sentences. Be encouraging: "Koi baat nahi, ab samajh aa gaya hoga." No new question.'}]
+    # v7.3.24: Language-aware encouragement
+    lang_pref = ctx.get("language_pref", "hinglish")
+    encouragement = "It's okay, now you understand." if lang_pref == "english" else "Koi baat nahi, ab samajh aa gaya hoga."
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'3rd wrong. Show solution: "{sol}". Walk through in 2-3 sentences. Be encouraging: "{encouragement}" No new question.'}]
 
 
 def _build_pick_next_question(a, ctx, q, sk, prev):
+    # v7.3.24: Language-aware transitions
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
+    transition = "Let's try another one." if use_english else "Chalo, ek aur try karte hain."
+    done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke questions ho gaye! Bahut achhi practice hui."
+
     if a.extra.get("follow_up"):
         if q:
-            return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "Chalo, ek aur try karte hain." Then read: "{q["question_voice"]}"'}]
-        return [{"role": "system", "content": _sys()}, {"role": "user", "content": 'After solution, say briefly: "Chalo, ek aur try karte hain."'}]
+            return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "{transition}" Then read: "{q["question_voice"]}"'}]
+        return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, say briefly: "{transition}"'}]
     if q:
         # Include praise for correct answer + the next question
         return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}"'}]
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": 'No more questions available. Say: "Is topic ke questions ho gaye! Bahut achhi practice hui."'}]
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'No more questions available. Say: "{done_msg}"'}]
 
 
 def _build_comfort_student(a, ctx, q, sk, prev):
-    return [{"role": "system", "content": _sys("\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: \"Koi baat nahi\", \"Mushkil lag raha hai na?\". End: \"Jab ready ho, batana.\"\n")},
+    # v7.3.24: Language-aware comfort messages
+    lang_pref = ctx.get("language_pref", "hinglish")
+    if lang_pref == "english":
+        comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "It\'s okay", "This is difficult, isn\'t it?". End: "Let me know when you\'re ready."\n'
+    else:
+        comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "Koi baat nahi", "Mushkil lag raha hai na?". End: "Jab ready ho, batana."\n'
+    return [{"role": "system", "content": _sys(comfort_mode)},
             {"role": "user", "content": f'Student said: "{a.student_text}". They are frustrated. Comfort. 2 sentences.'}]
 
 
 def _build_end_session(a, ctx, q, sk, prev):
     qc = ctx.get("questions_correct", 0)
     qa = ctx.get("questions_attempted", 0)
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Session ending. {qc}/{qa} correct. Summarize warmly. Encourage return tomorrow. "Kal phir milte hain!" 3 sentences max.'}]
+    # v7.3.24: Language-aware session ending
+    lang_pref = ctx.get("language_pref", "hinglish")
+    goodbye = "See you tomorrow!" if lang_pref == "english" else "Kal phir milte hain!"
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Session ending. {qc}/{qa} correct. Summarize warmly. Encourage return tomorrow. "{goodbye}" 3 sentences max.'}]
 
 
 def _build_acknowledge_homework(a, ctx, q, sk, prev):
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": '"Achha, homework hai? Photo bhejo ya question padh ke batao." 1 sentence.'}]
+    # v7.3.24: Language-aware homework acknowledgment
+    lang_pref = ctx.get("language_pref", "hinglish")
+    msg = "Oh, you have homework? Send a photo or read me the question." if lang_pref == "english" else "Achha, homework hai? Photo bhejo ya question padh ke batao."
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
 
 
 def _build_replay_heard(a, ctx, q, sk, prev):
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "Mujhe aisa suna: [heard]. Agar galat suna toh phir try karo." Be apologetic.'}]
+    # v7.3.24: Language-aware replay message
+    lang_pref = ctx.get("language_pref", "hinglish")
+    if lang_pref == "english":
+        msg = f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "I heard: [heard]. If I misheard, please try again." Be apologetic.'
+    else:
+        msg = f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "Mujhe aisa suna: [heard]. Agar galat suna toh phir try karo." Be apologetic.'
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
 
 
 def _build_ask_repeat(a, ctx, q, sk, prev):
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": '"Sorry, samajh nahi aaya. Ek baar phir boliye?" 1 sentence.'}]
+    # v7.3.24: Language-aware repeat request
+    lang_pref = ctx.get("language_pref", "hinglish")
+    msg = "Sorry, I didn't understand. Could you please say that again?" if lang_pref == "english" else "Sorry, samajh nahi aaya. Ek baar phir boliye?"
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
 
 
 # v7.2.0: New builders for language switch and meta questions
@@ -317,6 +384,9 @@ def _build_acknowledge_language_switch(a, ctx, q, sk, prev):
 
 def _build_answer_meta_question(a, ctx, q, sk, prev):
     """Answer meta questions like 'more examples', 'which chapter', etc."""
+    # v7.3.24: Language-aware meta question handling
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
     meta_type = a.extra.get("meta_type", "more_examples")
     ch = ctx.get("chapter", "rational numbers")
 
@@ -330,7 +400,8 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
         msg = f'Student wants more examples. Give 2-3 NEW examples for {skill_key}. DO NOT repeat the definition. Do NOT reuse: "{prev or ""}". Use fresh examples: {examples if examples else "laddoo, cricket score, rangoli squares"}. 2 sentences.'
     elif "chapter" in a.student_text.lower() or "topic" in a.student_text.lower():
         title = lesson.get("title_hi") or lesson.get("name") or ch
-        msg = f'Student asked which chapter. Say: "Yeh {title} chapter hai, Class 8 Math se." 1 sentence.'
+        chapter_response = f"This is the {title} chapter, from Class 8 Math." if use_english else f"Yeh {title} chapter hai, Class 8 Math se."
+        msg = f'Student asked which chapter. Say: "{chapter_response}" 1 sentence.'
     elif "real life" in a.student_text.lower() or "use" in a.student_text.lower():
         msg = f'Student asked about real-life use. Give 1-2 practical examples: architecture, cooking, shopping. How {ch} is used in daily life. 2 sentences.'
     else:
@@ -340,7 +411,10 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
 
 
 def _build_fallback(a, ctx, q, sk, prev):
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": 'Something unexpected. Say naturally: "Chalo, aage badhte hain."'}]
+    # v7.3.24: Language-aware fallback
+    lang_pref = ctx.get("language_pref", "hinglish")
+    fallback_msg = "Let's move on." if lang_pref == "english" else "Chalo, aage badhte hain."
+    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Something unexpected. Say naturally: "{fallback_msg}"'}]
 
 
 _BUILDERS = {
