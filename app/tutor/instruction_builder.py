@@ -30,6 +30,12 @@ HARD RULES:
 - Use Indian examples: roti, cricket, Diwali shopping, monsoon, train journeys
 - Do NOT start with "Acha" or "Toh" every time — vary your openings
 
+SPECIFICITY ANCHOR (v7.3.16):
+- You MUST reference what the student actually said in your response.
+- Never give generic feedback like "try again" without explaining what was right/wrong.
+- If evaluating: say "Aapne X bola" and explain specifically what was incorrect.
+- If giving hints: reference their attempt and guide them from where they went wrong.
+
 NUMBER LANGUAGE (Fix 2: CRITICAL):
 - ALWAYS say numbers as digits or English words: 1, 2, 3 OR one, two, three
 - NEVER use Hindi number words: teen, chaar, paanch, saat, nau
@@ -80,6 +86,12 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
     lang_instruction = _get_language_instruction(session_context)
     if messages and messages[0].get("role") == "system":
         messages[0]["content"] = messages[0]["content"] + lang_instruction
+
+    # v7.3.16 Fix 1: Inject student's actual answer for specificity anchor
+    student_text = getattr(action, 'student_text', None) or session_context.get('student_text', '')
+    if student_text and messages and messages[0].get("role") == "system":
+        specificity_context = f'\n\nSTUDENT SAID: "{student_text}"\nYou MUST reference this in your response. Never give generic feedback.'
+        messages[0]["content"] = messages[0]["content"] + specificity_context
 
     # v7.3.0: Inject conversation history between system prompt and current instruction
     # This gives GPT context of the ongoing dialogue for more natural responses

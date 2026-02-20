@@ -301,6 +301,26 @@ def _check_no_repetition(
     return True, text
 
 
+# ─── Light Enforcement for Streaming ─────────────────────────────────────────
+
+def light_enforce(
+    text: str,
+    verdict: Optional[str] = None,
+) -> str:
+    """
+    Light enforcement for streaming chunks.
+    Only strips banned phrases (false praise). Does NOT apply:
+    - Length/sentence limits (would break mid-stream)
+    - "End with question" rules
+    - Repetition checks
+
+    v7.3.16: Use this per-chunk during streaming, then run full enforce() at end.
+    """
+    # Only check Rule 2: No false praise
+    _, cleaned = _check_no_false_praise(text, verdict)
+    return cleaned
+
+
 # ─── Main Enforcement Function ───────────────────────────────────────────────
 
 def enforce(

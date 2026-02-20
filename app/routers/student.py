@@ -40,7 +40,7 @@ from app.config import OPENAI_API_KEY
 from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer
 from app.tutor.instruction_builder import build_prompt
-from app.tutor.enforcer import enforce, get_safe_fallback
+from app.tutor.enforcer import enforce, light_enforce, get_safe_fallback
 from app.tutor.llm import get_llm
 from app.tutor import memory
 
@@ -730,15 +730,9 @@ async def process_message_stream(
                 # Clean for TTS
                 cleaned = clean_for_tts(sentence)
 
-                # Enforce rules on each sentence
-                enforce_result = enforce(
-                    cleaned, new_state,
-                    verdict=verdict_str,
-                    student_answer=student_text,
-                    language=session.language,
-                    previous_response=prev_response,
-                )
-                cleaned = enforce_result.text
+                # v7.3.16 Fix 2: Light enforce per chunk (only banned phrases)
+                # Do NOT run full enforce() here — it breaks length/sentence rules mid-stream
+                cleaned = light_enforce(cleaned, verdict=verdict_str)
                 full_text += " " + cleaned
 
                 # Generate TTS for this sentence
@@ -756,8 +750,18 @@ async def process_message_stream(
             if sentence_index > 0:
                 yield f"data: {json.dumps({'type': 'last_chunk'})}\n\n"
 
-            # Send full text and metadata
+            # v7.3.16 Fix 2: Run full enforce() on complete text at end
             full_text = full_text.strip()
+            enforce_result = enforce(
+                full_text, new_state,
+                verdict=verdict_str,
+                student_answer=student_text,
+                language=session.language,
+                previous_response=prev_response,
+            )
+            full_text = enforce_result.text
+
+            # Send full text and metadata
             yield f"data: {json.dumps({'type': 'text', 'content': full_text})}\n\n"
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
