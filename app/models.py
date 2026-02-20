@@ -191,10 +191,10 @@ class Question(Base):
     question_text: Mapped[str] = mapped_column(Text)
     question_voice: Mapped[str] = mapped_column(Text)  # TTS-safe version
     answer: Mapped[str] = mapped_column(Text)
-    answer_variants: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    answer_variants: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     key_concepts: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     eval_method: Mapped[str] = mapped_column(String(20), default="exact")
-    hints: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    hints: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     solution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     target_skill: Mapped[str] = mapped_column(String(50))
     difficulty: Mapped[int] = mapped_column(Integer, default=1)

@@ -290,7 +290,13 @@ def check_math_answer(
     student_text = student_answer.strip()
 
     # Step 1: Exact string match against correct + variants
-    all_accepted = [correct_answer] + (answer_variants or [])
+    # Fix 3: Ensure answer_variants is a list and all values are strings
+    variants = answer_variants or []
+    if isinstance(variants, str):
+        variants = [variants]
+    elif not isinstance(variants, list):
+        variants = []
+    all_accepted = [str(correct_answer)] + [str(v) for v in variants]
     for accepted in all_accepted:
         if student_text.lower().strip() == accepted.lower().strip():
             return Verdict(
