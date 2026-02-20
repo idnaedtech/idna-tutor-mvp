@@ -546,6 +546,11 @@ async def process_message(
     )
     await run_in_threadpool(lambda: db.add(didi_turn))
 
+    # v7.3.26 Fix: NEXT_QUESTION is transient - after asking, state becomes WAITING_ANSWER
+    # Without this, the next turn would re-read the question instead of evaluating the answer
+    if new_state == "NEXT_QUESTION" and action.action_type == "pick_next_question":
+        new_state = "WAITING_ANSWER"
+
     session.state = new_state
     await run_in_threadpool(lambda: db.commit())
 
@@ -880,6 +885,10 @@ async def process_message_stream(
                     didi_response=full_text,
                 )
                 await run_in_threadpool(lambda: db.add(didi_turn))
+
+            # v7.3.26 Fix: NEXT_QUESTION is transient - after asking, state becomes WAITING_ANSWER
+            if new_state == "NEXT_QUESTION" and action.action_type == "pick_next_question":
+                new_state = "WAITING_ANSWER"
 
             session.state = new_state
             await run_in_threadpool(lambda: db.commit())
