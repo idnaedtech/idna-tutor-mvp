@@ -42,7 +42,24 @@ SPECIFICITY (CRITICAL):
 NUMBERS:
 - Use digits or English: "5 times 5 = 25", "3 squared = 9"
 - NEVER use Hindi number words: teen, chaar, paanch, pachees
+
+MATH ACCURACY (v7.3.22):
+- Double-check ALL arithmetic before responding
+- NEVER state a number is or isn't a perfect square without verifying: n is a perfect square if and only if some integer × itself = n
+- Example: 49 IS a perfect square because 7 × 7 = 49. 50 is NOT because no integer squared equals 50.
 """
+
+# v7.3.22 Fix 1: Chapter name mapping for metadata injection
+CHAPTER_NAMES = {
+    "ch1_rational_numbers": "Chapter 1 - Rational Numbers",
+    "ch1_square_and_cube": "Chapter 6 - Squares and Square Roots",
+    "ch2_linear_equations": "Chapter 2 - Linear Equations",
+    "ch3_understanding_quadrilaterals": "Chapter 3 - Understanding Quadrilaterals",
+    "ch4_practical_geometry": "Chapter 4 - Practical Geometry",
+    "ch5_data_handling": "Chapter 5 - Data Handling",
+    "ch6_squares_square_roots": "Chapter 6 - Squares and Square Roots",
+    "ch7_cubes_cube_roots": "Chapter 7 - Cubes and Cube Roots",
+}
 
 DIDI_NO_PRAISE = "\nANSWER INCORRECT. No praise. No shabash/bahut accha/well done.\n"
 DIDI_PRAISE_OK = "\nANSWER CORRECT. Praise briefly, reference their answer.\n"
@@ -68,6 +85,26 @@ def _get_language_instruction(session_context: dict) -> str:
     return LANG_HINGLISH
 
 
+def _get_chapter_context(session_context: dict, question_data: dict = None) -> str:
+    """v7.3.22 Fix 1: Build chapter metadata for system prompt."""
+    chapter_key = session_context.get("chapter", "")
+    chapter_name = CHAPTER_NAMES.get(chapter_key, "")
+
+    # Try to get skill info for more specific topic
+    skill_name = ""
+    if question_data:
+        skill_name = question_data.get("target_skill", "")
+
+    if chapter_name:
+        ctx = f'\nCURRENT TOPIC: {chapter_name} (NCERT Class 8 Math)'
+        if skill_name:
+            # Make skill name human-readable
+            skill_display = skill_name.replace("_", " ").title()
+            ctx += f'\nCurrent skill: {skill_display}'
+        return ctx
+    return ""
+
+
 def build_prompt(action, session_context, question_data=None, skill_data=None, previous_didi_response=None, conversation_history=None):
     at = action.action_type
     builder = _BUILDERS.get(at, _build_fallback)
@@ -77,6 +114,11 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
     lang_instruction = _get_language_instruction(session_context)
     if messages and messages[0].get("role") == "system":
         messages[0]["content"] = messages[0]["content"] + lang_instruction
+
+    # v7.3.22 Fix 1: Inject chapter metadata so Didi can answer "which chapter"
+    chapter_context = _get_chapter_context(session_context, question_data)
+    if chapter_context and messages and messages[0].get("role") == "system":
+        messages[0]["content"] = messages[0]["content"] + chapter_context
 
     # Inject student's actual words for specificity
     student_text = getattr(action, 'student_text', None) or session_context.get('student_text', '')

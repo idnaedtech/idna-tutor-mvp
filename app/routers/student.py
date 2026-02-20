@@ -731,11 +731,13 @@ async def process_message_stream(
             action.verdict = verdict
 
     # ── Build prompt ──
+    # v7.3.22 Fix 2: Include language_pref in session_ctx for streaming endpoint
     session_ctx = {
         "subject": session.subject,
         "chapter": session.chapter,
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
+        "language_pref": session.language_pref or "hinglish",
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
 
