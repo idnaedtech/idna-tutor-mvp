@@ -476,13 +476,30 @@
                 onSpeechEnd: async (audioFloat32) => {
                     if (isDidiSpeaking || isProcessing) return;
 
+                    // v7.3.34 Fix 1: Minimum duration check (500ms at 16kHz = 8000 samples)
+                    const durationMs = (audioFloat32.length / 16000) * 1000;
+                    if (durationMs < 500) {
+                        console.log(`[VAD] Misfire — speech too short (${durationMs.toFixed(0)}ms < 500ms), discarding`);
+                        return;
+                    }
+
                     isProcessing = true;
                     updateVoiceUI('processing');
-                    console.log("[VAD] Speech ended — sending to pipeline...");
+                    console.log(`[VAD] Speech ended (${durationMs.toFixed(0)}ms) — sending to pipeline...`);
 
                     try {
                         // Convert Float32Array (16kHz) to WAV blob for STT
                         const wavBlob = float32ToWav(audioFloat32, 16000);
+
+                        // v7.3.34 Fix 2: Skip if blob too small (< 1KB = noise)
+                        if (wavBlob.size < 1024) {
+                            console.log(`[VAD] Audio too small (${wavBlob.size} bytes < 1KB), discarding`);
+                            isProcessing = false;
+                            updateVoiceUI('ready');
+                            return;
+                        }
+                        console.log(`[VAD] Audio blob size: ${wavBlob.size} bytes`);
+
                         await sendAudioToPipeline(wavBlob);
                     } catch (err) {
                         console.error("[VAD] Pipeline error:", err);
@@ -691,7 +708,12 @@
                     URL.revokeObjectURL(url);
                     isDidiSpeaking = false;
                     currentAudio = null;
-                    startListening();
+                    // v7.3.34 Fix 3: Delay VAD resume by 500ms to avoid echo pickup
+                    console.log("[Audio] Waiting 500ms before re-enabling VAD...");
+                    setTimeout(() => {
+                        console.log("[Audio] Re-enabling VAD after delay");
+                        startListening();
+                    }, 500);
                     resolve();
                 };
 
