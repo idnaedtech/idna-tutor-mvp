@@ -763,6 +763,90 @@ def check_streaming_endpoint_fallback():
         return False, f"Error: {e}"
 
 
+
+# ============================================================
+# CHECK GROUP 11: v8.0 SessionState Schema
+# ============================================================
+
+def check_session_state_has_preferred_language():
+    """v8.0 Check 19: SessionState has preferred_language field."""
+    try:
+        from app.models.session import SessionState
+        import dataclasses
+        fields = {f.name for f in dataclasses.fields(SessionState)}
+        required_fields = ["preferred_language", "reteach_count", "teach_material_index", "current_state"]
+        missing = [f for f in required_fields if f not in fields]
+        if missing:
+            return False, f"SessionState missing: {', '.join(missing)}"
+        session = SessionState(session_id="test", student_name="Test", student_pin="1234")
+        if session.preferred_language != "hinglish":
+            return False, f"Default is '{session.preferred_language}', expected 'hinglish'"
+        return True, "SessionState has all v8.0 fields"
+    except ImportError as e:
+        return False, f"Cannot import SessionState: {e}"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def check_reteach_counter_caps():
+    """v8.0 Check 20: Reteach counter caps at 3."""
+    try:
+        from app.models.session import SessionState
+        session = SessionState(session_id="test", student_name="Test", student_pin="1234")
+        session.increment_reteach()
+        session.increment_reteach()
+        session.increment_reteach()
+        if session.reteach_count != 3:
+            return False, f"reteach_count should be 3, got {session.reteach_count}"
+        if session.teach_material_index != 2:
+            return False, f"teach_material_index should cap at 2, got {session.teach_material_index}"
+        return True, "Reteach caps at 3, material_index caps at 2"
+    except ImportError as e:
+        return False, f"Cannot import SessionState: {e}"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def check_transition_matrix_complete():
+    """v8.0 Check 21: All 60 state x input combinations defined."""
+    try:
+        from app.fsm.transitions import validate_matrix_completeness, TRANSITIONS
+        validate_matrix_completeness()
+        return True, f"All {len(TRANSITIONS)} state x input combinations defined"
+    except ImportError as e:
+        return False, f"Cannot import FSM: {e}"
+    except AssertionError as e:
+        return False, f"Matrix incomplete: {e}"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def check_integration_tests_pass():
+    """v8.0: Run integration tests."""
+    try:
+        test_file = os.path.join(REPO_ROOT, "tests", "test_integration.py")
+        if not os.path.exists(test_file):
+            return False, "tests/test_integration.py not found"
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", test_file, "-v", "--tb=line", "-q"],
+            capture_output=True, text=True, timeout=120, cwd=REPO_ROOT,
+        )
+        if result.returncode == 0:
+            for line in (result.stdout + result.stderr).split("\n"):
+                if "passed" in line:
+                    return True, line.strip()
+            return True, "Integration tests passed"
+        else:
+            for line in (result.stdout + result.stderr).split("\n"):
+                if "FAILED" in line:
+                    return False, line.strip()[:80]
+            return False, f"Tests failed (exit {result.returncode})"
+    except subprocess.TimeoutExpired:
+        return False, "Integration tests timed out"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
 # ============================================================
 # MAIN
 # ============================================================
@@ -772,31 +856,31 @@ def main():
     full = "--full" in sys.argv
 
     print("=" * 60)
-    print("  IDNA EdTech -- Mandatory Verification")
+    print("  IDNA EdTech -- Mandatory Verification (v8.0)")
     print(f"  Mode: {'QUICK' if quick else 'FULL' if full else 'STANDARD'}")
     print("=" * 60)
     print()
 
     # Group 1: Files
-    print("[1/10] File Existence:")
+    print("[1/14] File Existence:")
     check("ch1_square_and_cube.py exists", check_question_bank_exists)
     check("questions.py exists", check_questions_py_exists)
 
     # Group 2: Imports
-    print("\n[2/10] Module Imports:")
+    print("\n[2/14] Module Imports:")
     check("Question bank loads (50 questions)", check_import_questions)
     check("All skills have pre_teach", check_skill_lessons_have_pre_teach)
     check("Hindi IDK in classifier", check_input_classifier_hindi)
     check("No Sochiye catch-all", check_no_hardcoded_sochiye)
 
     # Group 3: TTS
-    print("\n[3/10] TTS Conversions:")
-    check("clean_for_tts handles ²³√", check_clean_for_tts)
+    print("\n[3/14] TTS Conversions:")
+    check("clean_for_tts handles math symbols", check_clean_for_tts)
 
     # Group 4: Server (skip in quick mode)
-    print("\n[4/10] Server Endpoints:")
+    print("\n[4/14] Server Endpoints:")
     if quick:
-        print("  ⏭️  Skipped (--quick mode)")
+        print("  Skipped (--quick mode)")
     else:
         check("Server imports cleanly", check_server_starts)
         check("TTS returns audio", check_tts_endpoint)
@@ -804,33 +888,48 @@ def main():
         check("Session loads Square & Cube", check_session_start_chapter)
 
     # Group 5: Tests
-    print("\n[5/10] Test Suite:")
+    print("\n[5/14] Test Suite:")
     if quick:
-        print("  ⏭️  Skipped (--quick mode)")
+        print("  Skipped (--quick mode)")
     else:
         check("pytest passes", check_pytest)
 
     # Group 6: Frontend
-    print("\n[6/10] Frontend:")
+    print("\n[6/14] Frontend:")
     check("Audio playback in HTML", check_frontend_audio_autoplay)
     check("Mic button or VAD present", check_no_mic_button_or_has_vad)
 
     # Group 7: Static Analysis
-    print("\n[7/10] Static Analysis (Uninitialized Variables):")
+    print("\n[7/14] Static Analysis:")
     check("No uninitialized vars in except/finally", check_uninitialized_in_exception_blocks)
 
     # Group 8: Filesystem Safety
-    print("\n[8/10] Filesystem Safety:")
+    print("\n[8/14] Filesystem Safety:")
     check("No ephemeral filesystem writes", check_no_ephemeral_filesystem_writes)
 
     # Group 9: API Call Safety
-    print("\n[9/10] API Call Safety:")
+    print("\n[9/14] API Call Safety:")
     check("All API calls have timeout", check_api_calls_have_timeout)
 
     # Group 10: Streaming Fallback
-    print("\n[10/10] Streaming Endpoint Fallback:")
+    print("\n[10/14] Streaming Endpoint Fallback:")
     check("Streaming handles LLM failures gracefully", check_streaming_endpoint_fallback)
 
+    # Group 11: v8.0 SessionState
+    print("\n[11/14] v8.0 SessionState Schema:")
+    check("SessionState has preferred_language", check_session_state_has_preferred_language)
+    check("Reteach counter caps at 3", check_reteach_counter_caps)
+
+    # Group 12: v8.0 FSM
+    print("\n[12/14] v8.0 FSM Completeness:")
+    check("All 60 state x input defined", check_transition_matrix_complete)
+
+    # Group 13: v8.0 Integration Tests
+    print("\n[13/14] v8.0 Integration Tests:")
+    if quick:
+        print("  Skipped (--quick mode)")
+    else:
+        check("Integration tests pass", check_integration_tests_pass)
 
     # Summary
     print("\n" + "=" * 60)

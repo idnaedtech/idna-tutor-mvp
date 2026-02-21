@@ -1,7 +1,14 @@
 """
-IDNA EdTech v7.3 — Main Application
+IDNA EdTech v8.0 — Main Application
 FastAPI app. Mounts routers, CORS, serves static files.
 Database initialization and question bank seeding on startup.
+
+v8.0: Complete session management rewrite with:
+- SessionState dataclass (app/models/session.py)
+- Complete FSM transition matrix (app/fsm/transitions.py)
+- Per-state handlers (app/fsm/handlers.py)
+- Language persistence across all turns
+- Reteach cap at 3 with CB material injection
 """
 
 import logging
@@ -101,7 +108,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v7.5.3 ready")
+    logger.info("IDNA Didi v8.0.0 ready")
     yield
     logger.info("Shutting down")
 
@@ -158,9 +165,9 @@ def _seed_test_student(db):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v7.5",
+    title="IDNA Didi v8.0",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="7.5.3",
+    version="8.0.0",
     lifespan=lifespan,
 )
 

@@ -1,10 +1,11 @@
 """
-IDNA EdTech v7.3 — Student Session Router
+IDNA EdTech v8.0 — Student Session Router
 The main interaction loop. Full pipeline:
 STT → classify → state machine → answer check → instruction build → LLM → enforce → clean → TTS
 
 v7.1: Added streaming endpoint for sentence-level TTS (reduces perceived latency).
 v7.3: Async LLM classifier, conversation history, run_in_threadpool for DB calls.
+v8.0: Complete FSM rewrite with SessionState, 60 state×input transitions, per-state handlers.
 """
 
 import logging
@@ -37,6 +38,11 @@ from app.voice.clean_for_tts import clean_for_tts, digits_to_english_words
 from app.tutor.input_classifier import classify
 from openai import AsyncOpenAI
 from app.config import OPENAI_API_KEY
+# v8.0: Import new FSM modules
+from app.models.session import SessionState, TutorState
+from app.fsm.transitions import get_transition
+from app.fsm.handlers import handle_state
+# Keep old imports for backward compatibility during transition
 from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer, Verdict
 from app.tutor.answer_evaluator import evaluate_answer
@@ -350,13 +356,14 @@ async def process_message(
             stt_latency=stt_latency,
         )
 
-    # ── Step 3: State machine transition ──────────────────────────────────
+    # ── Step 3: State machine transition (v8.0 FSM) ────────────────────────
     # Build asked questions list for this session
     asked_ids = [
         t.question_id for t in session.turns
         if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
     ]
 
+    # v8.0: Build context for old state machine (backward compat)
     ctx = {
         "student_text": student_text,
         "subject": session.subject or "math",
@@ -367,23 +374,33 @@ async def process_message(
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
         "total_hints_used": session.total_hints_used,
-        # v7.2.0: Teaching progression fields
         "teaching_turn": session.teaching_turn or 0,
         "explanations_given": session.explanations_given or [],
         "language_pref": session.language_pref or "hinglish",
     }
 
     state_before = session.state
+
+    # v8.0: Get transition from new FSM
+    transition_result = get_transition(TutorState(session.state), category)
+    logger.info(f"v8.0: {session.state} × {category} → {transition_result.next_state.value} (action={transition_result.action})")
+
+    # v8.0: CRITICAL - Store language BEFORE calling handler
+    extras = classify_result.get("extras", {})
+    if transition_result.special == "store_language" and extras.get("preferred_language"):
+        session.language_pref = extras["preferred_language"]
+        logger.info(f"v8.0: Language set to '{session.language_pref}' BEFORE handler")
+
+    # Use old transition for Action object (for backward compat with answer eval)
     new_state, action = transition(session.state, category, ctx)
 
-    # v7.3.28 Fix 3: Track empathy state
-    # Set empathy_given after COMFORT response, reset when entering TEACHING
-    if new_state == "COMFORT":
-        session.empathy_given = True
-        logger.info("v7.3.28: Entering COMFORT, setting empathy_given=True")
-    elif new_state == "TEACHING":
+    # v8.0: Track empathy state based on new transition
+    if transition_result.next_state == TutorState.TEACHING:
         session.empathy_given = False
-        logger.info("v7.3.28: Entering TEACHING, resetting empathy_given=False")
+        logger.info("v8.0: Entering TEACHING, resetting empathy_given=False")
+    elif transition_result.special == "empathy_first":
+        session.empathy_given = True
+        logger.info("v8.0: Empathy given, setting empathy_given=True")
 
     # ── Step 4: Answer evaluation (if needed) ─────────────────────────────
     verdict_obj = None
@@ -760,12 +777,12 @@ async def process_message_stream(
 
         return StreamingResponse(silence_stream(), media_type="text/event-stream")
 
-    # ── State transition ──
+    # ── State transition (v8.0 FSM) ──
     question_data = None
     if session.current_question_id:
         question_data = _load_question(db, session.current_question_id)
 
-    # Build context for state machine (same as non-streaming endpoint)
+    # v8.0: Build context for old state machine (backward compat)
     ctx = {
         "student_text": student_text,
         "subject": session.subject or "math",
@@ -776,31 +793,42 @@ async def process_message_stream(
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
         "total_hints_used": session.total_hints_used,
-        # v7.2.0: Teaching progression fields
         "teaching_turn": session.teaching_turn or 0,
         "explanations_given": session.explanations_given or [],
         "language_pref": session.language_pref or "hinglish",
     }
+
+    # v8.0: Get transition from new FSM
+    transition_result = get_transition(TutorState(session.state), category)
+    logger.info(f"v8.0 (stream): {session.state} × {category} → {transition_result.next_state.value}")
+
+    # v8.0: CRITICAL - Store language BEFORE calling handler
+    extras = classify_result.get("extras", {})
+    if transition_result.special == "store_language" and extras.get("preferred_language"):
+        session.language_pref = extras["preferred_language"]
+        logger.info(f"v8.0: Language set to '{session.language_pref}' BEFORE handler")
+
+    # Use old transition for Action object (backward compat with answer eval)
     new_state, action = transition(session.state, category, ctx)
 
-    # v7.3.28 Fix 3: Track empathy state (streaming endpoint)
-    if new_state == "COMFORT":
-        session.empathy_given = True
-        logger.info("v7.3.28: Entering COMFORT, setting empathy_given=True")
-    elif new_state == "TEACHING":
+    # v8.0: Track empathy state based on new transition
+    if transition_result.next_state == TutorState.TEACHING:
         session.empathy_given = False
-        logger.info("v7.3.28: Entering TEACHING, resetting empathy_given=False")
+        logger.info("v8.0: Entering TEACHING, resetting empathy_given=False")
+    elif transition_result.special == "empathy_first":
+        session.empathy_given = True
+        logger.info("v8.0: Empathy given, setting empathy_given=True")
 
-    # v7.5.3: Update session fields from action (matching non-streaming endpoint)
+    # v8.0: Update session fields from action
     if action.language_pref:
         session.language_pref = action.language_pref
-        logger.info(f"v7.5.3: Language preference set to '{action.language_pref}'")
+        logger.info(f"v8.0: Language preference set to '{action.language_pref}'")
     if action.extra.get("reset_teaching_turn"):
         session.teaching_turn = 0
         session.explanations_given = []
     elif action.teaching_turn > 0:
         session.teaching_turn = action.teaching_turn
-        logger.info(f"v7.5.3: Teaching turn set to {action.teaching_turn}")
+        logger.info(f"v8.0: Teaching turn set to {action.teaching_turn}")
 
     # ── Answer check (if ANSWER) ──
     verdict = None
