@@ -113,7 +113,7 @@ def _seed_test_student(db):
 app = FastAPI(
     title="IDNA Didi v7.3",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="7.3.28",
+    version="7.3.33",
     lifespan=lifespan,
 )
 
@@ -159,4 +159,10 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "7.3.28"}
+    return {"status": "ok", "version": "7.3.33"}
+
+
+# Keep-alive endpoint for UptimeRobot (prevents Railway sleep)
+@app.get("/ping")
+async def ping():
+    return {"status": "awake"}
