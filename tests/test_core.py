@@ -371,6 +371,29 @@ class TestStateMachine:
         assert new_state == "TEACHING"
         assert action.language_pref == "hindi"
 
+    def test_repeat_in_teaching_increments_turn(self):
+        """v7.5.3: REPEAT in TEACHING should increment teaching_turn like IDK."""
+        ctx = {"student_text": "what?", "teaching_turn": 0}
+        new_state, action = self.transition("TEACHING", "REPEAT", ctx)
+        assert new_state == "TEACHING"
+        assert action.teaching_turn == 1
+        assert action.action_type == "teach_concept"
+
+    def test_repeat_at_turn_3_forces_transition(self):
+        """v7.5.3: At teaching_turn=2, REPEAT should force transition to WAITING_ANSWER."""
+        ctx = {"student_text": "huh?", "teaching_turn": 2}
+        new_state, action = self.transition("TEACHING", "REPEAT", ctx)
+        assert new_state == "WAITING_ANSWER"
+        assert action.extra.get("forced_transition") == True
+        assert action.extra.get("max_reteach") == True
+
+    def test_repeat_outside_teaching_stays_in_state(self):
+        """v7.5.3: REPEAT outside TEACHING should stay in current state."""
+        ctx = {"student_text": "what?"}
+        new_state, action = self.transition("WAITING_ANSWER", "REPEAT", ctx)
+        assert new_state == "WAITING_ANSWER"
+        assert action.action_type == "ask_repeat"
+
     def test_meta_question_in_teaching(self):
         """BUG 4: META_QUESTION in TEACHING should be handled."""
         ctx = {"student_text": "any more examples?", "teaching_turn": 1}

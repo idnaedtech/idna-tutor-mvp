@@ -106,7 +106,9 @@ def transition(
             extra={"resume_state": current_state},
         )
 
-    if category == "REPEAT":
+    # v7.5.3: REPEAT handling moved to state-specific for TEACHING
+    # Other states: return current state with ask_repeat
+    if category == "REPEAT" and current_state != "TEACHING":
         return current_state, Action("ask_repeat", student_text=text)
 
     # ── GREETING ──────────────────────────────────────────────────────────
@@ -141,6 +143,25 @@ def transition(
     if current_state == "TEACHING":
         # v7.2.0: Get teaching_turn from context (BUG 1 fix)
         teaching_turn = ctx.get("teaching_turn", 0)
+
+        # v7.5.3: REPEAT in TEACHING = student didn't understand, treat like IDK
+        # This prevents infinite loop where student keeps saying unclear things
+        if category == "REPEAT":
+            new_turn = teaching_turn + 1
+            if new_turn >= 3:
+                # Max reteach (3) reached, force transition to question
+                return "WAITING_ANSWER", Action(
+                    "read_question", reteach_count=new_turn,
+                    teaching_turn=new_turn,
+                    student_text=text,
+                    extra={"difficulty": "easy", "forced_transition": True, "max_reteach": True},
+                )
+            return "TEACHING", Action(
+                "teach_concept", reteach_count=new_turn,
+                teaching_turn=new_turn,
+                student_text=text,
+                extra={"approach": "different_example"},
+            )
 
         if category == "ACK":
             # v7.2.0: ACK in TEACHING → reset teaching_turn, transition to WAITING_ANSWER

@@ -206,11 +206,13 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     skill_key = q.get("target_skill", "") if q else ctx.get("skill", "")
 
     # v7.4.0: Try content bank first for verified RAG content
+    # v7.5.3: Enhanced logging and full methodology injection
     cb_definition = None
     cb_hook = None
     cb_analogy = None
     cb_examples = []
     cb_vedic_trick = None
+    cb_visualization = None
     if _content_bank:
         cb_definition = _content_bank.get_definition_tts(skill_key)
         cb_hook = _content_bank.get_teaching_hook(skill_key)
@@ -219,6 +221,11 @@ def _build_teach_concept(a, ctx, q, sk, prev):
         methodology = _content_bank.get_teaching_methodology(skill_key)
         if methodology:
             cb_vedic_trick = methodology.get("vedic_trick")
+            cb_visualization = methodology.get("visualization")  # v7.5.3: tile visualization, etc.
+        # v7.5.3: Log content bank usage for debugging
+        import logging
+        _logger = logging.getLogger("idna.instruction_builder")
+        _logger.debug(f"CB skill={skill_key}: def={bool(cb_definition)}, hook={bool(cb_hook)}, analogy={bool(cb_analogy)}, examples={len(cb_examples)}")
 
     # Fallback to SKILL_TEACHING if content bank doesn't have this concept
     from app.content.seed_questions import SKILL_TEACHING
@@ -234,9 +241,11 @@ def _build_teach_concept(a, ctx, q, sk, prev):
         teach_content = cb_definition
         if cb_hook:
             extra += f'\n\nUSE THIS HOOK TO START: "{cb_hook}"'
-    elif teaching_turn == 1 and (cb_analogy or cb_examples):
-        # Turn 1: Analogy + easy example
+    elif teaching_turn == 1 and (cb_analogy or cb_examples or cb_visualization):
+        # Turn 1: Analogy + visualization + easy example (v7.5.3: added visualization)
         teach_content = cb_analogy or ""
+        if cb_visualization:
+            teach_content += f" {cb_visualization}"  # e.g., "tile visualization"
         if cb_examples and len(cb_examples) > 0:
             easy_ex = cb_examples[0]
             sol_tts = easy_ex.get("solution_tts", "")
@@ -250,6 +259,9 @@ def _build_teach_concept(a, ctx, q, sk, prev):
             teach_content = medium_ex.get("solution_tts", "")
         if cb_vedic_trick:
             teach_content += f" Trick: {cb_vedic_trick}"
+        # v7.5.3: Also try laddoo analogy or other methodology content
+        if not teach_content and cb_analogy:
+            teach_content = f"Different approach: {cb_analogy}"
         if not teach_content:
             teach_content = lesson.get("key_insight") or lesson.get("indian_example") or ""
     elif teaching_turn >= 2:

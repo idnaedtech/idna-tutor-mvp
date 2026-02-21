@@ -791,6 +791,17 @@ async def process_message_stream(
         session.empathy_given = False
         logger.info("v7.3.28: Entering TEACHING, resetting empathy_given=False")
 
+    # v7.5.3: Update session fields from action (matching non-streaming endpoint)
+    if action.language_pref:
+        session.language_pref = action.language_pref
+        logger.info(f"v7.5.3: Language preference set to '{action.language_pref}'")
+    if action.extra.get("reset_teaching_turn"):
+        session.teaching_turn = 0
+        session.explanations_given = []
+    elif action.teaching_turn > 0:
+        session.teaching_turn = action.teaching_turn
+        logger.info(f"v7.5.3: Teaching turn set to {action.teaching_turn}")
+
     # ── Answer check (if ANSWER) ──
     verdict = None
     verdict_str = None
