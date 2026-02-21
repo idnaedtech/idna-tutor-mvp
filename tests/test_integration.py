@@ -17,7 +17,7 @@ from datetime import datetime
 from unittest.mock import Mock, AsyncMock, patch
 
 # v8.0 imports
-from app.models.session import SessionState, TutorState
+from app.state.session import SessionState, TutorState
 from app.fsm.transitions import (
     get_transition, validate_matrix_completeness, TRANSITIONS,
     INPUT_CATEGORIES,

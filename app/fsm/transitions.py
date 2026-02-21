@@ -9,7 +9,7 @@ This is the core of the v8.0 architecture.
 
 from dataclasses import dataclass
 from typing import Optional
-from app.models.session import TutorState
+from app.state.session import TutorState
 
 
 # ─── Input Categories (from classifier) ─────────────────────────────────────

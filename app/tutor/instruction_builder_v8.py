@@ -12,7 +12,7 @@ This module builds LLM prompts with guaranteed language injection.
 """
 
 from typing import Optional, Dict, Any, List
-from app.models.session import SessionState, TutorState
+from app.state.session import SessionState, TutorState
 
 # Try to load content bank
 try:

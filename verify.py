@@ -771,7 +771,7 @@ def check_streaming_endpoint_fallback():
 def check_session_state_has_preferred_language():
     """v8.0 Check 19: SessionState has preferred_language field."""
     try:
-        from app.models.session import SessionState
+        from app.state.session import SessionState
         import dataclasses
         fields = {f.name for f in dataclasses.fields(SessionState)}
         required_fields = ["preferred_language", "reteach_count", "teach_material_index", "current_state"]
@@ -791,7 +791,7 @@ def check_session_state_has_preferred_language():
 def check_reteach_counter_caps():
     """v8.0 Check 20: Reteach counter caps at 3."""
     try:
-        from app.models.session import SessionState
+        from app.state.session import SessionState
         session = SessionState(session_id="test", student_name="Test", student_pin="1234")
         session.increment_reteach()
         session.increment_reteach()

@@ -39,7 +39,7 @@ from app.tutor.input_classifier import classify
 from openai import AsyncOpenAI
 from app.config import OPENAI_API_KEY
 # v8.0: Import new FSM modules
-from app.models.session import SessionState, TutorState
+from app.state.session import SessionState, TutorState
 from app.fsm.transitions import get_transition
 from app.fsm.handlers import handle_state
 # Keep old imports for backward compatibility during transition

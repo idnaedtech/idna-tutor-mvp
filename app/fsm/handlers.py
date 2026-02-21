@@ -18,7 +18,7 @@ The handlers use Content Bank material per teach_material_index.
 import logging
 from typing import Tuple, Dict, Any, Optional, Callable, Awaitable
 
-from app.models.session import SessionState, TutorState
+from app.state.session import SessionState, TutorState
 from app.fsm.transitions import get_transition, TransitionResult
 
 logger = logging.getLogger("idna.fsm.handlers")
