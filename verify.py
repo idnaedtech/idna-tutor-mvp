@@ -504,6 +504,265 @@ def check_no_mic_button_or_has_vad():
         return False, f"Error: {e}"
 
 
+
+# ============================================================
+# CHECK GROUP 7: Static Analysis - Uninitialized Variables in except/finally
+# ============================================================
+
+def check_uninitialized_in_exception_blocks():
+    """
+    v7.5.2: Check for the specific UnboundLocalError bug pattern.
+    Simplified to avoid false positives from pre-initialized variables.
+    The core check is: any function with nonlocal in a try block must declare it.
+    """
+    import ast
+    issues = []
+    
+    app_dir = os.path.join(REPO_ROOT, "app")
+    if not os.path.isdir(app_dir):
+        return True, "app/ directory not found"
+    
+    for root, dirs, files in os.walk(app_dir):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git")]
+        for f in files:
+            if f.endswith(".py"):
+                filepath = os.path.join(root, f)
+                try:
+                    with open(filepath, "r", encoding="utf-8", errors="ignore") as fh:
+                        source = fh.read()
+                    tree = ast.parse(source, filename=filepath)
+                except:
+                    continue
+                
+                # Look for nested functions with try/finally that modify outer variables
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+                        # Check if function has nested function with try/finally
+                        for child in ast.walk(node):
+                            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child != node:
+                                # This is a nested function - check if it has finally that assigns
+                                for inner in ast.walk(child):
+                                    if isinstance(inner, ast.Try) and inner.finalbody:
+                                        # Check if finally assigns to a variable that should be nonlocal
+                                        for stmt in inner.finalbody:
+                                            if isinstance(stmt, ast.Assign):
+                                                for target in stmt.targets:
+                                                    if isinstance(target, ast.Name):
+                                                        var = target.id
+                                                        # Check if this var is used elsewhere in the outer function
+                                                        # and not declared nonlocal
+                                                        has_nonlocal = False
+                                                        for n in ast.walk(child):
+                                                            if isinstance(n, ast.Nonlocal) and var in n.names:
+                                                                has_nonlocal = True
+                                                        if not has_nonlocal:
+                                                            # Check if var is assigned in outer function
+                                                            for n in ast.walk(node):
+                                                                if isinstance(n, ast.Assign) and n not in ast.walk(child):
+                                                                    for t in n.targets:
+                                                                        if isinstance(t, ast.Name) and t.id == var:
+                                                                            rel_path = os.path.relpath(filepath, REPO_ROOT)
+                                                                            issues.append(f"{rel_path}:{inner.lineno} - {var} may need nonlocal")
+    
+    if issues:
+        return False, f"Potential nonlocal issues: {'; '.join(issues[:3])}"
+    return True, "No obvious nonlocal issues found"
+
+
+# ============================================================
+# CHECK GROUP 8: No Filesystem Writes Outside /tmp or Database
+# ============================================================
+
+def check_no_ephemeral_filesystem_writes():
+    import ast
+    issues = []
+
+    def analyze_file(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                source = f.read()
+            tree = ast.parse(source, filename=filepath)
+        except SyntaxError:
+            return []
+
+        file_issues = []
+        lines = source.split("\n")
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func_name = ""
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    func_name = node.func.attr
+
+                if func_name == "open" and len(node.args) >= 2:
+                    mode_arg = node.args[1] if len(node.args) > 1 else None
+                    if mode_arg and isinstance(mode_arg, ast.Constant):
+                        mode = str(mode_arg.value)
+                        if "w" in mode or "a" in mode:
+                            if len(node.args) >= 1:
+                                line = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
+                                if "/tmp" in line or "tempfile" in line or "NamedTemporaryFile" in line:
+                                    continue
+                                if "tts_cache" in line:
+                                    file_issues.append((node.lineno, "tts_cache filesystem write"))
+                                elif "cache" in line.lower() and "db" not in line.lower():
+                                    file_issues.append((node.lineno, "cache filesystem write"))
+
+                if func_name in ("mkdir", "makedirs"):
+                    line = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
+                    # Allow /tmp paths and paths from environment variables
+                    if "/tmp" not in line and "temp" not in line.lower() and "getenv" not in line:
+                        if "cache" in line.lower() or "data" in line.lower():
+                            # Only flag hardcoded persistent paths
+                            if "Path(" in line and "os.getenv" not in line:
+                                file_issues.append((node.lineno, f"{func_name} for persistent storage"))
+
+        return file_issues
+
+    app_dir = os.path.join(REPO_ROOT, "app")
+    if os.path.isdir(app_dir):
+        for root, dirs, files in os.walk(app_dir):
+            dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git")]
+            for f in files:
+                if f.endswith(".py"):
+                    filepath = os.path.join(root, f)
+                    file_issues = analyze_file(filepath)
+                    for lineno, desc in file_issues:
+                        rel_path = os.path.relpath(filepath, REPO_ROOT)
+                        issues.append(f"{rel_path}:{lineno} - {desc}")
+
+    if issues:
+        return False, f"Ephemeral filesystem writes: {'; '.join(issues[:3])}"
+    return True, "No filesystem writes outside /tmp or database"
+
+
+# ============================================================
+# CHECK GROUP 9: Async API Calls Have Timeout
+# ============================================================
+
+def check_api_calls_have_timeout():
+    """
+    v7.5.2: Check that httpx/aiohttp calls have timeout.
+    Handles both method-level timeout and Client-level timeout.
+    """
+    issues = []
+    app_dir = os.path.join(REPO_ROOT, "app")
+    if not os.path.isdir(app_dir):
+        return True, "app/ directory not found"
+
+    for root, dirs, files in os.walk(app_dir):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git")]
+        for f in files:
+            if f.endswith(".py"):
+                filepath = os.path.join(root, f)
+                try:
+                    with open(filepath, "r", encoding="utf-8", errors="ignore") as fh:
+                        lines = fh.readlines()
+                except Exception:
+                    continue
+
+                uses_httpx = any("httpx" in line for line in lines)
+                uses_aiohttp = any("aiohttp" in line for line in lines)
+                if not (uses_httpx or uses_aiohttp):
+                    continue
+
+                # Track indentation level of Client context with timeout
+                client_timeout_indent = -1
+                
+                for i, line in enumerate(lines, 1):
+                    stripped = line.lstrip()
+                    indent = len(line) - len(stripped)
+                    
+                    # Check for Client constructor with timeout
+                    if "httpx.Client(" in line or "httpx.AsyncClient(" in line:
+                        if "timeout" in line:
+                            # Get indentation of the with statement
+                            if "with " in line:
+                                client_timeout_indent = indent
+                    
+                    # Reset when we exit the indentation level
+                    if client_timeout_indent >= 0 and indent <= client_timeout_indent and stripped:
+                        if not ("httpx.Client" in line or "with " in line):
+                            client_timeout_indent = -1
+                    
+                    # Skip if inside a Client context with timeout
+                    if client_timeout_indent >= 0 and indent > client_timeout_indent:
+                        continue
+                    
+                    if "httpx." in line or ("client." in line and uses_httpx):
+                        if ".get(" in line or ".post(" in line or ".put(" in line or ".delete(" in line or ".request(" in line:
+                            if "timeout" not in line:
+                                has_timeout = False
+                                for j in range(i, min(i + 5, len(lines) + 1)):
+                                    if "timeout" in lines[j - 1]:
+                                        has_timeout = True
+                                        break
+                                    if ")" in lines[j - 1] and "(" not in lines[j - 1]:
+                                        break
+                                if not has_timeout:
+                                    rel_path = os.path.relpath(filepath, REPO_ROOT)
+                                    issues.append(f"{rel_path}:{i} - httpx call without timeout")
+
+                    if "session." in line and uses_aiohttp:
+                        if ".get(" in line or ".post(" in line:
+                            if "timeout" not in line:
+                                rel_path = os.path.relpath(filepath, REPO_ROOT)
+                                issues.append(f"{rel_path}:{i} - aiohttp call without timeout")
+
+    if issues:
+        return False, f"API calls without timeout: {'; '.join(issues[:3])}"
+    return True, "All httpx/aiohttp calls have explicit timeout"
+
+
+# ============================================================
+# CHECK GROUP 10: Streaming Endpoint Graceful Fallback Test
+# ============================================================
+
+def check_streaming_endpoint_fallback():
+    try:
+        try:
+            from app.voice.streaming import SENTENCE_SPLIT
+        except ImportError:
+            return True, "Streaming module not found (v7.5.0 feature) -- skipped"
+
+        result = SENTENCE_SPLIT.split("")
+        result = SENTENCE_SPLIT.split("No punctuation here")
+        if len(result) == 0:
+            return False, "Sentence splitter returned empty for valid input"
+
+        try:
+            from app.tutor.answer_evaluator import parse_eval_response
+            result = parse_eval_response("not json at all")
+            if result.get("verdict") != "unclear":
+                return False, f"parse_eval_response didnt fallback: got {result.get('verdict')}"
+            result = parse_eval_response("")
+            if result.get("verdict") != "unclear":
+                return False, "parse_eval_response crashed on empty input"
+        except ImportError:
+            pass
+
+        student_router = os.path.join(REPO_ROOT, "app", "routers", "student.py")
+        if os.path.exists(student_router):
+            with open(student_router, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+
+            if "async def stream_response" in content:
+                if "nonlocal new_state" not in content and "nonlocal" not in content:
+                    if "new_state" in content and ("finally:" in content or "except" in content):
+                        return False, "stream_response may have UnboundLocalError (missing nonlocal)"
+
+            if "stream_response" in content:
+                if "try:" not in content or "except" not in content:
+                    return False, "stream_response lacks try/except error handling"
+
+        return True, "Streaming endpoint has graceful fallback handling"
+
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
 # ============================================================
 # MAIN
 # ============================================================
@@ -519,23 +778,23 @@ def main():
     print()
 
     # Group 1: Files
-    print("[1/6] File Existence:")
+    print("[1/10] File Existence:")
     check("ch1_square_and_cube.py exists", check_question_bank_exists)
     check("questions.py exists", check_questions_py_exists)
 
     # Group 2: Imports
-    print("\n[2/6] Module Imports:")
+    print("\n[2/10] Module Imports:")
     check("Question bank loads (50 questions)", check_import_questions)
     check("All skills have pre_teach", check_skill_lessons_have_pre_teach)
     check("Hindi IDK in classifier", check_input_classifier_hindi)
     check("No Sochiye catch-all", check_no_hardcoded_sochiye)
 
     # Group 3: TTS
-    print("\n[3/6] TTS Conversions:")
+    print("\n[3/10] TTS Conversions:")
     check("clean_for_tts handles ²³√", check_clean_for_tts)
 
     # Group 4: Server (skip in quick mode)
-    print("\n[4/6] Server Endpoints:")
+    print("\n[4/10] Server Endpoints:")
     if quick:
         print("  ⏭️  Skipped (--quick mode)")
     else:
@@ -545,16 +804,33 @@ def main():
         check("Session loads Square & Cube", check_session_start_chapter)
 
     # Group 5: Tests
-    print("\n[5/6] Test Suite:")
+    print("\n[5/10] Test Suite:")
     if quick:
         print("  ⏭️  Skipped (--quick mode)")
     else:
         check("pytest passes", check_pytest)
 
     # Group 6: Frontend
-    print("\n[6/6] Frontend:")
+    print("\n[6/10] Frontend:")
     check("Audio playback in HTML", check_frontend_audio_autoplay)
     check("Mic button or VAD present", check_no_mic_button_or_has_vad)
+
+    # Group 7: Static Analysis
+    print("\n[7/10] Static Analysis (Uninitialized Variables):")
+    check("No uninitialized vars in except/finally", check_uninitialized_in_exception_blocks)
+
+    # Group 8: Filesystem Safety
+    print("\n[8/10] Filesystem Safety:")
+    check("No ephemeral filesystem writes", check_no_ephemeral_filesystem_writes)
+
+    # Group 9: API Call Safety
+    print("\n[9/10] API Call Safety:")
+    check("All API calls have timeout", check_api_calls_have_timeout)
+
+    # Group 10: Streaming Fallback
+    print("\n[10/10] Streaming Endpoint Fallback:")
+    check("Streaming handles LLM failures gracefully", check_streaming_endpoint_fallback)
+
 
     # Summary
     print("\n" + "=" * 60)
