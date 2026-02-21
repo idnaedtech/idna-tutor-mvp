@@ -5,7 +5,7 @@
 Voice-based AI tutor "Didi" for NCERT Class 8 Math, targeting Tier 2/3 Indian students.
 Stack: FastAPI + GPT-5-mini (Didi) + GPT-4o-mini (classifier) + Sarvam Saarika STT + Sarvam Bulbul TTS + Railway.
 Repo: github.com/idnaedtech/idna-tutor-mvp
-Current version: v7.3.1
+Current version: v7.3.28-fix2  
 
 ## Architecture
 

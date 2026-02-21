@@ -25,7 +25,7 @@ if modified_py:
     output = {
         "decision": "block",
         "reason": f"Modified files detected: {', '.join(modified_py[:5])}. "
-                  f"Run verify.py and confirm 14/14 PASSED before completing. "
+                  f"Run verify.py and confirm ALL checks PASSED before completing. "
                   f"Use the wiring-checker subagent to verify cross-file connections."
     }
     print(json.dumps(output))
