@@ -1,20 +1,19 @@
 """
-IDNA EdTech v7.5.0 — TTS Pre-Cache
+IDNA EdTech v7.5.2 — TTS Pre-Cache (PostgreSQL)
 
 Pre-generates and caches TTS audio for all Content Bank text.
-Eliminates TTS wait for known text (questions, hints, solutions).
+Stores in PostgreSQL instead of ephemeral filesystem.
+Survives Railway container restarts.
 """
 
 import hashlib
 import asyncio
 import logging
-from pathlib import Path
 from typing import Optional, Callable, Awaitable, Dict, Any
 
-logger = logging.getLogger("idna.tts_precache")
+from sqlalchemy.orm import Session as DBSession
 
-# Cache directory - created at runtime
-CACHE_DIR = Path(__file__).parent.parent.parent / "tts_cache"
+logger = logging.getLogger("idna.tts_precache")
 
 
 def get_cache_key(text: str, lang: str = "hi-IN") -> str:
@@ -23,74 +22,88 @@ def get_cache_key(text: str, lang: str = "hi-IN") -> str:
     return hashlib.md5(content.encode()).hexdigest()
 
 
-def get_cached_audio(text: str, lang: str = "hi-IN") -> Optional[bytes]:
-    """Check if TTS audio is already cached."""
+def get_text_hash(text: str) -> str:
+    """Generate hash of text for verification."""
+    return hashlib.sha256(text.encode()).hexdigest()[:32]
+
+
+def get_cached_audio_db(db: DBSession, text: str, lang: str = "hi-IN") -> Optional[bytes]:
+    """Check if TTS audio is cached in database."""
+    from app.models import TTSCache
+
     key = get_cache_key(text, lang)
-    cache_path = CACHE_DIR / f"{key}.mp3"
-    if cache_path.exists():
-        return cache_path.read_bytes()
+    entry = db.query(TTSCache).filter(TTSCache.cache_key == key).first()
+    if entry:
+        return entry.audio_bytes
     return None
 
 
-def save_to_cache(text: str, audio_bytes: bytes, lang: str = "hi-IN") -> None:
-    """Save TTS audio to cache."""
-    CACHE_DIR.mkdir(exist_ok=True)
+def save_to_cache_db(db: DBSession, text: str, audio_bytes: bytes, lang: str = "hi-IN") -> None:
+    """Save TTS audio to database cache."""
+    from app.models import TTSCache
+
     key = get_cache_key(text, lang)
-    cache_path = CACHE_DIR / f"{key}.mp3"
-    cache_path.write_bytes(audio_bytes)
-    logger.debug(f"Cached TTS: {key} ({len(audio_bytes)} bytes)")
+    text_hash = get_text_hash(text)
+
+    # Upsert: update if exists, insert if not
+    existing = db.query(TTSCache).filter(TTSCache.cache_key == key).first()
+    if existing:
+        existing.audio_bytes = audio_bytes
+        existing.text_hash = text_hash
+    else:
+        entry = TTSCache(
+            cache_key=key,
+            audio_bytes=audio_bytes,
+            text_hash=text_hash,
+            lang=lang,
+        )
+        db.add(entry)
+    db.commit()
+    logger.debug(f"Cached TTS to DB: {key} ({len(audio_bytes)} bytes)")
 
 
-def get_cache_stats() -> Dict[str, Any]:
-    """Get cache statistics."""
-    if not CACHE_DIR.exists():
-        return {"exists": False, "files": 0, "size_mb": 0}
+def get_cache_stats_db(db: DBSession) -> Dict[str, Any]:
+    """Get cache statistics from database."""
+    from app.models import TTSCache
+    from sqlalchemy import func
 
-    files = list(CACHE_DIR.glob("*.mp3"))
-    total_size = sum(f.stat().st_size for f in files)
+    count = db.query(func.count(TTSCache.cache_key)).scalar() or 0
+    total_size = db.query(func.sum(func.length(TTSCache.audio_bytes))).scalar() or 0
+
     return {
         "exists": True,
-        "files": len(files),
-        "size_mb": round(total_size / (1024 * 1024), 2),
+        "files": count,
+        "size_mb": round(total_size / (1024 * 1024), 2) if total_size else 0,
     }
 
 
 async def precache_content_bank(
     content_bank,
     tts_func: Callable[[str, str], Awaitable[bytes]],
+    db: DBSession,
     languages: list = None,
 ) -> Dict[str, int]:
     """
     Pre-generate TTS audio for all content bank text.
-    Call this once at startup or deploy.
+    Stores in PostgreSQL for persistence across container restarts.
 
-    Caches: definitions, questions, hints, solutions,
-    teaching hooks, misconception corrections.
-
-    Args:
-        content_bank: ContentBank instance
-        tts_func: Async TTS function (text, lang) -> audio_bytes
-        languages: List of languages to cache (default: ["hi-IN"])
-
-    Returns:
-        Stats dict with total/cached/generated/failed counts
+    v7.5.2: Rate-limited to 2s between calls, skips if already cached.
     """
+    from app.models import TTSCache
+
     if languages is None:
         languages = ["hi-IN"]
 
     stats = {"total": 0, "cached": 0, "generated": 0, "failed": 0}
-    CACHE_DIR.mkdir(exist_ok=True)
 
     # Get all concepts
     all_concepts = []
     for chapter_key in content_bank._chapters.keys():
         all_concepts.extend(content_bank.get_chapter_concepts(chapter_key))
 
-    logger.info(f"TTS precache starting: {len(all_concepts)} concepts, {languages} languages")
-
+    # Collect all texts to cache
+    texts_to_cache = []
     for concept in all_concepts:
-        texts_to_cache = []
-
         # Definition TTS
         if concept.get("definition_tts"):
             for lang in languages:
@@ -123,7 +136,6 @@ async def precache_content_bank(
                 for lang in languages:
                     texts_to_cache.append((lang, q["question_tts"]))
 
-            # Hints (may not have _tts suffix, cache anyway)
             for hint in q.get("hints", []):
                 if isinstance(hint, str):
                     for lang in languages:
@@ -133,60 +145,66 @@ async def precache_content_bank(
                 for lang in languages:
                     texts_to_cache.append((lang, q["full_solution_tts"]))
 
-        # Generate audio (TTS has its own built-in caching)
-        for lang, text in texts_to_cache:
-            if not text or not text.strip():
-                continue
+    # Remove empty texts and duplicates
+    texts_to_cache = [(lang, text) for lang, text in texts_to_cache if text and text.strip()]
+    unique_texts = list(set(texts_to_cache))
+    stats["total"] = len(unique_texts)
 
-            stats["total"] += 1
+    # Check how many are already cached
+    for lang, text in unique_texts:
+        key = get_cache_key(text, lang)
+        if db.query(TTSCache).filter(TTSCache.cache_key == key).first():
+            stats["cached"] += 1
 
-            try:
-                # TTS handles its own caching internally via AUDIO_CACHE_DIR
-                # Just call it to pre-warm the cache
-                audio = await tts_func(text, lang)
-                if audio:
-                    stats["generated"] += 1
-                else:
-                    stats["failed"] += 1
-                # Rate limit: don't hammer Sarvam API
-                await asyncio.sleep(0.3)
-            except Exception as e:
-                logger.error(f"TTS precache failed for '{text[:40]}...': {e}")
+    to_generate = stats["total"] - stats["cached"]
+
+    if to_generate == 0:
+        logger.info(f"TTS precache: all {stats['total']} entries cached, skipping")
+        return stats
+
+    logger.info(f"TTS precache: {stats['cached']} cached, {to_generate} to generate")
+
+    # Generate missing audio with rate limiting
+    for lang, text in unique_texts:
+        key = get_cache_key(text, lang)
+
+        # Skip if already cached
+        if db.query(TTSCache).filter(TTSCache.cache_key == key).first():
+            continue
+
+        try:
+            audio = await tts_func(text, lang)
+            if audio:
+                save_to_cache_db(db, text, audio, lang)
+                stats["generated"] += 1
+            else:
                 stats["failed"] += 1
+
+            # v7.5.2: Rate limit 2s to avoid overwhelming Sarvam
+            await asyncio.sleep(2.0)
+        except Exception as e:
+            logger.error(f"TTS precache failed for '{text[:40]}...': {e}")
+            stats["failed"] += 1
+            # Continue even on failure
+            await asyncio.sleep(2.0)
 
     logger.info(f"TTS precache complete: {stats}")
     return stats
 
 
-async def get_or_generate_audio(
-    text: str,
-    lang: str,
-    tts_func: Callable[[str, str], Awaitable[bytes]],
-) -> Optional[bytes]:
-    """
-    Get cached audio or generate and cache it.
+# Legacy functions for backward compatibility (filesystem-based)
+# These are no longer used but kept to avoid import errors
 
-    Args:
-        text: Text to synthesize
-        lang: Language code (e.g., "hi-IN")
-        tts_func: Async TTS function (text, lang) -> audio_bytes
+def get_cache_stats() -> Dict[str, Any]:
+    """Legacy: Get cache stats (deprecated, use get_cache_stats_db)."""
+    return {"exists": False, "files": 0, "size_mb": 0}
 
-    Returns:
-        Audio bytes or None if failed
-    """
-    # Check cache first
-    cached = get_cached_audio(text, lang)
-    if cached:
-        logger.debug(f"TTS cache hit: {len(cached)} bytes")
-        return cached
 
-    # Generate and cache
-    try:
-        audio = await tts_func(text, lang)
-        if audio:
-            save_to_cache(text, audio, lang)
-            logger.debug(f"TTS cache miss, generated: {len(audio)} bytes")
-        return audio
-    except Exception as e:
-        logger.error(f"TTS generation failed: {e}")
-        return None
+def get_cached_audio(text: str, lang: str = "hi-IN") -> Optional[bytes]:
+    """Legacy: Filesystem cache (deprecated, use get_cached_audio_db)."""
+    return None
+
+
+def save_to_cache(text: str, audio_bytes: bytes, lang: str = "hi-IN") -> None:
+    """Legacy: Filesystem cache (deprecated, use save_to_cache_db)."""
+    pass

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
-    String, Integer, Float, Boolean, Text, DateTime, JSON,
+    String, Integer, Float, Boolean, Text, DateTime, JSON, LargeBinary,
     ForeignKey, Index, Enum as SAEnum
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -230,3 +230,19 @@ class LoginAttempt(Base):
     success: Mapped[bool] = mapped_column(Boolean)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     attempted_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+# ─── TTS Cache (v7.5.2) ─────────────────────────────────────────────────────
+
+class TTSCache(Base):
+    """
+    v7.5.2: Store TTS audio in PostgreSQL instead of ephemeral filesystem.
+    Survives Railway container restarts.
+    """
+    __tablename__ = "tts_cache"
+
+    cache_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    audio_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    lang: Mapped[str] = mapped_column(String(10), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

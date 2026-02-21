@@ -922,6 +922,7 @@ async def process_message_stream(
 
     async def stream_response():
         """SSE: stream audio chunks as sentences complete."""
+        nonlocal new_state  # v7.5.2: Fix UnboundLocalError - new_state is modified in finally block
         full_text = ""
         sentence_index = 0
         cancelled = False

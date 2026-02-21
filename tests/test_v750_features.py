@@ -113,40 +113,29 @@ class TestTTSPrecache:
         key_en = get_cache_key("test text", "en-IN")
         assert key_hi != key_en
 
-    def test_cache_roundtrip(self, tmp_path, monkeypatch):
-        """Save and retrieve from cache."""
-        from app.voice import tts_precache
+    def test_text_hash_deterministic(self):
+        """Text hash is deterministic."""
+        from app.voice.tts_precache import get_text_hash
 
-        # Use temp directory for cache
-        monkeypatch.setattr(tts_precache, "CACHE_DIR", tmp_path)
+        hash1 = get_text_hash("test text")
+        hash2 = get_text_hash("test text")
+        assert hash1 == hash2
+        assert len(hash1) == 32  # SHA256 truncated to 32 chars
 
-        # Save to cache
-        tts_precache.save_to_cache("test text", b"fake_audio_bytes", "hi-IN")
+    def test_text_hash_differs_by_content(self):
+        """Different text produces different hash."""
+        from app.voice.tts_precache import get_text_hash
 
-        # Retrieve from cache
-        cached = tts_precache.get_cached_audio("test text", "hi-IN")
-        assert cached == b"fake_audio_bytes"
+        hash1 = get_text_hash("text one")
+        hash2 = get_text_hash("text two")
+        assert hash1 != hash2
 
-    def test_cache_miss_returns_none(self, tmp_path, monkeypatch):
-        """Cache miss returns None."""
-        from app.voice import tts_precache
+    def test_legacy_functions_return_empty(self):
+        """v7.5.2: Legacy filesystem functions return empty/None."""
+        from app.voice.tts_precache import get_cached_audio, save_to_cache, get_cache_stats
 
-        monkeypatch.setattr(tts_precache, "CACHE_DIR", tmp_path)
-
-        cached = tts_precache.get_cached_audio("nonexistent text", "hi-IN")
-        assert cached is None
-
-    def test_cache_stats(self, tmp_path, monkeypatch):
-        """Cache stats reports correctly."""
-        from app.voice import tts_precache
-
-        monkeypatch.setattr(tts_precache, "CACHE_DIR", tmp_path)
-
-        # Empty cache
-        stats = tts_precache.get_cache_stats()
+        # Legacy functions should return empty values (DB functions are primary now)
+        assert get_cached_audio("any text", "hi-IN") is None
+        save_to_cache("any text", b"audio", "hi-IN")  # Should not raise
+        stats = get_cache_stats()
         assert stats["files"] == 0
-
-        # Add a file
-        tts_precache.save_to_cache("test", b"audio", "hi-IN")
-        stats = tts_precache.get_cache_stats()
-        assert stats["files"] == 1

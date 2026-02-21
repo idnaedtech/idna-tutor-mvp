@@ -54,40 +54,54 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    # v7.5.0: Start TTS precache in background (non-blocking)
+    # v7.5.2: Start TTS precache in background (PostgreSQL-backed)
     try:
         from content_bank.loader import get_content_bank
-        from app.voice.tts_precache import precache_content_bank, get_cache_stats
+        from app.voice.tts_precache import precache_content_bank, get_cache_stats_db
         from app.voice.tts import get_tts
 
         cb = get_content_bank()
-        cache_stats = get_cache_stats()
-        logger.info(f"TTS cache stats: {cache_stats}")
 
-        if cache_stats["files"] < 50:  # Precache if cache is small
-            tts = get_tts()
+        # Check cache stats from database
+        precache_db = SessionLocal()
+        try:
+            cache_stats = get_cache_stats_db(precache_db)
+            logger.info(f"TTS cache stats (DB): {cache_stats}")
 
-            async def tts_wrapper(text: str, lang: str) -> bytes:
-                """Wrapper to match precache expected signature."""
-                result = await tts.synthesize_async(text, lang)
-                return result.audio_bytes
+            # v7.5.2: Only precache if DB cache is small
+            if cache_stats["files"] < 50:
+                tts = get_tts()
 
-            async def run_precache():
-                try:
-                    stats = await precache_content_bank(cb, tts_wrapper, ["hi-IN"])
-                    logger.info(f"TTS precache complete: {stats}")
-                except Exception as e:
-                    logger.error(f"TTS precache failed: {e}")
+                async def tts_wrapper(text: str, lang: str) -> bytes:
+                    """Wrapper to match precache expected signature."""
+                    result = await tts.synthesize_async(text, lang)
+                    return result.audio_bytes
 
-            import asyncio
-            asyncio.create_task(run_precache())
-            logger.info("TTS precache started in background")
+                async def run_precache():
+                    # Get fresh DB session for async context
+                    from app.database import SessionLocal
+                    async_db = SessionLocal()
+                    try:
+                        stats = await precache_content_bank(cb, tts_wrapper, async_db, ["hi-IN"])
+                        logger.info(f"TTS precache complete: {stats}")
+                    except Exception as e:
+                        logger.error(f"TTS precache failed: {e}")
+                    finally:
+                        async_db.close()
+
+                import asyncio
+                asyncio.create_task(run_precache())
+                logger.info("TTS precache started in background (2s rate limit)")
+            else:
+                logger.info(f"TTS precache skipped: {cache_stats['files']} entries already cached")
+        finally:
+            precache_db.close()
     except ImportError as e:
         logger.warning(f"TTS precache skipped (missing deps): {e}")
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v7.5 ready")
+    logger.info("IDNA Didi v7.5.2 ready")
     yield
     logger.info("Shutting down")
 
@@ -146,7 +160,7 @@ def _seed_test_student(db):
 app = FastAPI(
     title="IDNA Didi v7.5",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="7.5.1",
+    version="7.5.2",
     lifespan=lifespan,
 )
 
