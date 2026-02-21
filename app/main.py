@@ -146,7 +146,7 @@ def _seed_test_student(db):
 app = FastAPI(
     title="IDNA Didi v7.5",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="7.5.0",
+    version="7.5.1",
     lifespan=lifespan,
 )
 
