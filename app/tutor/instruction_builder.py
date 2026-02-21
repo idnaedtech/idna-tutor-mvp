@@ -16,6 +16,13 @@ from typing import Optional
 from app.tutor.state_machine import Action
 from app.tutor.answer_checker import Verdict
 
+# v7.4.0: Content bank for verified RAG content
+try:
+    from content_bank import get_content_bank
+    _content_bank = get_content_bank()
+except ImportError:
+    _content_bank = None
+
 DIDI_BASE = """You are Didi, a caring Hindi-speaking tutor for Class 8 Math.
 
 PERSONALITY: Warm older sister. Patient. Focused on learning. Use "aap" form always.
@@ -195,14 +202,33 @@ def _build_teach_concept(a, ctx, q, sk, prev):
         anti_rep += "Use a COMPLETELY DIFFERENT approach this time.\n"
         extra += anti_rep
 
-    # Get actual teaching content from SKILL_TEACHING
-    from app.content.seed_questions import SKILL_TEACHING
+    # Get skill key for content lookup
     skill_key = q.get("target_skill", "") if q else ctx.get("skill", "")
+
+    # v7.4.0: Try content bank first for verified RAG content
+    cb_definition = None
+    cb_hook = None
+    cb_analogy = None
+    if _content_bank:
+        cb_definition = _content_bank.get_definition_tts(skill_key)
+        cb_hook = _content_bank.get_teaching_hook(skill_key)
+        cb_analogy = _content_bank.get_teaching_analogy(skill_key)
+
+    # Fallback to SKILL_TEACHING if content bank doesn't have this concept
+    from app.content.seed_questions import SKILL_TEACHING
     lesson = SKILL_TEACHING.get(skill_key, {})
 
+    # v7.4.0: Use content bank definition if available, else fallback to SKILL_TEACHING
     # v7.2.0: Rotate approaches based on teaching_turn (BUG 3 fix)
-    # Turn 0: definition/pre_teach, Turn 1: indian_example, Turn 2+: key_insight/visual
-    if teaching_turn >= 2:
+    if cb_definition and teaching_turn == 0:
+        # Turn 0: Use verified content bank definition
+        teach_content = cb_definition
+        if cb_hook:
+            extra += f'\n\nUSE THIS HOOK TO START: "{cb_hook}"'
+    elif cb_analogy and teaching_turn == 1:
+        # Turn 1: Use content bank analogy
+        teach_content = cb_analogy
+    elif teaching_turn >= 2:
         teach_content = lesson.get("key_insight") or lesson.get("indian_example") or lesson.get("pre_teach") or ""
     elif teaching_turn == 1:
         teach_content = lesson.get("indian_example") or lesson.get("key_insight") or lesson.get("pre_teach") or ""
@@ -281,8 +307,16 @@ def _build_give_hint(a, ctx, q, sk, prev):
     lang_pref = ctx.get("language_pref", "hinglish")
     use_english = lang_pref == "english"
 
-    # Get actual hint or build from question context
-    if a.hint_level <= len(hints):
+    # v7.4.0: Try content bank hints first
+    question_id = q.get("question_id") or q.get("id")
+    cb_hints = []
+    if _content_bank and question_id:
+        cb_hints = _content_bank.get_hints(question_id)
+
+    # Get actual hint: content bank first, then question hints, then generated
+    if cb_hints and a.hint_level <= len(cb_hints):
+        h = cb_hints[a.hint_level - 1]
+    elif a.hint_level <= len(hints):
         h = hints[a.hint_level - 1]
     else:
         # No more hints — build contextual hint from question and answer
@@ -305,7 +339,15 @@ def _build_give_hint(a, ctx, q, sk, prev):
 def _build_show_solution(a, ctx, q, sk, prev):
     if not q:
         return _build_fallback(a, ctx, q, sk, prev)
-    sol = q.get("solution", "Solution not available.")
+
+    # v7.4.0: Try content bank full_solution_tts first
+    question_id = q.get("question_id") or q.get("id")
+    sol = None
+    if _content_bank and question_id:
+        sol = _content_bank.get_full_solution_tts(question_id)
+    if not sol:
+        sol = q.get("solution", "Solution not available.")
+
     # v7.3.24: Language-aware encouragement
     lang_pref = ctx.get("language_pref", "hinglish")
     encouragement = "It's okay, now you understand." if lang_pref == "english" else "Koi baat nahi, ab samajh aa gaya hoga."
