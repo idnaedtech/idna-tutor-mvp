@@ -213,7 +213,7 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "7.3.33"}
+    return {"status": "ok", "version": "8.0.0"}
 
 
 # Keep-alive endpoint for UptimeRobot (prevents Railway sleep)
