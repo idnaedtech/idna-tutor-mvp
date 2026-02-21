@@ -209,25 +209,49 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     cb_definition = None
     cb_hook = None
     cb_analogy = None
+    cb_examples = []
+    cb_vedic_trick = None
     if _content_bank:
         cb_definition = _content_bank.get_definition_tts(skill_key)
         cb_hook = _content_bank.get_teaching_hook(skill_key)
         cb_analogy = _content_bank.get_teaching_analogy(skill_key)
+        cb_examples = _content_bank.get_examples(skill_key)  # easy, medium, hard
+        methodology = _content_bank.get_teaching_methodology(skill_key)
+        if methodology:
+            cb_vedic_trick = methodology.get("vedic_trick")
 
     # Fallback to SKILL_TEACHING if content bank doesn't have this concept
     from app.content.seed_questions import SKILL_TEACHING
     lesson = SKILL_TEACHING.get(skill_key, {})
 
-    # v7.4.0: Use content bank definition if available, else fallback to SKILL_TEACHING
-    # v7.2.0: Rotate approaches based on teaching_turn (BUG 3 fix)
+    # v7.4.2: Progressive reteach from content bank
+    # Turn 0: definition_tts + hook
+    # Turn 1: analogy + examples[0].solution_tts
+    # Turn 2: examples[1].solution_tts + vedic_trick
+    # Turn 3+: Force transition to question
     if cb_definition and teaching_turn == 0:
         # Turn 0: Use verified content bank definition
         teach_content = cb_definition
         if cb_hook:
             extra += f'\n\nUSE THIS HOOK TO START: "{cb_hook}"'
-    elif cb_analogy and teaching_turn == 1:
-        # Turn 1: Use content bank analogy
-        teach_content = cb_analogy
+    elif teaching_turn == 1 and (cb_analogy or cb_examples):
+        # Turn 1: Analogy + easy example
+        teach_content = cb_analogy or ""
+        if cb_examples and len(cb_examples) > 0:
+            easy_ex = cb_examples[0]
+            sol_tts = easy_ex.get("solution_tts", "")
+            if sol_tts:
+                teach_content += f" Example: {sol_tts}"
+    elif teaching_turn == 2 and (cb_examples or cb_vedic_trick):
+        # Turn 2: Medium example + vedic trick
+        teach_content = ""
+        if cb_examples and len(cb_examples) > 1:
+            medium_ex = cb_examples[1]
+            teach_content = medium_ex.get("solution_tts", "")
+        if cb_vedic_trick:
+            teach_content += f" Trick: {cb_vedic_trick}"
+        if not teach_content:
+            teach_content = lesson.get("key_insight") or lesson.get("indian_example") or ""
     elif teaching_turn >= 2:
         teach_content = lesson.get("key_insight") or lesson.get("indian_example") or lesson.get("pre_teach") or ""
     elif teaching_turn == 1:
@@ -243,18 +267,23 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     understand_short = "Make sense?" if use_english else "Samajh aaya?"
     lang_mode = "English" if use_english else "Hinglish"
 
-    # v7.2.0: Phase-based prompts (BUG 1 fix)
-    if a.extra.get("forced_transition"):
+    # v7.4.2: Phase-based prompts with progressive reteach
+    # Only force transition after Turn 3 (exhausted CB teaching material)
+    if a.extra.get("forced_transition") and teaching_turn >= 3:
         # Turn 3+: Force to question with gentle transition
         msg = f'Say: "{transition_phrase}" Then read the question.'
     elif approach == "answer_question":
         msg = f'Student asked: "{a.student_text}". Answer their question about {ch}. {teach_content if teach_content else "Use simple example."} 2 sentences.'
-    elif approach == "different_example":
+    elif approach == "different_example" or teaching_turn > 0:
+        # v7.4.2: Reteach with progressive examples - ALWAYS end with samajh aaya?
+        # Do NOT transition to question until student gives ACK
         if teaching_turn == 1:
-            msg = f'Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. End: "{understand_check}"'
-        elif teaching_turn >= 2:
-            # Simplest version
-            msg = f"Student still doesn't understand. Give the SIMPLEST explanation possible: \"{teach_content}\" 2 sentences. End: \"{understand_check}\""
+            msg = f'Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
+        elif teaching_turn == 2:
+            msg = f'Student still confused. Try this simpler approach: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
+        elif teaching_turn >= 3:
+            # Exhausted content bank, now can transition
+            msg = f'Say: "{transition_phrase}" Then read the question.'
         else:
             msg = f"Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"{understand_check}\""
     else:
