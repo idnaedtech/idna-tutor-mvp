@@ -210,8 +210,9 @@ def _check_specificity(
     state: str,
 ) -> tuple[bool, str]:
     """Rule 3: Response must reference student's answer or specific error.
-    Only applies to EVALUATING and HINT states."""
-    if state not in ("EVALUATING", "HINT_1", "HINT_2"):
+    Only applies to EVALUATING state. HINT states give guidance without
+    needing to reference the student's specific answer."""
+    if state != "EVALUATING":
         return True, text
 
     if not student_answer:

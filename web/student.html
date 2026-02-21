@@ -470,10 +470,27 @@
                     updateVoiceUI('listening');
                     clearInactivityTimer(); // Reset silence timer on speech
                     console.log("[VAD] Speech detected — recording...");
+
+                    // v7.4.3: 25s cap to stay under Sarvam 30s STT limit
+                    if (window.vadRecordingTimeout) clearTimeout(window.vadRecordingTimeout);
+                    window.vadRecordingTimeout = setTimeout(() => {
+                        console.warn("[VAD] 25s cap hit — forcing speech end");
+                        if (vadInstance) vadInstance.pause();
+                        // Brief delay then resume to trigger onSpeechEnd with collected audio
+                        setTimeout(() => {
+                            if (vadInstance && !isDidiSpeaking && !isProcessing) vadInstance.start();
+                        }, 100);
+                    }, 25000);
                 },
 
                 // When student stops speaking (silence detected)
                 onSpeechEnd: async (audioFloat32) => {
+                    // v7.4.3: Clear 25s cap timeout
+                    if (window.vadRecordingTimeout) {
+                        clearTimeout(window.vadRecordingTimeout);
+                        window.vadRecordingTimeout = null;
+                    }
+
                     if (isDidiSpeaking || isProcessing) return;
 
                     // v7.3.34 Fix 1: Minimum duration check (500ms at 16kHz = 8000 samples)
@@ -943,7 +960,16 @@
 
             showTyping(false);
 
-            if (!resp.ok) throw new Error('Message failed');
+            if (!resp.ok) {
+                // v7.4.3: Handle session conflict (400 = session_id mismatch or expired)
+                if (resp.status === 400) {
+                    addMessage('didi', 'Session expired. Please refresh the page. (Agar aapne doosri tab mein khola hai, woh band karein.)');
+                    updateVoiceUI('error');
+                    pauseListening(); // Stop VAD completely
+                    return; // Don't retry - user must refresh
+                }
+                throw new Error('Message failed');
+            }
 
             const data = await resp.json();
             logLatency(data);
@@ -1002,7 +1028,16 @@
 
             showTyping(false);
 
-            if (!resp.ok) throw new Error('Message failed');
+            if (!resp.ok) {
+                // v7.4.3: Handle session conflict (400 = session_id mismatch or expired)
+                if (resp.status === 400) {
+                    addMessage('didi', 'Session expired. Please refresh the page. (Agar aapne doosri tab mein khola hai, woh band karein.)');
+                    updateVoiceUI('error');
+                    pauseListening();
+                    return;
+                }
+                throw new Error('Message failed');
+            }
 
             const data = await resp.json();
             logLatency(data);
