@@ -38,8 +38,10 @@ from app.tutor.input_classifier import classify
 from openai import AsyncOpenAI
 from app.config import OPENAI_API_KEY
 from app.tutor.state_machine import transition, route_after_evaluation, Action
-from app.tutor.answer_checker import check_math_answer
+from app.tutor.answer_checker import check_math_answer, Verdict
+from app.tutor.answer_evaluator import evaluate_answer
 from app.tutor.instruction_builder import build_prompt
+from content_bank.loader import get_content_bank
 from app.tutor.enforcer import enforce, light_enforce, get_safe_fallback
 from app.tutor.llm import get_llm
 from app.tutor import memory
@@ -80,6 +82,18 @@ def get_openai_client() -> AsyncOpenAI:
     if _openai_client is None:
         _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     return _openai_client
+
+
+async def llm_call_for_eval(messages: list, max_tokens: int = 150) -> str:
+    """v7.5.0: Async LLM call wrapper for answer evaluation."""
+    client = get_openai_client()
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",  # Fast model for evaluation
+        messages=messages,
+        max_tokens=max_tokens,
+        temperature=0.1,  # Low temp for consistent evaluation
+    )
+    return response.choices[0].message.content
 
 
 # ─── Request/Response Models ─────────────────────────────────────────────────
@@ -384,13 +398,56 @@ async def process_message(
         )
 
         if question:
-            verdict_obj = check_math_answer(
-                student_text,
-                question.answer,
-                question.answer_variants or [],
-            )
-            verdict_str = verdict_obj.verdict
-            diagnostic = verdict_obj.diagnostic
+            # v7.5.0: Use LLM-based answer evaluation with Content Bank context
+            try:
+                cb = get_content_bank()
+                # Get misconceptions from content bank if available
+                misconceptions = []
+                if question.target_skill:
+                    misconceptions = cb.get_misconceptions(question.target_skill)
+
+                eval_result = await evaluate_answer(
+                    question_text=question.question_voice or question.question_text,
+                    expected_answer=question.answer,
+                    acceptable_alternates=question.answer_variants or [],
+                    misconceptions=misconceptions,
+                    student_response=student_text,
+                    llm_call_func=llm_call_for_eval,
+                )
+
+                # Convert LLM eval result to Verdict object for compatibility
+                verdict_map = {
+                    "correct": ("CORRECT", True),
+                    "incorrect": ("INCORRECT", False),
+                    "partial": ("PARTIAL", False),
+                    "idk": ("INCORRECT", False),
+                    "unclear": ("INCORRECT", False),
+                }
+                v_str, v_correct = verdict_map.get(eval_result["verdict"], ("INCORRECT", False))
+
+                verdict_obj = Verdict(
+                    correct=v_correct,
+                    verdict=v_str,
+                    student_parsed=eval_result.get("student_answer_extracted", ""),
+                    correct_display=question.answer,
+                    diagnostic=eval_result.get("feedback_hi", ""),
+                )
+                verdict_str = v_str
+                diagnostic = eval_result.get("feedback_hi", "")
+
+                logger.info(f"v7.5.0 LLM eval: '{student_text[:30]}' -> {v_str} (extracted: {eval_result.get('student_answer_extracted')})")
+
+            except Exception as e:
+                # Fallback to regex-based checker if LLM eval fails
+                logger.warning(f"v7.5.0 LLM eval failed, using fallback: {e}")
+                verdict_obj = check_math_answer(
+                    student_text,
+                    question.answer,
+                    question.answer_variants or [],
+                )
+                verdict_str = verdict_obj.verdict
+                diagnostic = verdict_obj.diagnostic
+
             action.verdict = verdict_obj
 
             # Route based on verdict
@@ -744,12 +801,50 @@ async def process_message_stream(
             ).first()
         )
         if question:
-            verdict = check_math_answer(
-                student_text,
-                question.answer,
-                question.answer_variants or [],
-            )
-            verdict_str = verdict.verdict
+            # v7.5.0: Use LLM-based answer evaluation (streaming endpoint)
+            try:
+                cb = get_content_bank()
+                misconceptions = []
+                if question.target_skill:
+                    misconceptions = cb.get_misconceptions(question.target_skill)
+
+                eval_result = await evaluate_answer(
+                    question_text=question.question_voice or question.question_text,
+                    expected_answer=question.answer,
+                    acceptable_alternates=question.answer_variants or [],
+                    misconceptions=misconceptions,
+                    student_response=student_text,
+                    llm_call_func=llm_call_for_eval,
+                )
+
+                verdict_map = {
+                    "correct": ("CORRECT", True),
+                    "incorrect": ("INCORRECT", False),
+                    "partial": ("PARTIAL", False),
+                    "idk": ("INCORRECT", False),
+                    "unclear": ("INCORRECT", False),
+                }
+                v_str, v_correct = verdict_map.get(eval_result["verdict"], ("INCORRECT", False))
+
+                verdict = Verdict(
+                    correct=v_correct,
+                    verdict=v_str,
+                    student_parsed=eval_result.get("student_answer_extracted", ""),
+                    correct_display=question.answer,
+                    diagnostic=eval_result.get("feedback_hi", ""),
+                )
+                verdict_str = v_str
+                logger.info(f"v7.5.0 LLM eval (stream): '{student_text[:30]}' -> {v_str}")
+
+            except Exception as e:
+                logger.warning(f"v7.5.0 LLM eval failed (stream), using fallback: {e}")
+                verdict = check_math_answer(
+                    student_text,
+                    question.answer,
+                    question.answer_variants or [],
+                )
+                verdict_str = verdict.verdict
+
             # Route based on verdict
             new_state, action.action_type = route_after_evaluation(
                 verdict,

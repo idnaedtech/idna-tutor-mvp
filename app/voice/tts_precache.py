@@ -133,21 +133,18 @@ async def precache_content_bank(
                 for lang in languages:
                     texts_to_cache.append((lang, q["full_solution_tts"]))
 
-        # Generate missing audio
+        # Generate audio (TTS has its own built-in caching)
         for lang, text in texts_to_cache:
             if not text or not text.strip():
                 continue
 
             stats["total"] += 1
 
-            if get_cached_audio(text, lang):
-                stats["cached"] += 1
-                continue
-
             try:
+                # TTS handles its own caching internally via AUDIO_CACHE_DIR
+                # Just call it to pre-warm the cache
                 audio = await tts_func(text, lang)
                 if audio:
-                    save_to_cache(text, audio, lang)
                     stats["generated"] += 1
                 else:
                     stats["failed"] += 1
