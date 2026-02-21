@@ -17,7 +17,8 @@ result = subprocess.run(
     capture_output=True, text=True, cwd=input_data.get("cwd", ".")
 )
 
-modified_py = [f for f in result.stdout.strip().split("\n") if f.endswith(".py") and f]
+modified_py = [f for f in result.stdout.strip().split("\n")
+               if f.endswith(".py") and f and not f.startswith(".claude/")]
 
 if modified_py:
     # Files modified — check if verify.py was run
