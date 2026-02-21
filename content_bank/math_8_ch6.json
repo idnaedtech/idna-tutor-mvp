@@ -1,0 +1,1214 @@
+{
+  "_schema": {
+    "version": "1.0.0",
+    "description": "IDNA EdTech Content Bank — structured curriculum JSON for RAG-based teaching. Replaces LLM-improvised explanations with verified, graded content.",
+    "scalability_note": "This schema applies to ANY NCERT chapter/subject. Only concept_id prefixes and answer_type change per chapter.",
+    "layers": {
+      "L1": "RAG curriculum — verified definitions, examples, questions per concept",
+      "L2": "Teaching methodology — extracted from YouTube Hindi teachers and pedagogy research",
+      "L3": "Conversation intelligence — handled by v7.3.28 FSM (not in this file)"
+    },
+    "fields": {
+      "concept_id": "Unique ID: {subject}_{class}_{ch}_{concept_short}",
+      "ncert_section": "NCERT section reference (e.g., 6.2)",
+      "concept_name": "English name",
+      "concept_name_hi": "Hindi name (Devanagari)",
+      "definition": "Verified definition — NCERT-aligned, not LLM-generated",
+      "definition_tts": "TTS-safe definition — no symbols, fractions spoken out, clean for Sarvam Bulbul",
+      "prerequisite_concepts": "List of concept_ids that must be taught before this one",
+      "examples": "Array of 3 graded examples: easy → medium → hard",
+      "misconceptions": "Array of 2 common student misconceptions with corrections",
+      "questions": "Array of 3 graded questions with expected_answer + acceptable_alternates",
+      "teaching_methodology": "L2 — Hindi teacher patterns, analogies, hooks, Vedic tricks"
+    }
+  },
+
+  "chapter_meta": {
+    "subject": "mathematics",
+    "class": 8,
+    "chapter_number": 6,
+    "chapter_name": "Squares and Square Roots",
+    "chapter_name_hi": "वर्ग और वर्गमूल",
+    "ncert_edition": "2024-25",
+    "total_exercises": 4,
+    "total_ncert_questions": 30,
+    "exercise_map": {
+      "6.1": "Properties of square numbers, patterns, Pythagorean triplets",
+      "6.2": "Square roots by repeated subtraction and prime factorisation",
+      "6.3": "Square roots by long division, decimals",
+      "6.4": "Estimating square roots, word problems"
+    },
+    "skill_progression": [
+      "sq_perfect_square",
+      "sq_properties",
+      "sq_patterns_odd_sum",
+      "sq_between_consecutive",
+      "sq_finding_square",
+      "sq_pythagorean_triplets",
+      "sq_root_repeated_subtraction",
+      "sq_root_prime_factorisation",
+      "sq_make_perfect_square",
+      "sq_root_long_division",
+      "sq_root_decimals",
+      "sq_root_estimation"
+    ]
+  },
+
+  "concepts": [
+    {
+      "concept_id": "math_8_ch6_perfect_square",
+      "ncert_section": "6.1",
+      "concept_name": "Perfect Square Numbers",
+      "concept_name_hi": "पूर्ण वर्ग संख्याएँ",
+      "definition": "If a natural number m can be expressed as n², where n is also a natural number, then m is called a perfect square or square number. For example, 1, 4, 9, 16, 25 are perfect squares because 1=1², 4=2², 9=3², 16=4², 25=5².",
+      "definition_tts": "Agar koi natural number m ko n ka square likha ja sake, jahan n bhi ek natural number ho, toh m ko perfect square ya varg sankhya kehte hain. Jaise 1, 4, 9, 16, 25 perfect squares hain kyunki 1 barabar 1 ka square, 4 barabar 2 ka square, 9 barabar 3 ka square.",
+      "prerequisite_concepts": [],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Is 36 a perfect square?",
+          "problem_tts": "Kya 36 ek perfect square hai?",
+          "solution": "Yes, 36 = 6 × 6 = 6². So 36 is a perfect square.",
+          "solution_tts": "Haan, 36 barabar 6 guna 6, matlab 6 ka square. Toh 36 ek perfect square hai.",
+          "indian_context": "Ek cricket team mein 6 players hain. Agar har player 6 run banaye, toh total 36 run — yeh perfect square hai."
+        },
+        {
+          "level": "medium",
+          "problem": "Is 50 a perfect square?",
+          "problem_tts": "Kya 50 ek perfect square hai?",
+          "solution": "7² = 49 and 8² = 64. Since 50 is between 49 and 64, and no whole number squared gives 50, it is NOT a perfect square.",
+          "solution_tts": "7 ka square 49 hota hai aur 8 ka square 64. 50, 49 aur 64 ke beech mein hai, aur koi bhi poori sankhya ka square 50 nahi deta. Toh 50 perfect square nahi hai.",
+          "indian_context": "50 roti banani hain, lekin square plate mein equally arrange nahi kar sakte — na 7 guna 7, na 8 guna 8."
+        },
+        {
+          "level": "hard",
+          "problem": "Is 2025 a perfect square? If yes, find its square root.",
+          "problem_tts": "Kya 2025 ek perfect square hai? Agar haan, toh iska vargmool bataiye.",
+          "solution": "45² = 2025. So yes, 2025 is a perfect square and √2025 = 45.",
+          "solution_tts": "45 ka square 2025 hota hai. Toh haan, 2025 ek perfect square hai aur iska vargmool 45 hai.",
+          "indian_context": "2025 paudhon ko bagiche mein rows aur columns mein lagana hai — 45 rows mein 45 paudhe, perfect square!"
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students think all numbers ending in 0, 1, 4, 5, 6, 9 are perfect squares.",
+          "misconception_hi": "Bacche sochte hain ki har number jo 0, 1, 4, 5, 6, 9 pe khatam ho, woh perfect square hai.",
+          "correction": "These digits are necessary but not sufficient. 10 ends in 0 but is not a perfect square. You must verify by finding the actual square root.",
+          "correction_tts": "Yeh digits zaroori hain lekin kaafi nahi. 10 ka ant 0 se hota hai lekin yeh perfect square nahi hai. Aapko check karna hoga ki koi poori sankhya ka square yeh number deta hai ya nahi."
+        },
+        {
+          "misconception": "Students confuse 'square of a number' with 'double of a number'. They think 5² = 10.",
+          "misconception_hi": "Bacche 'square' ko 'double' samajh lete hain. Unhe lagta hai 5 ka square 10 hai.",
+          "correction": "Square means multiplying a number by itself, not by 2. So 5² = 5 × 5 = 25, not 5 × 2 = 10.",
+          "correction_tts": "Square ka matlab hai number ko khud se multiply karna, 2 se nahi. Toh 5 ka square, 5 guna 5, barabar 25 hota hai. 10 nahi."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_ps_q1",
+          "level": "easy",
+          "question": "What is 9² (the square of 9)?",
+          "question_tts": "9 ka square kitna hota hai?",
+          "expected_answer": "81",
+          "acceptable_alternates": ["eighty one", "81.0", "ikkyasi", "इक्यासी"],
+          "answer_type": "numeric",
+          "hints": [
+            "9 ko 9 se multiply karo",
+            "9 guna 9 sochiye"
+          ],
+          "full_solution_tts": "9 ka square matlab 9 guna 9, jo hota hai 81."
+        },
+        {
+          "question_id": "sq_ps_q2",
+          "level": "medium",
+          "question": "Which of these numbers are perfect squares: 16, 18, 25, 30?",
+          "question_tts": "In mein se konsi sankhyaein perfect square hain: 16, 18, 25, 30?",
+          "expected_answer": "16 and 25",
+          "acceptable_alternates": ["16, 25", "16 aur 25", "solah aur pachees", "16 25"],
+          "answer_type": "list",
+          "hints": [
+            "Har number ke liye sochiye — kya koi poori sankhya ka square yeh number deta hai?",
+            "4 ka square 16 hota hai. 5 ka square 25. Baaki check karo."
+          ],
+          "full_solution_tts": "16 barabar 4 ka square, aur 25 barabar 5 ka square. 18 aur 30 kisi bhi poori sankhya ka square nahi hai. Toh 16 aur 25 perfect squares hain."
+        },
+        {
+          "question_id": "sq_ps_q3",
+          "level": "hard",
+          "question": "The students of a class donated ₹2401 total. Each student donated as many rupees as the number of students. How many students are in the class?",
+          "question_tts": "Ek class ke students ne kul 2401 rupaye donate kiye. Har student ne utne rupaye diye jitne students the. Class mein kitne students hain?",
+          "expected_answer": "49",
+          "acceptable_alternates": ["49 students", "unchaas", "उनचास"],
+          "answer_type": "numeric",
+          "hints": [
+            "Agar har student x rupaye deta hai aur x students hain, toh total = x × x = x²",
+            "2401 ka vargmool nikalo"
+          ],
+          "full_solution_tts": "Total donation x guna x hai, matlab x ka square 2401 hai. 49 ka square 2401 hota hai. Toh class mein 49 students hain."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Aapne kabhi tiles lagayi hain? 3 guna 3 tiles = 9 tiles, perfect square shape banta hai. 4 guna 4 = 16 tiles. Yeh hain varg sankhyaein!",
+        "analogy": "Square number ko aise samjho — tiles ko perfect square shape mein lagao. Jitni tiles ek line mein, utni hi doosri line mein. Agar poora square ban gaya, toh woh perfect square hai.",
+        "vedic_trick": null,
+        "common_teacher_phrase": "Bachcho, square matlab number ko khud se multiply karo. 5 ka square, 5 guna 5, 25!",
+        "visual_cue": "Draw dot arrays: 3×3 grid = 9 dots (perfect square), then try 10 dots — can't make a perfect square grid.",
+        "energy_moment": "Challenge: 1 se 20 tak ke saare perfect squares 30 second mein bolke dikhao!"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_properties",
+      "ncert_section": "6.2",
+      "concept_name": "Properties of Square Numbers",
+      "concept_name_hi": "वर्ग संख्याओं के गुणधर्म",
+      "definition": "Square numbers have specific properties: (1) They can only end in digits 0, 1, 4, 5, 6, or 9 — never 2, 3, 7, or 8. (2) Square of even number is even, square of odd number is odd. (3) A perfect square has an even number of trailing zeros. (4) Between n² and (n+1)², there are exactly 2n non-square numbers.",
+      "definition_tts": "Varg sankhyaon ke kuch khaas gunadharma hain. Pehla, yeh sirf 0, 1, 4, 5, 6, ya 9 pe khatam ho sakti hain — kabhi 2, 3, 7, ya 8 pe nahi. Doosra, even number ka square even hota hai, odd ka odd. Teesra, perfect square ke ant mein zero ki sankhya hamesha even hoti hai.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Can 1057 be a perfect square?",
+          "problem_tts": "Kya 1057 ek perfect square ho sakta hai?",
+          "solution": "1057 ends in 7. Since perfect squares never end in 2, 3, 7, or 8, it cannot be a perfect square.",
+          "solution_tts": "1057 ka ant 7 se hota hai. Perfect squares kabhi 2, 3, 7, ya 8 pe khatam nahi hoti. Toh 1057 perfect square nahi ho sakta.",
+          "indian_context": "Yeh aise hai jaise phone number se pata chal jaaye ki kaunsa state ka hai — last digit dekho, bahut kuch samajh aa jayega!"
+        },
+        {
+          "level": "medium",
+          "problem": "Is the square of 431 odd or even?",
+          "problem_tts": "431 ka square odd hoga ya even?",
+          "solution": "431 is odd. Square of an odd number is always odd. So 431² is odd.",
+          "solution_tts": "431 ek odd number hai. Odd number ka square hamesha odd hota hai. Toh 431 ka square bhi odd hoga.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "How many non-square numbers lie between 12² and 13²?",
+          "problem_tts": "12 ka square aur 13 ka square ke beech mein kitne non-square numbers hain?",
+          "solution": "Between n² and (n+1)², there are 2n non-square numbers. Here n = 12, so 2 × 12 = 24 non-square numbers.",
+          "solution_tts": "n ka square aur n plus 1 ka square ke beech mein 2n non-square numbers hote hain. Yahan n barabar 12 hai, toh 2 guna 12 barabar 24 non-square numbers hain.",
+          "indian_context": "Jaise 12vi aur 13vi floor ke beech mein 24 seedhiyan hain — yeh 24 non-square numbers hain."
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students think a number ending in 0 must be a perfect square because 100 (ending in 0) is a perfect square.",
+          "misconception_hi": "Bacche sochte hain ki 0 pe khatam hone wala number perfect square hona chahiye kyunki 100 perfect square hai.",
+          "correction": "A number ending in 0 may or may not be a perfect square. 10, 20, 30 end in 0 but are not perfect squares. 100, 400, 900 are. A perfect square must have an even number of trailing zeros.",
+          "correction_tts": "0 pe khatam hone se perfect square zaroori nahi. 10, 20, 30 perfect square nahi hain. Lekin 100, 400, 900 hain. Perfect square mein zeros ki sankhya hamesha even honi chahiye."
+        },
+        {
+          "misconception": "Students think there are always the same number of non-square numbers between consecutive squares.",
+          "misconception_hi": "Bacche sochte hain ki har do consecutive squares ke beech barabar non-square numbers hote hain.",
+          "correction": "The count increases. Between 1² and 2² there are 2 non-squares. Between 2² and 3² there are 4. The formula is 2n for between n² and (n+1)².",
+          "correction_tts": "Yeh sankhya badhti jaati hai. 1 ka square aur 2 ka square ke beech 2 non-squares hain. 2 ka square aur 3 ka square ke beech 4 hain. Formula hai 2n."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_prop_q1",
+          "level": "easy",
+          "question": "What will be the unit digit of 272²?",
+          "question_tts": "272 ka square ka unit digit kya hoga?",
+          "expected_answer": "4",
+          "acceptable_alternates": ["four", "chaar", "चार"],
+          "answer_type": "numeric",
+          "hints": [
+            "Sirf unit digit pe dhyaan do — 272 ka unit digit 2 hai",
+            "2 ka square 4 hota hai"
+          ],
+          "full_solution_tts": "272 ka unit digit 2 hai. 2 ka square 4 hota hai. Toh 272 ka square ka unit digit 4 hoga."
+        },
+        {
+          "question_id": "sq_prop_q2",
+          "level": "medium",
+          "question": "Which of these are surely not perfect squares: 153, 257, 408, 441?",
+          "question_tts": "In mein se konse number zaroor perfect square nahi hain: 153, 257, 408, 441?",
+          "expected_answer": "153, 257, 408",
+          "acceptable_alternates": ["153 257 408", "153, 257, and 408", "pehle teen"],
+          "answer_type": "list",
+          "hints": [
+            "Perfect squares kabhi 2, 3, 7, ya 8 pe khatam nahi hoti",
+            "Har number ka last digit check karo"
+          ],
+          "full_solution_tts": "153 ka ant 3 se hai, 257 ka ant 7 se, 408 ka ant 8 se. Yeh teeno perfect square nahi ho sakte. 441 ka ant 1 se hai, toh yeh perfect square ho sakta hai — aur hai bhi, 21 ka square 441 hai."
+        },
+        {
+          "question_id": "sq_prop_q3",
+          "level": "hard",
+          "question": "How many non-square numbers lie between 99² and 100²?",
+          "question_tts": "99 ka square aur 100 ka square ke beech kitne non-square numbers hain?",
+          "expected_answer": "198",
+          "acceptable_alternates": ["198 numbers", "ek sau anthanobbe", "एक सौ अंठानवे"],
+          "answer_type": "numeric",
+          "hints": [
+            "Formula yaad karo: n ka square aur n plus 1 ka square ke beech 2n numbers hote hain",
+            "Yahan n = 99 hai, toh 2 × 99 = ?"
+          ],
+          "full_solution_tts": "Formula hai 2n. Yahan n barabar 99 hai. Toh 2 guna 99 barabar 198 non-square numbers hain 99 ka square aur 100 ka square ke beech."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Main aapko ek magic trick dikhata hoon — koi bhi number bolo, main bina calculate kiye bata doonga ki woh perfect square ho sakta hai ya nahi. Raaz? Sirf last digit dekho!",
+        "analogy": "Last digit check karna aise hai jaise Aadhaar card ka last digit verify karna — agar galat hai, toh poora number galat hai.",
+        "vedic_trick": "Perfect squares sirf 0, 1, 4, 5, 6, 9 pe khatam hoti hain. Yaad rakhne ka trick: '01 45 69' — teen pairs yaad karo.",
+        "common_teacher_phrase": "Bachcho, 2, 3, 7, 8 pe khatam ho toh seedha reject — yeh kabhi perfect square nahi ho sakta!",
+        "visual_cue": "Write digits 0-9 on board. Circle 0,1,4,5,6,9. Cross out 2,3,7,8. Label: Varg sankhya ke possible ant.",
+        "energy_moment": "Quick fire round: Main number bolunga, aap bologe 'haan possible' ya 'nahi kabhi nahi'. Ready? 7928? 3481? 5766?"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_odd_sum_pattern",
+      "ncert_section": "6.3",
+      "concept_name": "Sum of Odd Numbers Pattern",
+      "concept_name_hi": "विषम संख्याओं के योग का पैटर्न",
+      "definition": "The sum of first n odd natural numbers is n². For example: 1+3 = 4 = 2², 1+3+5 = 9 = 3², 1+3+5+7 = 16 = 4². Conversely, a perfect square n² can be expressed as the sum of first n consecutive odd numbers starting from 1.",
+      "definition_tts": "Pehli n visham sankhyaon ka yog n ka square hota hai. Jaise, 1 jod 3 barabar 4, jo 2 ka square hai. 1 jod 3 jod 5 barabar 9, jo 3 ka square hai. 1 jod 3 jod 5 jod 7 barabar 16, jo 4 ka square hai.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find 1 + 3 + 5 + 7 + 9 without adding.",
+          "problem_tts": "1 jod 3 jod 5 jod 7 jod 9 ka yog bina jodhe bataiye.",
+          "solution": "There are 5 odd numbers. Sum of first n odd numbers = n². So sum = 5² = 25.",
+          "solution_tts": "Yahan 5 visham sankhyaein hain. Pehli n visham sankhyaon ka yog n ka square hota hai. Toh yog barabar 5 ka square, 25.",
+          "indian_context": "Cricket mein 5 overs mein 1, 3, 5, 7, 9 run aaye — total 25, jo 5 ka square hai!"
+        },
+        {
+          "level": "medium",
+          "problem": "Express 49 as sum of 7 odd numbers.",
+          "problem_tts": "49 ko 7 visham sankhyaon ke yog ke roop mein likhiye.",
+          "solution": "49 = 7² = 1 + 3 + 5 + 7 + 9 + 11 + 13",
+          "solution_tts": "49 barabar 7 ka square. Toh 49 barabar 1 jod 3 jod 5 jod 7 jod 9 jod 11 jod 13.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Find 1 + 3 + 5 + 7 + ... + 23. How many odd numbers are there?",
+          "problem_tts": "1 jod 3 jod 5 jod 7 jod teen bindu jod 23 kitna hoga? Aur kitni visham sankhyaein hain?",
+          "solution": "Odd numbers from 1 to 23: 1, 3, 5, ..., 23. Count = (23-1)/2 + 1 = 12. Sum = 12² = 144.",
+          "solution_tts": "1 se 23 tak ki visham sankhyaein: 1, 3, 5, ..., 23. Yeh 12 visham sankhyaein hain. Toh yog barabar 12 ka square, 144.",
+          "indian_context": null
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students start adding from 1, 2, 3... instead of 1, 3, 5... (confuse odd with consecutive).",
+          "misconception_hi": "Bacche 1, 2, 3 jodna shuru kar dete hain 1, 3, 5 ke bajaye — consecutive aur odd mein confuse ho jaate hain.",
+          "correction": "The pattern is only for ODD numbers: 1, 3, 5, 7, 9... (gap of 2). Not 1, 2, 3, 4... which are all consecutive numbers.",
+          "correction_tts": "Yeh pattern sirf visham sankhyaon ke liye hai: 1, 3, 5, 7, 9 — har baar 2 ka gap. 1, 2, 3, 4 nahi — woh consecutive numbers hain, visham nahi."
+        },
+        {
+          "misconception": "Students think the pattern works starting from any odd number, not just 1.",
+          "misconception_hi": "Bacche sochte hain ki yeh pattern kisi bhi odd number se shuru kar sakte hain.",
+          "correction": "The sum must start from 1. 3 + 5 + 7 = 15, which is not a perfect square. Only 1 + 3 + 5 + 7 = 16 = 4².",
+          "correction_tts": "Yog hamesha 1 se shuru hona chahiye. 3 jod 5 jod 7 barabar 15, jo perfect square nahi hai. Sirf 1 jod 3 jod 5 jod 7 barabar 16, jo 4 ka square hai."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_odd_q1",
+          "level": "easy",
+          "question": "What is 1 + 3 + 5 + 7 + 9 + 11 + 13 + 15 + 17 + 19?",
+          "question_tts": "1 jod 3 jod 5 jod 7 jod 9 jod 11 jod 13 jod 15 jod 17 jod 19 kitna hoga?",
+          "expected_answer": "100",
+          "acceptable_alternates": ["hundred", "sau", "100.0", "सौ"],
+          "answer_type": "numeric",
+          "hints": [
+            "Kitni visham sankhyaein hain? Gino.",
+            "10 visham sankhyaein hain, toh 10 ka square?"
+          ],
+          "full_solution_tts": "Yahan 10 visham sankhyaein hain. Pehli 10 visham sankhyaon ka yog barabar 10 ka square, 100."
+        },
+        {
+          "question_id": "sq_odd_q2",
+          "level": "medium",
+          "question": "Express 121 as the sum of consecutive odd numbers starting from 1.",
+          "question_tts": "121 ko 1 se shuru hone wali visham sankhyaon ke yog mein likhiye.",
+          "expected_answer": "1 + 3 + 5 + 7 + 9 + 11 + 13 + 15 + 17 + 19 + 21",
+          "acceptable_alternates": ["sum of first 11 odd numbers", "11 odd numbers", "1+3+5+7+9+11+13+15+17+19+21"],
+          "answer_type": "expression",
+          "hints": [
+            "121 kiska square hai?",
+            "11 ka square 121 hai, toh pehli 11 visham sankhyaein likhiye."
+          ],
+          "full_solution_tts": "121 barabar 11 ka square. Toh 121 barabar pehli 11 visham sankhyaon ka yog: 1 jod 3 jod 5 jod 7 jod 9 jod 11 jod 13 jod 15 jod 17 jod 19 jod 21."
+        },
+        {
+          "question_id": "sq_odd_q3",
+          "level": "hard",
+          "question": "Is 128 a perfect square? Use the odd number subtraction method to check.",
+          "question_tts": "Kya 128 ek perfect square hai? Visham sankhya ghataav vidhi se check kijiye.",
+          "expected_answer": "No, 128 is not a perfect square",
+          "acceptable_alternates": ["no", "nahi", "not perfect square", "नहीं"],
+          "answer_type": "yes_no_explain",
+          "hints": [
+            "128 se ek ek karke visham sankhyaein ghataao: 128-1=127, 127-3=124, 124-5=119...",
+            "Agar 0 milta hai toh perfect square, nahi toh nahi."
+          ],
+          "full_solution_tts": "128 se 1, 3, 5, 7... ghataate jaao. 11 baari mein 7 bachta hai, 0 nahi milta. Toh 128 perfect square nahi hai. 11 ka square 121 hai aur 12 ka square 144 — 128 inke beech hai."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Main aapko ek magic dikhaata hoon. 1 jod 3 = 4. 1 jod 3 jod 5 = 9. 1 jod 3 jod 5 jod 7 = 16. Pattern dikha? Har baar perfect square aa raha hai!",
+        "analogy": "Socho ek square bana rahe ho dots se. Pehle 1 dot. Phir 3 dots jodo — 2x2 square ban gaya. Phir 5 dots jodo — 3x3 square. Har baar ek layer jod rahe ho!",
+        "vedic_trick": null,
+        "common_teacher_phrase": "Bachcho, n visham sankhyaon ka yog = n ka square. Bas gin lo kitni hain, square kar do, answer aa gaya!",
+        "visual_cue": "Draw L-shaped additions to a growing square: 1 dot, add 3 dots in L-shape = 2×2, add 5 dots in L-shape = 3×3.",
+        "energy_moment": "Bina calculator ke bolo: 1+3+5+7+9+11+13+15+17+19+21+23+25 kitna hoga? (13 odd numbers = 13² = 169)"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_pythagorean_triplets",
+      "ncert_section": "6.4.2",
+      "concept_name": "Pythagorean Triplets",
+      "concept_name_hi": "पाइथागोरस त्रिक",
+      "definition": "A Pythagorean triplet is a set of three natural numbers (a, b, c) such that a² + b² = c². For any natural number m > 1, the formula 2m, m²-1, m²+1 generates a Pythagorean triplet. Example: m=2 gives (3, 4, 5) since 3² + 4² = 9 + 16 = 25 = 5².",
+      "definition_tts": "Pythagorean triplet teen natural numbers ka set hai jahan a ka square jod b ka square barabar c ka square hota hai. Kisi bhi number m jo 1 se bada ho, 2m, m ka square minus 1, aur m ka square plus 1 se Pythagorean triplet milta hai. Jaise m barabar 2 se 3, 4, 5 milta hai.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Verify that (3, 4, 5) is a Pythagorean triplet.",
+          "problem_tts": "Verify kijiye ki 3, 4, 5 ek Pythagorean triplet hai.",
+          "solution": "3² + 4² = 9 + 16 = 25 = 5². Yes, it's a Pythagorean triplet.",
+          "solution_tts": "3 ka square jod 4 ka square barabar 9 jod 16 barabar 25, jo 5 ka square hai. Haan, yeh Pythagorean triplet hai.",
+          "indian_context": "Ek kamre ka ek deewar 3 metre, doosri 4 metre. Diagonal kitna? 5 metre! Yeh Pythagoras ka kamaal hai."
+        },
+        {
+          "level": "medium",
+          "problem": "Find a Pythagorean triplet using m = 3.",
+          "problem_tts": "m barabar 3 lekar ek Pythagorean triplet nikaliye.",
+          "solution": "2m = 6, m²-1 = 8, m²+1 = 10. Triplet: (6, 8, 10). Check: 6²+8² = 36+64 = 100 = 10².",
+          "solution_tts": "2 guna 3 barabar 6. 3 ka square minus 1 barabar 8. 3 ka square plus 1 barabar 10. Triplet hai 6, 8, 10. Check: 6 ka square jod 8 ka square barabar 36 jod 64 barabar 100, jo 10 ka square hai.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Find a Pythagorean triplet in which one member is 12.",
+          "problem_tts": "Ek Pythagorean triplet nikaliye jismein ek member 12 ho.",
+          "solution": "Try 2m = 12, so m = 6. Then m²-1 = 35, m²+1 = 37. Triplet: (12, 35, 37). Check: 144+1225 = 1369 = 37².",
+          "solution_tts": "2m barabar 12, toh m barabar 6. m ka square minus 1 barabar 35. m ka square plus 1 barabar 37. Triplet hai 12, 35, 37. Check karo: 12 ka square jod 35 ka square barabar 144 jod 1225 barabar 1369, jo 37 ka square hai.",
+          "indian_context": null
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students think any three numbers that 'look right' are a Pythagorean triplet without checking a² + b² = c².",
+          "misconception_hi": "Bacche bina check kiye keh dete hain ki yeh triplet hai.",
+          "correction": "Always verify: calculate a² + b² and check if it equals c² (the largest number squared). For example, (3, 5, 7) is NOT a triplet because 9 + 25 = 34 ≠ 49.",
+          "correction_tts": "Hamesha verify karo: a ka square jod b ka square calculate karo aur check karo ki yeh c ka square ke barabar hai ya nahi. Jaise 3, 5, 7 triplet nahi hai kyunki 9 jod 25 barabar 34, jo 49 ke barabar nahi."
+        },
+        {
+          "misconception": "Students forget that m must be greater than 1 in the formula.",
+          "misconception_hi": "Bacche m = 1 daal dete hain formula mein.",
+          "correction": "If m = 1: 2m = 2, m²-1 = 0, m²+1 = 2. This gives (0, 2, 2) which is not a valid triplet. m must be > 1.",
+          "correction_tts": "Agar m barabar 1 rakhein toh 2m barabar 2, m ka square minus 1 barabar 0, m ka square plus 1 barabar 2. Yeh 0, 2, 2 valid triplet nahi hai. m hamesha 1 se bada hona chahiye."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_pyth_q1",
+          "level": "easy",
+          "question": "Is (5, 12, 13) a Pythagorean triplet?",
+          "question_tts": "Kya 5, 12, 13 ek Pythagorean triplet hai?",
+          "expected_answer": "Yes",
+          "acceptable_alternates": ["haan", "yes it is", "हाँ", "ha"],
+          "answer_type": "yes_no_explain",
+          "hints": [
+            "5 ka square jod 12 ka square calculate karo",
+            "25 jod 144 = 169. Kya 13 ka square 169 hai?"
+          ],
+          "full_solution_tts": "5 ka square barabar 25, 12 ka square barabar 144. 25 jod 144 barabar 169, jo 13 ka square hai. Haan, yeh Pythagorean triplet hai."
+        },
+        {
+          "question_id": "sq_pyth_q2",
+          "level": "medium",
+          "question": "Write a Pythagorean triplet whose smallest member is 8.",
+          "question_tts": "Ek Pythagorean triplet likhiye jiska sabse chhota member 8 ho.",
+          "expected_answer": "8, 15, 17",
+          "acceptable_alternates": ["(8, 15, 17)", "8 15 17"],
+          "answer_type": "triplet",
+          "hints": [
+            "2m = 8, toh m kitna hoga?",
+            "m = 4. Ab m ka square minus 1 aur m ka square plus 1 nikalo."
+          ],
+          "full_solution_tts": "2m barabar 8, toh m barabar 4. m ka square minus 1 barabar 15, m ka square plus 1 barabar 17. Triplet hai 8, 15, 17."
+        },
+        {
+          "question_id": "sq_pyth_q3",
+          "level": "hard",
+          "question": "Find a Pythagorean triplet in which one member is 20.",
+          "question_tts": "Ek Pythagorean triplet nikaaliye jismein ek member 20 ho.",
+          "expected_answer": "20, 99, 101",
+          "acceptable_alternates": ["(20, 99, 101)", "20 99 101", "20, 21, 29"],
+          "answer_type": "triplet",
+          "hints": [
+            "2m = 20 try karo, toh m = 10",
+            "m ka square minus 1 = 99, m ka square plus 1 = 101"
+          ],
+          "full_solution_tts": "2m barabar 20, toh m barabar 10. m ka square minus 1 barabar 99, m ka square plus 1 barabar 101. Triplet hai 20, 99, 101."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Aapne right angle triangle dekha hai? Uski teen bhujaon ka ek special rishta hota hai — sabse lambi bhuja ka square, baaki dono ka square ka yog hota hai!",
+        "analogy": "Ek L-shaped room socho — 3 metre aur 4 metre. Diagonal se shortcut loge toh kitna? Exactly 5 metre. 3-4-5 Pythagorean triplet hai!",
+        "vedic_trick": "Formula yaad rakhne ka trick: 2m, m²-1, m²+1. Bas m choose karo, teen numbers aa jayengi. m=2 → (3,4,5), m=3 → (5,12,13) wait... (6,8,10). Dono kaam karte hain!",
+        "common_teacher_phrase": "Bachcho, Pythagorean triplet ke liye formula hai: 2m, m ka square minus 1, m ka square plus 1. Koi bhi m lo jo 1 se bada ho!",
+        "visual_cue": "Draw a right triangle and label sides. Show that area of square on hypotenuse = sum of areas of squares on other two sides.",
+        "energy_moment": "Challenge: m = 5 se triplet nikalo 10 second mein! (10, 24, 26)"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_finding_square",
+      "ncert_section": "6.4",
+      "concept_name": "Finding the Square of a Number",
+      "concept_name_hi": "किसी संख्या का वर्ग निकालना",
+      "definition": "To find the square of a two-digit number, use the expansion: (a+b)² = a² + 2ab + b². For example, 23² = (20+3)² = 400 + 120 + 9 = 529. Special case: numbers ending in 5 use the shortcut n5² = n×(n+1) followed by 25.",
+      "definition_tts": "Do digit number ka square nikalne ke liye expansion use karo: a jod b ka whole square barabar a ka square jod 2ab jod b ka square. Jaise 23 ka square barabar 20 jod 3 ka whole square barabar 400 jod 120 jod 9 barabar 529. Special case: 5 pe khatam hone wale numbers ka shortcut hai.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find 15².",
+          "problem_tts": "15 ka square nikaliye.",
+          "solution": "For numbers ending in 5: 15² = 1×2 followed by 25 = 225.",
+          "solution_tts": "5 pe khatam hone wale numbers ka shortcut: 15 ka square ke liye, 1 ko uske agle number 2 se multiply karo, 2 milta hai. Phir 25 lagao. Answer 225.",
+          "indian_context": "Yeh Vedic Math ka trick hai — India ki purani ganit vidhya se."
+        },
+        {
+          "level": "medium",
+          "problem": "Find 32².",
+          "problem_tts": "32 ka square nikaliye.",
+          "solution": "32² = (30+2)² = 900 + 120 + 4 = 1024.",
+          "solution_tts": "32 ka square. 32 ko 30 jod 2 likho. 30 ka square 900, 2 guna 30 guna 2 barabar 120, 2 ka square 4. 900 jod 120 jod 4 barabar 1024.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Find 99².",
+          "problem_tts": "99 ka square nikaliye.",
+          "solution": "99² = (100-1)² = 10000 - 200 + 1 = 9801.",
+          "solution_tts": "99 ka square. 99 ko 100 minus 1 likho. 100 ka square 10000, minus 2 guna 100 guna 1 matlab minus 200, jod 1 ka square matlab 1. 10000 minus 200 jod 1 barabar 9801.",
+          "indian_context": "Agar 100 rotis se 1 roti kam hai, toh square bhi 10000 se thoda kam — 9801."
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students compute (a+b)² as a² + b² instead of a² + 2ab + b², forgetting the middle term 2ab.",
+          "misconception_hi": "Bacche (a+b)² ko a² + b² likh dete hain, beech wala 2ab bhool jaate hain.",
+          "correction": "(a+b)² = a² + 2ab + b², not a² + b². The 2ab term is crucial. For 23²: without it you'd get 400+9=409, but correct answer is 400+120+9=529.",
+          "correction_tts": "a jod b ka whole square barabar a ka square jod 2ab jod b ka square. 2ab bhoolna sabse badi galti hai. 23 ka square mein, bina 2ab ke 409 aayega, lekin sahi answer 529 hai."
+        },
+        {
+          "misconception": "Students apply the 'ending in 5' shortcut incorrectly, thinking 25² = 2×3 then 25 = 625, confusing which digits to use.",
+          "misconception_hi": "5 wale trick mein galat digits use kar lete hain.",
+          "correction": "For n5²: take the digit(s) before 5, multiply by (that digit + 1), then append 25. So 25²: 2×3 = 6, append 25 = 625. For 35²: 3×4 = 12, append 25 = 1225.",
+          "correction_tts": "n5 ka square ke liye: 5 se pehle ka digit lo, usse uske agle number se multiply karo, phir 25 laga do. 25 ka square: 2 guna 3 barabar 6, phir 25. Answer 625. 35 ka square: 3 guna 4 barabar 12, phir 25. Answer 1225."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_find_q1",
+          "level": "easy",
+          "question": "Find 25².",
+          "question_tts": "25 ka square nikaliye.",
+          "expected_answer": "625",
+          "acceptable_alternates": ["six twenty five", "625.0"],
+          "answer_type": "numeric",
+          "hints": [
+            "5 pe khatam hone wala number hai — shortcut use karo",
+            "2 ko 3 se multiply karo, phir 25 lagao"
+          ],
+          "full_solution_tts": "25 ka square: 2 guna 3 barabar 6, phir 25 lagao. Answer 625."
+        },
+        {
+          "question_id": "sq_find_q2",
+          "level": "medium",
+          "question": "Find 46² using the expansion method.",
+          "question_tts": "46 ka square expansion method se nikaliye.",
+          "expected_answer": "2116",
+          "acceptable_alternates": ["2116.0"],
+          "answer_type": "numeric",
+          "hints": [
+            "46 ko 40 jod 6 likho",
+            "40 ka square jod 2 guna 40 guna 6 jod 6 ka square"
+          ],
+          "full_solution_tts": "46 ka square. 40 jod 6 ka whole square. 40 ka square 1600, 2 guna 40 guna 6 barabar 480, 6 ka square 36. 1600 jod 480 jod 36 barabar 2116."
+        },
+        {
+          "question_id": "sq_find_q3",
+          "level": "hard",
+          "question": "Find 95² using the shortcut for numbers ending in 5.",
+          "question_tts": "95 ka square shortcut se nikaliye.",
+          "expected_answer": "9025",
+          "acceptable_alternates": ["9025.0"],
+          "answer_type": "numeric",
+          "hints": [
+            "5 se pehle 9 hai. 9 ko uske agle number se multiply karo.",
+            "9 guna 10 = 90. Phir 25 lagao."
+          ],
+          "full_solution_tts": "95 ka square: 9 guna 10 barabar 90, phir 25 lagao. Answer 9025."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Aapko lagta hai bade numbers ka square nikalna mushkil hai? Main aapko ek trick dikhata hoon jisse 2 second mein answer aa jayega!",
+        "analogy": "Expansion method aise samjho: ek bada square chhote squares aur rectangles mein toot jaata hai. 23 ka square = ek 20x20 square + do 20x3 rectangles + ek 3x3 chhota square.",
+        "vedic_trick": "5 pe khatam hone wala number ka square: pehle digit ko uske agle number se multiply karo, phir 25 laga do. 45² = 4×5 then 25 = 2025. Done!",
+        "common_teacher_phrase": "Bachcho, (a+b) ka whole square mein teen cheezein hain: a ka square, 2ab, aur b ka square. Beech wala 2ab mat bhoolo!",
+        "visual_cue": "Draw a square divided into 4 parts: a², ab, ab, b². Show how they add up to (a+b)².",
+        "energy_moment": "Speed round: 15², 25², 35², 45², 55² — sabke jawab 3 second mein! (225, 625, 1225, 2025, 3025)"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_root_prime_factorisation",
+      "ncert_section": "6.5.3",
+      "concept_name": "Square Root by Prime Factorisation",
+      "concept_name_hi": "अभाज्य गुणनखंड विधि से वर्गमूल",
+      "definition": "To find the square root by prime factorisation: (1) Find the prime factorisation of the number. (2) Group identical prime factors into pairs. (3) Take one factor from each pair. (4) Multiply them together — the product is the square root. If any prime factor cannot be paired, the number is not a perfect square.",
+      "definition_tts": "Abhajya gunankhand vidhi se vargmool nikalne ke liye: pehle, number ka prime factorisation karo. Doosra, same prime factors ki jodi banao. Teesra, har jodi se ek factor lo. Chautha, unhe multiply karo — yahi vargmool hai. Agar koi factor bina jodi ka bach jaaye, toh number perfect square nahi hai.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find √144 by prime factorisation.",
+          "problem_tts": "144 ka vargmool prime factorisation se nikaliye.",
+          "solution": "144 = 2×2×2×2×3×3 = (2×2)×(2×2)×(3×3). Take one from each pair: 2×2×3 = 12. So √144 = 12.",
+          "solution_tts": "144 barabar 2 guna 2 guna 2 guna 2 guna 3 guna 3. Jodiyan banao: 2 ki jodi, 2 ki jodi, 3 ki jodi. Har jodi se ek lo: 2 guna 2 guna 3 barabar 12. Toh 144 ka vargmool 12 hai.",
+          "indian_context": "Jaise 144 toffees ko 12 bacchon mein 12-12 baant do — perfect barabar!"
+        },
+        {
+          "level": "medium",
+          "problem": "Find √1764 by prime factorisation.",
+          "problem_tts": "1764 ka vargmool prime factorisation se nikaliye.",
+          "solution": "1764 = 2×2×3×3×7×7. Pairs: (2,2), (3,3), (7,7). √1764 = 2×3×7 = 42.",
+          "solution_tts": "1764 barabar 2 guna 2 guna 3 guna 3 guna 7 guna 7. Jodiyan: 2 ki jodi, 3 ki jodi, 7 ki jodi. Har jodi se ek: 2 guna 3 guna 7 barabar 42. Toh 1764 ka vargmool 42 hai.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Find the smallest number by which 252 must be multiplied to get a perfect square. Also find the square root of the resulting number.",
+          "problem_tts": "252 ko kis sabse chhoti sankhya se multiply karein ki perfect square ban jaaye? Aur us perfect square ka vargmool bhi bataiye.",
+          "solution": "252 = 2×2×3×3×7. The factor 7 is unpaired. Multiply by 7: 252×7 = 1764 = 2²×3²×7². √1764 = 2×3×7 = 42.",
+          "solution_tts": "252 barabar 2 guna 2 guna 3 guna 3 guna 7. 7 bina jodi ka bach gaya. 7 se multiply karo: 252 guna 7 barabar 1764. Ab 1764 perfect square hai. Iska vargmool: 2 guna 3 guna 7 barabar 42.",
+          "indian_context": "Jaise 252 tiles hain lekin perfect square nahi ban raha. 7 aur tiles khareed lo — ab 1764 tiles se 42x42 perfect square floor ban jayega!"
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students multiply ALL prime factors instead of taking one from each pair.",
+          "misconception_hi": "Bacche saare prime factors multiply kar dete hain jodi se ek lene ke bajaye.",
+          "correction": "For square root, take ONE from each PAIR. 144 = 2×2×2×2×3×3. Don't multiply all six factors. Take one 2 from first pair, one 2 from second pair, one 3 from third pair: 2×2×3 = 12.",
+          "correction_tts": "Vargmool ke liye har jodi se sirf EK factor lena hai. 144 mein 6 prime factors hain, lekin 3 jodiyan hain. Har jodi se ek: 2 guna 2 guna 3 barabar 12."
+        },
+        {
+          "misconception": "Students don't recognize when a factor is unpaired and incorrectly claim the number is a perfect square.",
+          "misconception_hi": "Bacche bina jodi wale factor ko ignore kar dete hain aur galat answer de dete hain.",
+          "correction": "If ANY prime factor is left unpaired, the number is NOT a perfect square. You must multiply or divide by that factor to make it a perfect square.",
+          "correction_tts": "Agar koi bhi prime factor bina jodi ka hai, toh number perfect square NAHI hai. Us factor se multiply ya divide karke perfect square banana padega."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_pf_q1",
+          "level": "easy",
+          "question": "Find √324 by prime factorisation.",
+          "question_tts": "324 ka vargmool prime factorisation se nikaliye.",
+          "expected_answer": "18",
+          "acceptable_alternates": ["eighteen", "अठारह", "athaarah"],
+          "answer_type": "numeric",
+          "hints": [
+            "324 ko prime factors mein todo: 2 se divide karo phir 3 se",
+            "324 = 2×2×3×3×3×3. Jodiyan banao."
+          ],
+          "full_solution_tts": "324 barabar 2 guna 2 guna 3 guna 3 guna 3 guna 3. Jodiyan: 2 ki jodi, 3 ki jodi, 3 ki jodi. Har jodi se ek: 2 guna 3 guna 3 barabar 18."
+        },
+        {
+          "question_id": "sq_pf_q2",
+          "level": "medium",
+          "question": "Find the smallest number by which 180 must be multiplied to make it a perfect square.",
+          "question_tts": "180 ko kis sabse chhoti sankhya se multiply karein ki perfect square ban jaaye?",
+          "expected_answer": "5",
+          "acceptable_alternates": ["five", "paanch", "पाँच"],
+          "answer_type": "numeric",
+          "hints": [
+            "180 ka prime factorisation karo",
+            "180 = 2×2×3×3×5. Kaun sa factor bina jodi ka hai?"
+          ],
+          "full_solution_tts": "180 barabar 2 guna 2 guna 3 guna 3 guna 5. 2 ki jodi ban gayi, 3 ki jodi ban gayi, lekin 5 akela hai. 5 se multiply karo toh 900 perfect square ban jayega."
+        },
+        {
+          "question_id": "sq_pf_q3",
+          "level": "hard",
+          "question": "Find the smallest number by which 2028 must be divided to make it a perfect square. Also find the square root.",
+          "question_tts": "2028 ko kis sabse chhoti sankhya se divide karein ki perfect square ban jaaye? Aur vargmool bhi bataiye.",
+          "expected_answer": "Divide by 3, square root is 26",
+          "acceptable_alternates": ["3", "3, 26", "3 and 26"],
+          "answer_type": "multi_part",
+          "hints": [
+            "2028 ka prime factorisation karo",
+            "2028 = 2×2×3×13×13. Kaun sa factor bina jodi ka hai?"
+          ],
+          "full_solution_tts": "2028 barabar 2 guna 2 guna 3 guna 13 guna 13. 2 ki jodi aur 13 ki jodi ban gayi, lekin 3 akela hai. 3 se divide karo: 2028 baata 3 barabar 676. 676 ka vargmool: 2 guna 13 barabar 26."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Prime factorisation — yeh aise hai jaise kisi number ko uske sabse chhote building blocks mein tod rahe ho. Phir jodiyan banao, har jodi se ek lo — vargmool mil gaya!",
+        "analogy": "Sochiye number ek genda hai aur prime factors uski pattiyan hain. Vargmool ke liye pattiyon ki jodiyan banao — agar sab jod gaye toh perfect square, agar ek akeli bach gayi toh nahi.",
+        "vedic_trick": null,
+        "common_teacher_phrase": "Bachcho, pehle factor tree banao, phir jodiyan banao, phir har jodi se ek lo aur multiply karo. Bas!",
+        "visual_cue": "Draw factor tree on board. Circle pairs with same color. Take one from each colored pair.",
+        "energy_moment": "Kaun sabse pehle 784 ka factor tree bana ke vargmool nikalega? (784 = 2⁴×7² → √784 = 2²×7 = 28)"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_root_long_division",
+      "ncert_section": "6.5.4",
+      "concept_name": "Square Root by Long Division Method",
+      "concept_name_hi": "लंबी विभाजन विधि से वर्गमूल",
+      "definition": "The long division method finds square roots of large numbers and decimals. Steps: (1) Pair digits from right (for decimals, pair from decimal point both ways). (2) Find largest number whose square ≤ leftmost pair. (3) Subtract, bring down next pair. (4) Double the quotient, find next digit. (5) Repeat until done.",
+      "definition_tts": "Lambi vibhajan vidhi se bade numbers aur decimals ka vargmool nikaal sakte hain. Pehle, right side se do-do digits ki jodi banao. Phir, sabse bade number ka square jo pehli jodi se chhota ya barabar ho, woh likho. Ghatao, agli jodi neeche lao. Bhagfal ko double karo, agli digit dhundho. Yeh process repeat karo.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square", "math_8_ch6_root_prime_factorisation"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find √529 by long division.",
+          "problem_tts": "529 ka vargmool lambi vibhajan vidhi se nikaliye.",
+          "solution": "Pair: 5|29. √5 ≈ 2 (2²=4). Subtract: 5-4=1. Bring down 29→129. Double 2→4_. 43×3=129. √529 = 23.",
+          "solution_tts": "529 mein jodiyan: 5 aur 29. 5 ke liye sabse bada number jiska square 5 se chhota ho — woh 2 hai, 2 ka square 4. 5 minus 4 barabar 1. 29 neeche lao, 129 bana. Bhagfal 2 ka double 4, blank ke saath 43. 43 guna 3 barabar 129. Toh 529 ka vargmool 23 hai.",
+          "indian_context": null
+        },
+        {
+          "level": "medium",
+          "problem": "Find √2304 by long division.",
+          "problem_tts": "2304 ka vargmool lambi vibhajan vidhi se nikaliye.",
+          "solution": "Pair: 23|04. √23 ≈ 4 (4²=16). 23-16=7, bring down 04→704. Double 4→8_. 88×8=704. √2304 = 48.",
+          "solution_tts": "2304 mein jodiyan: 23 aur 04. 23 ke liye 4, kyunki 4 ka square 16. 23 minus 16 barabar 7. 04 neeche lao, 704 bana. 4 ka double 8, blank ke saath 88. 88 guna 8 barabar 704. Toh 2304 ka vargmool 48 hai.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Find the least number that must be subtracted from 402 to make it a perfect square.",
+          "problem_tts": "402 mein se kam se kam kitna ghatayein ki perfect square ban jaaye?",
+          "solution": "By long division on 402: we get quotient 20 with remainder 2. So subtract 2: 402-2 = 400 = 20².",
+          "solution_tts": "402 ka vargmool long division se nikaalein toh bhagfal 20 aata hai aur shesh 2 bachta hai. Toh 402 mein se 2 ghatao: 402 minus 2 barabar 400, jo 20 ka square hai.",
+          "indian_context": "402 tiles hain lekin 2 extra hain — 2 hata do, toh 400 tiles se 20x20 perfect square ban jayega."
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students pair digits from left to right instead of right to left.",
+          "misconception_hi": "Bacche digits ki jodi left se right banate hain, right se left ke bajaye.",
+          "correction": "Always pair from the units digit going left. For 2304: pair as 23|04, not 2|30|4. For 3-digit numbers like 529: pair as 5|29.",
+          "correction_tts": "Hamesha right side se, matlab ones digit se left ki taraf jodiyan banao. 2304 mein: 23 aur 04, na ki 2 aur 30 aur 4."
+        },
+        {
+          "misconception": "Students forget to double the quotient before finding the next digit.",
+          "misconception_hi": "Bacche bhagfal double karna bhool jaate hain.",
+          "correction": "After each step, the quotient so far must be doubled to form the beginning of the next divisor. This is a critical step — without it, the entire calculation goes wrong.",
+          "correction_tts": "Har step ke baad, ab tak ke bhagfal ko double karna zaroori hai — yeh agla divisor ka shuruat hoga. Yeh bhoolne se poori calculation galat ho jayegi."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_ld_q1",
+          "level": "easy",
+          "question": "Find √484 by long division.",
+          "question_tts": "484 ka vargmool long division se nikaliye.",
+          "expected_answer": "22",
+          "acceptable_alternates": ["twenty two", "baees", "बाईस"],
+          "answer_type": "numeric",
+          "hints": [
+            "Jodiyan: 4 aur 84",
+            "4 ke liye 2 (2²=4). Double karke 4_. 42×2 = 84."
+          ],
+          "full_solution_tts": "484 mein jodiyan: 4 aur 84. 4 ke liye 2, kyunki 2 ka square 4. 4 minus 4 barabar 0. 84 neeche lao. 2 ka double 4, blank ke saath 42. 42 guna 2 barabar 84. Toh 484 ka vargmool 22 hai."
+        },
+        {
+          "question_id": "sq_ld_q2",
+          "level": "medium",
+          "question": "Find √7056 by long division.",
+          "question_tts": "7056 ka vargmool long division se nikaliye.",
+          "expected_answer": "84",
+          "acceptable_alternates": ["eighty four", "chaurasee", "चौरासी"],
+          "answer_type": "numeric",
+          "hints": [
+            "Jodiyan: 70 aur 56",
+            "70 ke liye 8 (8²=64). 70-64=6. 56 neeche lao: 656. Double 8 = 16_."
+          ],
+          "full_solution_tts": "7056 mein jodiyan: 70 aur 56. 70 ke liye 8, kyunki 8 ka square 64. 70 minus 64 barabar 6. 56 neeche lao, 656 bana. 8 ka double 16, blank ke saath 164. 164 guna 4 barabar 656. Toh 7056 ka vargmool 84 hai."
+        },
+        {
+          "question_id": "sq_ld_q3",
+          "level": "hard",
+          "question": "Find the least number that must be added to 525 to make it a perfect square.",
+          "question_tts": "525 mein kam se kam kitna jodein ki perfect square ban jaaye?",
+          "expected_answer": "4",
+          "acceptable_alternates": ["four", "chaar", "चार"],
+          "answer_type": "numeric",
+          "hints": [
+            "Long division se 525 ka vargmool nikalo — shesh kitna aata hai?",
+            "Bhagfal 22 aata hai, shesh 41. Agla perfect square (23)² = 529. Toh 529-525 = ?"
+          ],
+          "full_solution_tts": "525 ka long division karo toh 22 aata hai shesh 41 ke saath. 22 ka square 484, 23 ka square 529. 525 ko 529 banana hai, toh 529 minus 525 barabar 4 jodna hoga."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Prime factorisation se bade numbers ka vargmool nikalna mushkil hai. Isliye long division method aata hai — step by step, koi bhi bada number crack kar sakte ho!",
+        "analogy": "Long division method aise hai jaise ek puzzle solve kar rahe ho — ek ek piece fit karte jao, answer banta jayega.",
+        "vedic_trick": "Pairing ka shortcut: right se count karo. 4 digits = 2 pairs = 2 digit answer. 6 digits = 3 pairs = 3 digit answer. Toh answer kitne digit ka hoga pehle se pata chal jaata hai!",
+        "common_teacher_phrase": "Bachcho, right se jodi banao, left se divide shuru karo, har baar double karo. Teen steps yaad rakhiye!",
+        "visual_cue": "Show the long division format on board with color-coded steps: RED for pairing, BLUE for finding digit, GREEN for doubling.",
+        "energy_moment": "Board pe aao aur √1296 long division se nikalo. Sabse pehle kaun karega? (Answer: 36)"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_root_repeated_subtraction",
+      "ncert_section": "6.5.2",
+      "concept_name": "Square Root by Repeated Subtraction",
+      "concept_name_hi": "बारम्बार घटाव विधि से वर्गमूल",
+      "definition": "Since the sum of first n odd numbers is n², we can find the square root by subtracting consecutive odd numbers (1, 3, 5, 7, ...) from the number until we reach 0. The count of subtractions gives the square root. If we never reach exactly 0, the number is not a perfect square.",
+      "definition_tts": "Kyunki pehli n visham sankhyaon ka yog n ka square hota hai, hum vargmool nikal sakte hain lagaataar visham sankhyaein ghatake — 1, 3, 5, 7 — jab tak 0 na aa jaaye. Kitni baar ghataaya, woh vargmool hai. Agar 0 na aaye toh perfect square nahi hai.",
+      "prerequisite_concepts": ["math_8_ch6_odd_sum_pattern"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find √36 by repeated subtraction.",
+          "problem_tts": "36 ka vargmool baarbaar ghatav vidhi se nikaliye.",
+          "solution": "36-1=35, 35-3=32, 32-5=27, 27-7=20, 20-9=11, 11-11=0. We subtracted 6 times. √36 = 6.",
+          "solution_tts": "36 minus 1 barabar 35, minus 3 barabar 32, minus 5 barabar 27, minus 7 barabar 20, minus 9 barabar 11, minus 11 barabar 0. Humne 6 baar ghataaya. Toh 36 ka vargmool 6 hai.",
+          "indian_context": null
+        },
+        {
+          "level": "medium",
+          "problem": "Find √81 by repeated subtraction.",
+          "problem_tts": "81 ka vargmool baarbaar ghatav vidhi se nikaliye.",
+          "solution": "81-1=80, -3=77, -5=72, -7=65, -9=56, -11=45, -13=32, -15=17, -17=0. Count = 9. √81 = 9.",
+          "solution_tts": "81 minus 1, 3, 5, 7, 9, 11, 13, 15, 17 ghatate jaao. 9 baar mein 0 aaya. Toh 81 ka vargmool 9 hai.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Using repeated subtraction, check if 50 is a perfect square.",
+          "problem_tts": "Baarbaar ghatav vidhi se check kijiye ki 50 perfect square hai ya nahi.",
+          "solution": "50-1=49, -3=46, -5=41, -7=34, -9=25, -11=14, -13=1, -15=negative. We never hit 0. So 50 is NOT a perfect square.",
+          "solution_tts": "50 se 1, 3, 5, 7, 9, 11, 13 ghataao. 13 ghataane ke baad 1 bachta hai. 15 ghataane se negative ho jayega. Kabhi 0 nahi aaya. Toh 50 perfect square nahi hai.",
+          "indian_context": null
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students subtract the same odd number repeatedly instead of consecutive odd numbers.",
+          "misconception_hi": "Bacche ek hi visham sankhya baar baar ghata dete hain, lagaataar visham sankhyaein nahi ghataate.",
+          "correction": "You must subtract increasing odd numbers: 1, then 3, then 5, then 7... Each subtraction uses the NEXT odd number, not the same one.",
+          "correction_tts": "Aapko badhti hui visham sankhyaein ghataani hain: pehle 1, phir 3, phir 5, phir 7. Har baar AGLA odd number, wahi nahi."
+        },
+        {
+          "misconception": "Students think this method works efficiently for large numbers.",
+          "misconception_hi": "Bacche sochte hain yeh method bade numbers ke liye bhi acha hai.",
+          "correction": "Repeated subtraction is only practical for small numbers. For √10000, you'd need 100 subtractions! Use prime factorisation or long division for large numbers.",
+          "correction_tts": "Yeh method sirf chhote numbers ke liye practical hai. 10000 ka vargmool ke liye 100 baar ghataana padega! Bade numbers ke liye prime factorisation ya long division use karo."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_rs_q1",
+          "level": "easy",
+          "question": "Find √49 by repeated subtraction.",
+          "question_tts": "49 ka vargmool baarbaar ghatav se nikaliye.",
+          "expected_answer": "7",
+          "acceptable_alternates": ["seven", "saat", "सात"],
+          "answer_type": "numeric",
+          "hints": [
+            "49 se 1, 3, 5, 7... ghataate jaao",
+            "49-1=48, 48-3=45, 45-5=40... jab tak 0 na aaye ginte jao"
+          ],
+          "full_solution_tts": "49 minus 1 barabar 48, minus 3 barabar 45, minus 5 barabar 40, minus 7 barabar 33, minus 9 barabar 24, minus 11 barabar 13, minus 13 barabar 0. 7 baar mein 0 aaya. Toh 49 ka vargmool 7 hai."
+        },
+        {
+          "question_id": "sq_rs_q2",
+          "level": "medium",
+          "question": "Find √100 by repeated subtraction.",
+          "question_tts": "100 ka vargmool baarbaar ghatav se nikaliye.",
+          "expected_answer": "10",
+          "acceptable_alternates": ["ten", "das", "दस"],
+          "answer_type": "numeric",
+          "hints": [
+            "100 se consecutive odd numbers ghataate jaao",
+            "Kitni baar 0 aane mein laga — woh count hi vargmool hai"
+          ],
+          "full_solution_tts": "100 se 1, 3, 5, 7, 9, 11, 13, 15, 17, 19 ghataao. 10 baar mein 0 aaya. Toh 100 ka vargmool 10 hai."
+        },
+        {
+          "question_id": "sq_rs_q3",
+          "level": "hard",
+          "question": "Find √169 by repeated subtraction.",
+          "question_tts": "169 ka vargmool baarbaar ghatav se nikaliye.",
+          "expected_answer": "13",
+          "acceptable_alternates": ["thirteen", "terah", "तेरह"],
+          "answer_type": "numeric",
+          "hints": [
+            "169 se 1, 3, 5, 7... ghataate jaao jab tak 0 na aaye",
+            "Ginti rakho — 13 baar mein 0 aayega"
+          ],
+          "full_solution_tts": "169 se 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25 ghataao. 13 baar mein 0 aaya. Toh 169 ka vargmool 13 hai."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Yaad hai pehle humne seekha tha ki odd numbers jodne se square numbers bante hain? Ab ulta karte hain — odd numbers ghataate jaao, vargmool mil jayega!",
+        "analogy": "Jaise ek pyramid ke blocks hata rahe ho — pehle 1, phir 3, phir 5. Jab sab blocks hat jaayein (0 bachhe), pyramid ki height pata chal gayi!",
+        "vedic_trick": null,
+        "common_teacher_phrase": "Bachcho, yeh method chhote numbers ke liye best hai. 1, 3, 5, 7 ghataate jao, 0 aaye toh perfect square, nahi aaye toh nahi!",
+        "visual_cue": "Draw staircase: remove 1 block, then 3, then 5... show the square shrinking layer by layer.",
+        "energy_moment": "Race: √25 baarbaar ghatav se kaun pehle nikalega? (25-1-3-5-7-9=0, 5 baar, answer 5!)"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_make_perfect_square",
+      "ncert_section": "6.2",
+      "concept_name": "Making a Number a Perfect Square",
+      "concept_name_hi": "किसी संख्या को पूर्ण वर्ग बनाना",
+      "definition": "To make a number a perfect square: (1) Find its prime factorisation. (2) Identify unpaired prime factors. (3) To make it a perfect square by multiplication: multiply by the product of unpaired factors. (4) To make it a perfect square by division: divide by the product of unpaired factors.",
+      "definition_tts": "Kisi number ko perfect square banane ke liye: pehle, prime factorisation karo. Bina jodi wale factors dhundho. Multiply karke perfect square banana ho toh bina jodi wale factors se multiply karo. Divide karke banana ho toh bina jodi wale factors se divide karo.",
+      "prerequisite_concepts": ["math_8_ch6_root_prime_factorisation"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find the smallest number by which 48 must be multiplied to get a perfect square.",
+          "problem_tts": "48 ko kis sabse chhoti sankhya se multiply karein ki perfect square mil jaaye?",
+          "solution": "48 = 2×2×2×2×3. Factor 3 is unpaired. Multiply by 3: 48×3 = 144 = 12².",
+          "solution_tts": "48 barabar 2 guna 2 guna 2 guna 2 guna 3. 3 bina jodi ka hai. 3 se multiply karo: 48 guna 3 barabar 144, jo 12 ka square hai.",
+          "indian_context": "48 tiles hain — 3 aur khareed lo, toh 144 tiles se 12x12 perfect square floor ban jayega!"
+        },
+        {
+          "level": "medium",
+          "problem": "Find the smallest number by which 2925 must be divided to get a perfect square.",
+          "problem_tts": "2925 ko kis sabse chhoti sankhya se divide karein ki perfect square mil jaaye?",
+          "solution": "2925 = 3×3×5×5×13. Factor 13 is unpaired. Divide by 13: 2925÷13 = 225 = 15².",
+          "solution_tts": "2925 barabar 3 guna 3 guna 5 guna 5 guna 13. 13 bina jodi ka hai. 13 se divide karo: 2925 baata 13 barabar 225, jo 15 ka square hai.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Find the smallest square number divisible by 8, 15, and 20.",
+          "problem_tts": "8, 15, aur 20 se vibhajya sabse chhoti varg sankhya konsi hai?",
+          "solution": "LCM(8,15,20) = 120 = 2³×3×5. Unpaired: one 2, one 3, one 5. Multiply by 2×3×5=30. 120×30 = 3600 = 60².",
+          "solution_tts": "8, 15, aur 20 ka LCM 120 hai. 120 barabar 2 guna 2 guna 2 guna 3 guna 5. Bina jodi: ek 2, ek 3, ek 5. 2 guna 3 guna 5 barabar 30 se multiply karo. 120 guna 30 barabar 3600, jo 60 ka square hai.",
+          "indian_context": null
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students multiply by the square of the unpaired factor instead of just the factor itself.",
+          "misconception_hi": "Bacche bina jodi wale factor ka square multiply kar dete hain, sirf factor nahi.",
+          "correction": "You only need ONE more of the unpaired factor to complete the pair. If 7 is unpaired, multiply by 7 (not 49).",
+          "correction_tts": "Aapko sirf EK aur chahiye jodi poori karne ke liye. Agar 7 akela hai, toh 7 se multiply karo, 49 se nahi."
+        },
+        {
+          "misconception": "Students confuse when to multiply vs when to divide.",
+          "misconception_hi": "Bacche confuse ho jaate hain ki kab multiply karna hai aur kab divide.",
+          "correction": "If the question says 'multiplied to get a perfect square', multiply by unpaired factors. If it says 'divided', divide by unpaired factors. Read the question carefully!",
+          "correction_tts": "Agar sawaal mein 'multiply' likha hai toh bina jodi wale factors se multiply karo. 'Divide' likha hai toh divide karo. Sawaal dhyaan se padho!"
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_mps_q1",
+          "level": "easy",
+          "question": "Find the smallest number by which 72 must be multiplied to get a perfect square.",
+          "question_tts": "72 ko kis sabse chhoti sankhya se multiply karein ki perfect square ban jaaye?",
+          "expected_answer": "2",
+          "acceptable_alternates": ["two", "do", "दो"],
+          "answer_type": "numeric",
+          "hints": [
+            "72 ka prime factorisation karo",
+            "72 = 2×2×2×3×3. Kaun sa factor bina jodi ka hai?"
+          ],
+          "full_solution_tts": "72 barabar 2 guna 2 guna 2 guna 3 guna 3. 2 ki do jodiyan ban jaati hain lekin ek 2 akela bach jaata hai. 2 se multiply karo: 72 guna 2 barabar 144, jo 12 ka square hai."
+        },
+        {
+          "question_id": "sq_mps_q2",
+          "level": "medium",
+          "question": "Find the smallest number by which 396 must be divided to get a perfect square.",
+          "question_tts": "396 ko kis sabse chhoti sankhya se divide karein ki perfect square ban jaaye?",
+          "expected_answer": "11",
+          "acceptable_alternates": ["eleven", "gyaarah", "ग्यारह"],
+          "answer_type": "numeric",
+          "hints": [
+            "396 ka prime factorisation karo",
+            "396 = 2×2×3×3×11. Kaun sa factor bina jodi ka hai?"
+          ],
+          "full_solution_tts": "396 barabar 2 guna 2 guna 3 guna 3 guna 11. 11 bina jodi ka hai. 11 se divide karo: 396 baata 11 barabar 36, jo 6 ka square hai."
+        },
+        {
+          "question_id": "sq_mps_q3",
+          "level": "hard",
+          "question": "Find the smallest square number that is divisible by each of 6, 9, and 15.",
+          "question_tts": "6, 9, aur 15 se vibhajya sabse chhoti varg sankhya konsi hai?",
+          "expected_answer": "900",
+          "acceptable_alternates": ["nine hundred", "nau sau", "नौ सौ"],
+          "answer_type": "numeric",
+          "hints": [
+            "Pehle LCM nikalo: LCM(6,9,15) = ?",
+            "LCM = 90 = 2×3²×5. Bina jodi wale factors se multiply karo."
+          ],
+          "full_solution_tts": "6, 9, aur 15 ka LCM 90 hai. 90 barabar 2 guna 3 guna 3 guna 5. 2 aur 5 bina jodi ke hain. 2 guna 5 barabar 10 se multiply karo. 90 guna 10 barabar 900, jo 30 ka square hai."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Sochiye aapke paas 252 tiles hain — perfect square floor banana hai lekin ban nahi raha. Kitni aur tiles chahiye? Prime factorisation se pata chalega!",
+        "analogy": "Bina jodi wale factor ko aise samjho jaise ek pair mein ek joota missing hai. Doosra joota laao (multiply) ya akela joota hata do (divide) — dono se problem solve!",
+        "vedic_trick": null,
+        "common_teacher_phrase": "Factor tree banao, jodiyan banao, akela wala dhundho — bas wahi multiply ya divide karna hai!",
+        "visual_cue": "Show factor tree with paired factors circled together. Highlight the lonely unpaired factor in red.",
+        "energy_moment": "1008 ko perfect square banao — kya multiply karoge? (1008 = 2⁴×3²×7, multiply by 7, answer 7056 = 84²)"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_root_decimals",
+      "ncert_section": "6.6",
+      "concept_name": "Square Root of Decimals",
+      "concept_name_hi": "दशमलव संख्याओं का वर्गमूल",
+      "definition": "To find the square root of a decimal number using long division: (1) Make pairs of digits — from decimal point leftward for the integer part, and rightward for the decimal part. (2) Add a zero if the decimal part has odd number of digits. (3) Apply the long division method. (4) Place the decimal point in the answer when you start using decimal pairs.",
+      "definition_tts": "Dashmalav sankhyaon ka vargmool nikalne ke liye: decimal point se left mein integer part ki jodiyan banao, aur right mein decimal part ki jodiyan. Agar decimal part mein odd digits hain toh ek zero jodo. Phir long division method lagao. Jab decimal wali jodiyan use karna shuru karein toh answer mein decimal point lagao.",
+      "prerequisite_concepts": ["math_8_ch6_root_long_division"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find √2.56.",
+          "problem_tts": "2 dashmalav 56 ka vargmool nikaliye.",
+          "solution": "Pairs: 2|.56. Integer: 2, decimal: 56. √2 ≈ 1 (1²=1), remainder 1. Bring 56: 156. Double 1→2_. 26×6=156. √2.56 = 1.6.",
+          "solution_tts": "2 dashmalav 56 mein jodiyan: 2 aur 56. 2 ke liye 1, kyunki 1 ka square 1. Shesh 1. 56 neeche lao, 156 bana. Decimal point lagao. 1 ka double 2, blank ke saath 26. 26 guna 6 barabar 156. Toh 2 dashmalav 56 ka vargmool 1 dashmalav 6 hai.",
+          "indian_context": null
+        },
+        {
+          "level": "medium",
+          "problem": "Find √0.0016.",
+          "problem_tts": "0 dashmalav 0016 ka vargmool nikaliye.",
+          "solution": "Pairs from decimal: 00|16. √00=0, bring 16. 4²=16. √0.0016 = 0.04.",
+          "solution_tts": "0 dashmalav 0016 mein decimal ke baad jodiyan: 00 aur 16. 00 ke liye 0. 16 neeche lao. 4 ka square 16. Toh 0 dashmalav 0016 ka vargmool 0 dashmalav 04 hai.",
+          "indian_context": null
+        },
+        {
+          "level": "hard",
+          "problem": "Find √7.29.",
+          "problem_tts": "7 dashmalav 29 ka vargmool nikaliye.",
+          "solution": "Pairs: 7|.29. √7 ≈ 2 (2²=4), remainder 3. Bring 29: 329. Double 2→4_. 47×7=329. √7.29 = 2.7.",
+          "solution_tts": "7 dashmalav 29 mein jodiyan: 7 aur 29. 7 ke liye 2, kyunki 2 ka square 4. Shesh 3. 29 neeche lao, 329 bana. Decimal point lagao. 2 ka double 4, blank ke saath 47. 47 guna 7 barabar 329. Toh 7 dashmalav 29 ka vargmool 2 dashmalav 7 hai.",
+          "indian_context": null
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students pair decimal digits from left to right (wrong direction for decimal part).",
+          "misconception_hi": "Bacche decimal part mein bhi left se right jodiyan banate hain.",
+          "correction": "For the decimal part, pair from the decimal point going RIGHT. For 2.56: integer pairs from right: 2. Decimal pairs from left of decimal going right: 56. If odd digits in decimal, add zero at end.",
+          "correction_tts": "Decimal part mein decimal point se RIGHT ki taraf jodiyan banao. 2 dashmalav 56 mein: integer part 2, decimal part 56. Agar decimal mein odd digits hain toh end mein zero lagao."
+        },
+        {
+          "misconception": "Students forget to place the decimal point in the answer.",
+          "misconception_hi": "Bacche answer mein decimal point lagana bhool jaate hain.",
+          "correction": "When you start bringing down decimal pairs, place the decimal point in the quotient at that step. Without this, the answer will be 10x or 100x too large.",
+          "correction_tts": "Jab decimal wali jodiyan use karna shuru karo, usi waqt answer mein decimal point lagao. Bina decimal ke answer 10 guna ya 100 guna bada ho jayega."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_dec_q1",
+          "level": "easy",
+          "question": "Find √1.44.",
+          "question_tts": "1 dashmalav 44 ka vargmool nikaliye.",
+          "expected_answer": "1.2",
+          "acceptable_alternates": ["1.20", "one point two"],
+          "answer_type": "decimal",
+          "hints": [
+            "Jodiyan: 1 aur 44",
+            "1 ke liye 1 (1²=1). 44 neeche lao. Double 1→2_. 22×2=44."
+          ],
+          "full_solution_tts": "1 dashmalav 44 mein jodiyan: 1 aur 44. 1 ke liye 1. Shesh 0. 44 neeche lao, decimal point lagao. 1 ka double 2, blank ke saath 22. 22 guna 2 barabar 44. Toh 1 dashmalav 44 ka vargmool 1 dashmalav 2 hai."
+        },
+        {
+          "question_id": "sq_dec_q2",
+          "level": "medium",
+          "question": "Find √42.25.",
+          "question_tts": "42 dashmalav 25 ka vargmool nikaliye.",
+          "expected_answer": "6.5",
+          "acceptable_alternates": ["6.50", "six point five"],
+          "answer_type": "decimal",
+          "hints": [
+            "Jodiyan: 42 aur 25",
+            "42 ke liye 6 (6²=36). Shesh 6. 25 neeche lao: 625. Double 6→12_. 125×5=625."
+          ],
+          "full_solution_tts": "42 dashmalav 25 mein jodiyan: 42 aur 25. 42 ke liye 6, kyunki 6 ka square 36. Shesh 6. 25 neeche lao, 625. Decimal point lagao. 6 ka double 12, blank ke saath 125. 125 guna 5 barabar 625. Toh 42 dashmalav 25 ka vargmool 6 dashmalav 5 hai."
+        },
+        {
+          "question_id": "sq_dec_q3",
+          "level": "hard",
+          "question": "Find √0.2916.",
+          "question_tts": "0 dashmalav 2916 ka vargmool nikaliye.",
+          "expected_answer": "0.54",
+          "acceptable_alternates": ["0.540", "point five four"],
+          "answer_type": "decimal",
+          "hints": [
+            "Decimal ke baad jodiyan: 29 aur 16",
+            "0 ke liye 0. 29 neeche lao. 5 ka square 25. Shesh 4. 16 neeche lao: 416. Double 5→10_. 104×4=416."
+          ],
+          "full_solution_tts": "0 dashmalav 2916 mein jodiyan: 0 aur 29 aur 16. 0 ke liye 0, decimal point lagao. 29 neeche lao. 5 ka square 25, shesh 4. 16 neeche lao, 416 bana. 5 ka double 10, blank ke saath 104. 104 guna 4 barabar 416. Toh 0 dashmalav 2916 ka vargmool 0 dashmalav 54 hai."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Ab tak humne poore numbers ka vargmool nikala. Lekin agar number mein decimal ho toh? Wahi long division method, bas ek extra rule — decimal point ki jagah dhyaan se set karo!",
+        "analogy": "Decimal wale vargmool ko aise samjho: agar 144 ka vargmool 12 hai, toh 1.44 ka vargmool 1.2 hoga. Decimal point dono jagah shift hota hai.",
+        "vedic_trick": "Quick check: √1.44 = 1.2 kyunki 12² = 144. Bas decimal 2 jagah left shift karke 1.44 bana, toh answer mein 1 jagah shift: 1.2.",
+        "common_teacher_phrase": "Bachcho, integer part mein right se pair, decimal part mein left se pair. Decimal point answer mein wahan lagao jab decimal ki jodi use ho!",
+        "visual_cue": "Show the pairing process: draw brackets over digit pairs with arrows showing direction (← for integer, → for decimal).",
+        "energy_moment": "Quick: agar 25² = 625, toh √6.25 kitna? (2.5!) Decimal shift ka kamaal!"
+      }
+    },
+
+    {
+      "concept_id": "math_8_ch6_estimation",
+      "ncert_section": "6.7",
+      "concept_name": "Estimating Square Roots",
+      "concept_name_hi": "वर्गमूल का अनुमान",
+      "definition": "To estimate the square root of a non-perfect-square number: (1) Find the two consecutive perfect squares between which the number lies. (2) Determine which perfect square it is closer to. (3) The square root will be close to the root of the nearer perfect square. Example: √7 lies between √4=2 and √9=3, closer to 3, so √7 ≈ 2.6.",
+      "definition_tts": "Non-perfect-square number ka vargmool anumaan lagane ke liye: pehle, do lagaataar perfect squares dhundho jinke beech yeh number ho. Phir dekho kaunse perfect square ke zyada kareeb hai. Vargmool kareeb wale perfect square ke root ke paas hoga. Jaise 7, 4 aur 9 ke beech hai, 9 ke zyada kareeb, toh vargmool lagbhag 2 dashmalav 6.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square", "math_8_ch6_properties"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Between which two whole numbers does √5 lie?",
+          "problem_tts": "5 ka vargmool kin do poori sankhyaon ke beech mein hai?",
+          "solution": "2² = 4 and 3² = 9. Since 4 < 5 < 9, √5 lies between 2 and 3.",
+          "solution_tts": "2 ka square 4 aur 3 ka square 9. Kyunki 4 se chhota 5 hai aur 5 se chhota 9 hai, toh 5 ka vargmool 2 aur 3 ke beech hai.",
+          "indian_context": null
+        },
+        {
+          "level": "medium",
+          "problem": "Estimate √300.",
+          "problem_tts": "300 ka vargmool anumaan lagaiye.",
+          "solution": "17² = 289 and 18² = 324. 300 is closer to 289. So √300 ≈ 17.3.",
+          "solution_tts": "17 ka square 289 aur 18 ka square 324. 300, 289 ke zyada kareeb hai. Toh 300 ka vargmool lagbhag 17 dashmalav 3.",
+          "indian_context": "Agar 300 square feet ka kamra hai, toh ek side lagbhag 17 feet 4 inch hogi."
+        },
+        {
+          "level": "hard",
+          "problem": "Estimate √1000 to one decimal place.",
+          "problem_tts": "1000 ka vargmool ek decimal tak anumaan lagaiye.",
+          "solution": "31² = 961, 32² = 1024. 1000 is closer to 1024 (difference 24) than to 961 (difference 39). So √1000 ≈ 31.6.",
+          "solution_tts": "31 ka square 961 aur 32 ka square 1024. 1000 aur 1024 ka antar 24 hai, jabki 1000 aur 961 ka antar 39 hai. Toh 1000, 1024 ke zyada kareeb hai. Vargmool lagbhag 31 dashmalav 6.",
+          "indian_context": null
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students only check the nearest perfect square and forget to check both sides.",
+          "misconception_hi": "Bacche sirf ek taraf ka perfect square check karte hain, dono taraf nahi dekhte.",
+          "correction": "You must find BOTH the perfect square below AND above the number. Then compare distances to determine which root the answer is closer to.",
+          "correction_tts": "Aapko number ke NEECHE wala aur UPAR wala dono perfect squares dhundne hain. Phir dono se distance compare karke dekho ki vargmool kiske kareeb hoga."
+        },
+        {
+          "misconception": "Students think estimation means the exact answer.",
+          "misconception_hi": "Bacche sochte hain ki anumaan matlab exact answer hai.",
+          "correction": "Estimation gives an approximate value, not exact. √7 ≈ 2.65 is close to the actual value 2.6457..., but it's not exact. That's okay — estimation is meant to be quick, not perfect.",
+          "correction_tts": "Anumaan lagbhag value deta hai, exact nahi. 7 ka vargmool lagbhag 2 dashmalav 65 hai, asli value 2 dashmalav 6457 hai. Yeh theek hai — anumaan quick hota hai, perfect nahi."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "sq_est_q1",
+          "level": "easy",
+          "question": "Between which two whole numbers does √10 lie?",
+          "question_tts": "10 ka vargmool kin do poori sankhyaon ke beech hai?",
+          "expected_answer": "3 and 4",
+          "acceptable_alternates": ["3, 4", "between 3 and 4", "3 aur 4", "3-4"],
+          "answer_type": "range",
+          "hints": [
+            "3 ka square aur 4 ka square calculate karo",
+            "9 < 10 < 16, toh vargmool 3 aur 4 ke beech"
+          ],
+          "full_solution_tts": "3 ka square 9 aur 4 ka square 16. 10, 9 aur 16 ke beech hai. Toh 10 ka vargmool 3 aur 4 ke beech hai."
+        },
+        {
+          "question_id": "sq_est_q2",
+          "level": "medium",
+          "question": "Estimate √200.",
+          "question_tts": "200 ka vargmool anumaan lagaiye.",
+          "expected_answer": "Approximately 14.1",
+          "acceptable_alternates": ["14", "14.1", "14.14", "about 14"],
+          "answer_type": "estimate",
+          "hints": [
+            "14 ka square aur 15 ka square calculate karo",
+            "196 < 200 < 225. 200, 196 ke zyada kareeb hai."
+          ],
+          "full_solution_tts": "14 ka square 196 aur 15 ka square 225. 200, 196 ke zyada kareeb hai, antar sirf 4 ka. Toh 200 ka vargmool lagbhag 14 dashmalav 1."
+        },
+        {
+          "question_id": "sq_est_q3",
+          "level": "hard",
+          "question": "A gardener has 1000 plants. She wants rows and columns to be equal. What is the minimum number of plants she should add to make this possible?",
+          "question_tts": "Ek maali ke paas 1000 paudhe hain. Woh barabar rows aur columns mein lagana chahti hai. Kam se kam kitne aur paudhe chahiye?",
+          "expected_answer": "24",
+          "acceptable_alternates": ["twenty four", "chaubees", "चौबीस"],
+          "answer_type": "numeric",
+          "hints": [
+            "Sabse kareeb ka perfect square dhundho jo 1000 se bada ho",
+            "31² = 961 (chhota), 32² = 1024 (bada). Toh 1024 - 1000 = ?"
+          ],
+          "full_solution_tts": "31 ka square 961, 1000 se chhota. 32 ka square 1024, 1000 se bada. 1024 minus 1000 barabar 24. Toh maali ko 24 aur paudhe chahiye. Tab 1024 paudhe, 32 guna 32 mein lag jayenge."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Kya aap bina calculator ke bata sakte ho ki √500 lagbhag kitna hai? Main aapko ek trick dikhata hoon jo 10 second mein answer de degi!",
+        "analogy": "Estimation aise hai jaise Google Maps ka ETA — exact nahi, lekin bahut kareeb. 22 ka square 484, 23 ka square 529. 500 dono ke beech hai, 529 ke thoda kareeb. Toh √500 lagbhag 22.4.",
+        "vedic_trick": "Quick estimation: number ke closest perfect squares yaad rakho. 1-400 tak ke squares yaad hain toh bahut problems solve ho jayenge!",
+        "common_teacher_phrase": "Bachcho, dono taraf ke perfect squares dhundho, phir dekho kaunse ke zyada kareeb ho. Bas estimation ho gayi!",
+        "visual_cue": "Draw a number line. Mark perfect squares. Show where the target number falls. The closer perfect square's root is our estimate.",
+        "energy_moment": "Game: Main number bolunga, aap 5 second mein closest perfect square bolke estimate do. Ready? 150! (12²=144, 13²=169, closer to 144, so ≈12.2)"
+      }
+    }
+  ],
+
+  "_answer_checker_config": {
+    "description": "Configuration for the v7.3.28 answer checker to use with this content bank",
+    "numeric_tolerance": 0.01,
+    "accept_hindi_numerals": true,
+    "accept_devanagari_words": true,
+    "accept_transliterated_hindi": true,
+    "fraction_formats": ["a/b", "a bata b", "a upon b", "a by b", "a baata b"],
+    "yes_no_alternates": {
+      "yes": ["haan", "ha", "हाँ", "हां", "yes", "sahi", "सही", "bilkul"],
+      "no": ["nahi", "nai", "नहीं", "no", "galat", "गलत"]
+    }
+  },
+
+  "_tts_config": {
+    "description": "TTS rendering rules for Sarvam Bulbul v3",
+    "rules": [
+      "Replace √ with 'ka vargmool' or 'square root of'",
+      "Replace ² with 'ka square'",
+      "Replace × with 'guna'",
+      "Replace ÷ with 'baata'",
+      "Replace + with 'jod'",
+      "Replace - with 'minus' or 'ghatao'",
+      "Replace = with 'barabar'",
+      "Replace ≈ with 'lagbhag barabar'",
+      "Replace ≠ with 'barabar nahi'",
+      "Replace < with 'se chhota'",
+      "Replace > with 'se bada'",
+      "Fractions: 3/4 → 'teen baata chaar' or 'three upon four'",
+      "Decimals: 2.56 → 'do dashmalav pachchpan' or '2 point 5 6'",
+      "Numbers in English context: speak as English",
+      "Numbers in Hindi context: speak as Hindi"
+    ]
+  }
+}
