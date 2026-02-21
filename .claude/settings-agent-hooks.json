@@ -1,0 +1,22 @@
+{
+  "_comment": "Agent hooks disabled - verifier runs via Task tool, not as hook",
+  "_disabled_hooks": {
+    "Stop": [
+      {
+        "description": "Run verifier sub-agent to check work completeness",
+        "type": "agent",
+        "agent": "verifier"
+      }
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "description": "Block --no-verify flag",
+        "matcher": "Bash",
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); if echo \"$INPUT\" | jq -r \".tool_input.command\" 2>/dev/null | grep -q \"no-verify\"; then echo \"BLOCKED: --no-verify is banned.\"; exit 2; fi; exit 0'"
+      }
+    ]
+  }
+}
