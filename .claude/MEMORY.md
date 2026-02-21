@@ -2,12 +2,14 @@
 
 ## Current State (2026-02-21)
 
-**Version**: v7.3.28-fix2
+**Version**: v7.3.30
 **Status**: Server running on http://localhost:8000
-**Last verify.py**: PASSED (9/9 checks in quick mode)
+**Last verify.py**: PASSED (14/14 checks in full mode)
 **Questions loaded**: 60 questions, 19 skills
 
-### Recent Changes (v7.3.22 → v7.3.28-fix2)
+### Recent Changes (v7.3.22 → v7.3.30)
+- v7.3.30: Exclude .claude/ files from stop hook verification
+- v7.3.29: Update version to v7.3.28-fix2, fix stop hook message
 - v7.3.28-fix2: PostgreSQL boolean migration syntax
 - v7.3.28-fix1: Chapter question now correctly shows chapter name
 - v7.3.28: Three fixes — chapter context, answer flexibility, empathy cap
