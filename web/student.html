@@ -808,12 +808,7 @@
         });
 
         try {
-            // v7.1.1: Streaming disabled temporarily - SSE chunk parsing issues
-            // TODO: Fix SSE buffering for partial JSON chunks
-            // For now, use reliable non-streaming endpoint
-            return sendAudioNonStreaming(wavBlob);
-
-            /* DISABLED: Streaming endpoint
+            // v7.5.0: Streaming re-enabled with proper SSE buffering
             const resp = await fetch(`${API}/api/student/session/message-stream`, {
                 method: 'POST',
                 headers: {
@@ -828,13 +823,13 @@
 
             if (!resp.ok) {
                 // Fallback to non-streaming endpoint
+                console.log('[Stream] Endpoint failed, falling back to non-streaming');
                 return sendAudioNonStreaming(wavBlob);
             }
-            */
 
             showTyping(false);
 
-            // Process SSE stream
+            // Process SSE stream with proper buffering for partial chunks
             const eventReader = resp.body.getReader();
             const decoder = new TextDecoder();
             let audioQueue = [];
@@ -843,17 +838,25 @@
             let transcript = '';
             let verdict = null;
             let newState = null;
+            let sseBuffer = '';  // v7.5.0: Buffer for incomplete SSE events
 
             while (true) {
                 const { done, value } = await eventReader.read();
                 if (done) break;
 
-                const text = decoder.decode(value);
-                const lines = text.split('\n').filter(l => l.startsWith('data: '));
+                // v7.5.0: Append to buffer instead of parsing immediately
+                sseBuffer += decoder.decode(value, { stream: true });
 
-                for (const line of lines) {
-                    try {
-                        const data = JSON.parse(line.substring(6));
+                // Split on double newline (SSE event boundary)
+                const events = sseBuffer.split('\n\n');
+                // Keep the last (potentially incomplete) chunk in buffer
+                sseBuffer = events.pop() || '';
+
+                for (const event of events) {
+                    const lines = event.split('\n').filter(l => l.startsWith('data: '));
+                    for (const line of lines) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
 
                         if (data.type === 'audio_chunk') {
                             const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
@@ -908,9 +911,10 @@
                             }
                         }
                     } catch (e) {
-                        console.error('[SSE] Parse error:', e);
+                        console.error('[SSE] Parse error:', e, line);
                     }
                 }
+                }  // close for (const event of events)
             }
 
             // Play audio chunks sequentially

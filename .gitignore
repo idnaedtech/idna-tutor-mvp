@@ -36,3 +36,6 @@ htmlcov/
 
 # Claude Code
 .claude/_state/
+
+# TTS Cache (v7.5.0)
+tts_cache/

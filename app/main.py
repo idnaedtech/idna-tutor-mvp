@@ -54,7 +54,40 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    logger.info("IDNA Didi v7.3 ready")
+    # v7.5.0: Start TTS precache in background (non-blocking)
+    try:
+        from content_bank.loader import get_content_bank
+        from app.voice.tts_precache import precache_content_bank, get_cache_stats
+        from app.voice.tts import get_tts
+
+        cb = get_content_bank()
+        cache_stats = get_cache_stats()
+        logger.info(f"TTS cache stats: {cache_stats}")
+
+        if cache_stats["files"] < 50:  # Precache if cache is small
+            tts = get_tts()
+
+            async def tts_wrapper(text: str, lang: str) -> bytes:
+                """Wrapper to match precache expected signature."""
+                result = await tts.synthesize_async(text, lang)
+                return result.audio_bytes
+
+            async def run_precache():
+                try:
+                    stats = await precache_content_bank(cb, tts_wrapper, ["hi-IN"])
+                    logger.info(f"TTS precache complete: {stats}")
+                except Exception as e:
+                    logger.error(f"TTS precache failed: {e}")
+
+            import asyncio
+            asyncio.create_task(run_precache())
+            logger.info("TTS precache started in background")
+    except ImportError as e:
+        logger.warning(f"TTS precache skipped (missing deps): {e}")
+    except Exception as e:
+        logger.error(f"TTS precache init failed: {e}")
+
+    logger.info("IDNA Didi v7.5 ready")
     yield
     logger.info("Shutting down")
 
@@ -111,9 +144,9 @@ def _seed_test_student(db):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v7.3",
+    title="IDNA Didi v7.5",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="7.3.33",
+    version="7.5.0",
     lifespan=lifespan,
 )
 
