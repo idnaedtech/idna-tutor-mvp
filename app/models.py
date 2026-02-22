@@ -102,6 +102,14 @@ class Session(Base):
     # v7.3.28: Empathy one-turn-max flag (Fix 3)
     empathy_given: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # v8.1.0: Confusion escalation counter (P0 Bug 2 fix)
+    # Increments when student expresses confusion. Resets on correct answer or new topic.
+    confusion_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    # v8.1.0: Board and topics tracking (P0 Bug 3 fix)
+    board_name: Mapped[str] = mapped_column(String(20), default="NCERT")
+    topics_covered: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # List of skill names covered
+
     # v7.3.0: Conversation history for multi-turn context (CHANGE 2)
     conversation_history: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # [{"role": "user"|"assistant", "content": str}]
 

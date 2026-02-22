@@ -23,34 +23,120 @@ try:
 except ImportError:
     _content_bank = None
 
-DIDI_BASE = """You are Didi, a caring Hindi-speaking tutor for Class 8 Math.
+DIDI_BASE = """You are **Didi (दीदी)**, a friendly elder-sister AI tutor for Indian school students. You teach math through voice conversation.
 
-PERSONALITY: Warm older sister. Patient. Focused on learning. Use "aap" form always.
+---
 
-LISTENING RULES (HIGHEST PRIORITY):
-- LISTEN FIRST: If student asks a question or makes a request, respond to THAT before continuing the lesson.
-- LANGUAGE OBEDIENCE: If student says "speak in English" or "Hindi mein bolo", switch fully and maintain their choice.
-- TEACH BEFORE ASKING: When introducing a concept, explain with example FIRST. Only ask after student confirms understanding.
-- NO DEAD LOOPS: After acknowledging a language switch, CONTINUE the lesson immediately. Never say "what would you like to know" and wait.
+## RULE 0: LANGUAGE — ABSOLUTE, NON-NEGOTIABLE
 
-FORMAT RULES (STRICT):
-- Maximum 2 sentences, 40 words
-- ONE idea per turn — never teach AND ask together
-- Vary openings — don't always start with "Acha" or "Toh"
+The student's current language preference is: **{medium_of_instruction}**
 
-SPECIFICITY (CRITICAL):
-- ALWAYS reference what the student said: "Aapne X bola..."
-- NEVER give generic feedback like "try again" or "sochiye"
-- Explain specifically what was right or wrong about their answer
+- If `{medium_of_instruction}` is `english` → Respond ENTIRELY in English. No Hindi words. No Hinglish. No "Hum", no "padhai", no "aaram kijiye". ZERO Hindi.
+- If `{medium_of_instruction}` is `hindi` → Respond in Hindi-English code-switch (Hinglish).
+- If `{medium_of_instruction}` is `hinglish` → Respond in natural Hindi-English mix.
 
-NUMBERS:
-- Use digits or English: "5 times 5 = 25", "3 squared = 9"
-- NEVER use Hindi number words: teen, chaar, paanch, pachees
+**LANGUAGE SWITCH DETECTION:**
+If the student says ANY of the following (in any phrasing):
+- "speak in English" / "talk in English" / "English please" / "I don't understand Hindi" / "please speak properly in English"
+- OR if the student sends 2+ consecutive messages in English while you responded in Hindi
 
-MATH ACCURACY (v7.3.22):
-- Double-check ALL arithmetic before responding
-- NEVER state a number is or isn't a perfect square without verifying: n is a perfect square if and only if some integer × itself = n
-- Example: 49 IS a perfect square because 7 × 7 = 49. 50 is NOT because no integer squared equals 50.
+Then you MUST:
+1. Immediately switch to full English for THIS response and ALL subsequent responses.
+2. Acknowledge the switch briefly: "Got it, English from now on."
+3. NEVER revert to Hindi unless the student explicitly asks for Hindi again.
+
+**This rule overrides ALL other instructions, including content bank templates. If a content template is in Hindi and the student wants English, you MUST translate it to English before responding. Never paste a Hindi template when the student has requested English.**
+
+---
+
+## RULE 1: CONFUSION ESCALATION PROTOCOL
+
+Track how many times the student signals confusion. Confusion signals include:
+- "I don't understand" / "samajh nahi aaya" / "not understanding" / "what?" / "huh?"
+- Repeating the same wrong answer
+- Off-topic deflection after your explanation
+- Frustrated expressions ("I don't get it", "this is hard", "I can't do this")
+
+**Escalation ladder:**
+
+### Confusion count = 1
+- Rephrase using a DIFFERENT analogy (not another version of the same analogy).
+- Make it shorter — max 2 sentences.
+
+### Confusion count = 2
+- Strip to the absolute simplest form. Use only single-digit numbers.
+- Example: "2 times 2 is 4. So 4 is a perfect square. That's it. 2 times 2 equals 4."
+- Ask a yes/no check: "Does that make sense — 2 times 2 is 4?"
+
+### Confusion count = 3
+- STOP teaching the concept abstractly.
+- Switch to a direct guided example: "Let's just try one together. What is 3 times 3?"
+- Wait for their answer. Guide from their response.
+
+### Confusion count ≥ 4
+- Acknowledge their effort warmly: "Hey, it's totally okay. This is a tricky topic and you're doing great by trying."
+- Offer an exit: "Want to try a super easy warm-up question, or should we take a break and come back tomorrow?"
+- If they choose break → transition to WRAP_UP.
+- Do NOT keep cycling through more analogies.
+
+**NEVER repeat the same explanation or analogy twice. If you catch yourself generating a response you've already given, STOP and move down the escalation ladder.**
+
+---
+
+## RULE 2: META-QUESTION ROUTING
+
+Some student messages are NOT about the math concept — they are informational questions about the session itself. Detect and answer them directly.
+
+**Meta-questions (answer from session context, NOT from content bank):**
+
+| Student says | You respond (in {medium_of_instruction}) |
+|---|---|
+| "What chapter are we learning?" | "We're learning Chapter {chapter_number} — {chapter_name}." |
+| "What topic is this?" | "We're on {current_topic}." |
+| "What class is this for?" | "This is for Class {class_level}." |
+| "What board?" | "This is {board_name} curriculum." |
+| "How long have we been studying?" | "We've been at it for about {session_duration_minutes} minutes." |
+| "What did we cover?" | Briefly summarize topics covered in this session. |
+
+**Detection rule:** If the student's message is a WH-question (what/which/when/how long) about the session, chapter, subject, or logistics → answer directly from context. Do NOT re-explain the math concept. Do NOT fall back to a teaching response.
+
+---
+
+## RULE 3: EMOTIONAL AWARENESS
+
+Pay attention to the student's emotional state:
+
+- **Frustration** ("I don't want to study", "this is boring", physical displeasure expressions) → Acknowledge warmly. Don't push. Offer a break. "That's completely fine. We can pick this up whenever you're ready."
+- **Tiredness** ("not feeling well", "I'm tired", "let's do this tomorrow") → Respect it immediately. Don't try to squeeze in one more question. Wrap up warmly in their preferred language.
+- **Playfulness/off-topic** → Gently redirect once, then engage briefly if they persist. They're a child, not an employee.
+
+**If the student expresses frustration or says something indicating physical discomfort or emotional distress, your FIRST response must acknowledge the emotion, not the math.**
+
+---
+
+## RULE 4: RESPONSE FORMAT (VOICE-OPTIMIZED)
+
+- Keep responses SHORT. Max 3 sentences for teaching. Max 2 sentences for feedback.
+- No bullet points, no numbered lists — this is spoken aloud via TTS.
+- No markdown formatting, no asterisks, no special characters.
+- Avoid parenthetical asides — TTS reads them awkwardly.
+- Use "times" not "×". Use "equals" not "=". Use "into" for multiplication if in Hinglish.
+- Spell out numbers when contextually clearer: "three times three is nine" not "3×3=9".
+
+---
+
+## SESSION CONTEXT (injected per session)
+
+- Student name: {student_name}
+- Board: {board_name}
+- Class: {class_level}
+- Chapter: {chapter_number} — {chapter_name}
+- Current topic: {current_topic}
+- Language: {medium_of_instruction}
+- Session state: {fsm_state}
+- Confusion count: {confusion_count}
+- Topics covered this session: {topics_covered}
+- Session duration: {session_duration_minutes} minutes
 """
 
 # v7.3.22 Fix 1: Chapter name mapping for metadata injection
@@ -69,13 +155,17 @@ DIDI_NO_PRAISE = "\nANSWER INCORRECT. No praise. No shabash/bahut accha/well don
 DIDI_PRAISE_OK = "\nANSWER CORRECT. Praise briefly, reference their answer.\n"
 
 LANG_ENGLISH = """
-LANGUAGE: English only. No Hindi words. No "Acha", "Theek hai", "Dekho".
+LANGUAGE SETTING: english
+YOU MUST respond ENTIRELY in English. Zero Hindi words. No "Acha", "Theek hai", "Dekho", "Samajh aaya", "Kya".
+If any content template is in Hindi, TRANSLATE it to English before responding.
 """
 LANG_HINDI = """
-LANGUAGE: Hindi (Devanagari). Use digits for numbers: "5 × 5 = 25".
+LANGUAGE SETTING: hindi
+Respond in Hindi. Use Devanagari script. Use digits for numbers: "5 × 5 = 25".
 """
 LANG_HINGLISH = """
-LANGUAGE: Hinglish. Natural mix of Hindi-English. Use digits for math.
+LANGUAGE SETTING: hinglish
+Respond in Hinglish (natural mix of Hindi-English). Use digits for math.
 """
 
 
@@ -87,6 +177,12 @@ def _get_language_instruction(session_context: dict) -> str:
     elif pref == "hindi":
         return LANG_HINDI
     return LANG_HINGLISH
+
+
+def _get_confusion_instruction(session_context: dict) -> str:
+    """Get confusion escalation context based on confusion_count."""
+    count = session_context.get("confusion_count", 0)
+    return f"\nCONFUSION COUNT: {count}"
 
 
 def _get_chapter_context(session_context: dict, question_data: dict = None) -> str:
@@ -117,17 +213,8 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
     builder = _BUILDERS.get(at, _build_fallback)
     messages = builder(action, session_context, question_data, skill_data, previous_didi_response)
 
-    # v7.2.0: Inject language preference into system prompt (BUG 2 fix)
-    lang_instruction = _get_language_instruction(session_context)
-    if messages and messages[0].get("role") == "system":
-        messages[0]["content"] = messages[0]["content"] + lang_instruction
-
-    # v7.3.22 Fix 1: Inject chapter metadata so Didi can answer "which chapter"
-    chapter_context = _get_chapter_context(session_context, question_data)
-    if chapter_context and messages and messages[0].get("role") == "system":
-        messages[0]["content"] = messages[0]["content"] + chapter_context
-
-    # Inject student's actual words for specificity
+    # v8.1.0: Language, confusion, and chapter context now embedded in DIDI_BASE via _sys()
+    # Only inject student's actual words for specificity (unique per turn)
     student_text = getattr(action, 'student_text', None) or session_context.get('student_text', '')
     if student_text and messages and messages[0].get("role") == "system":
         messages[0]["content"] = messages[0]["content"] + f'\n\nSTUDENT SAID: "{student_text}"'
@@ -145,8 +232,71 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
     return messages
 
 
-def _sys(extra=""):
-    return DIDI_BASE + extra
+def _format_didi_base(session_context: dict, question_data: dict = None) -> str:
+    """Format DIDI_BASE with all session context variables."""
+    # Extract chapter info
+    chapter_key = session_context.get("chapter", "")
+    chapter_name = CHAPTER_NAMES.get(chapter_key, chapter_key)
+
+    # Extract chapter number from chapter_name (e.g., "Chapter 6 - Squares..." -> "6")
+    chapter_number = ""
+    if chapter_name and "Chapter " in chapter_name:
+        parts = chapter_name.split(" - ")
+        if parts:
+            chapter_number = parts[0].replace("Chapter ", "")
+
+    # Get current topic from question data
+    current_topic = ""
+    if question_data:
+        skill = question_data.get("target_skill", "")
+        current_topic = skill.replace("_", " ").title() if skill else ""
+    if not current_topic:
+        current_topic = session_context.get("current_topic", "Perfect Squares")
+
+    # Get topics covered
+    topics_covered = session_context.get("topics_covered", [])
+    topics_str = ", ".join(topics_covered) if topics_covered else "None yet"
+
+    # Calculate session duration
+    session_duration = session_context.get("session_duration_minutes", 0)
+
+    # Format the prompt
+    formatted = DIDI_BASE.format(
+        medium_of_instruction=session_context.get("language_pref", "hinglish"),
+        confusion_count=session_context.get("confusion_count", 0),
+        student_name=session_context.get("student_name", "Student"),
+        board_name=session_context.get("board_name", "NCERT"),
+        class_level=session_context.get("class_level", 8),
+        chapter_number=chapter_number,
+        chapter_name=chapter_name,
+        current_topic=current_topic,
+        fsm_state=session_context.get("state", "TEACHING"),
+        topics_covered=topics_str,
+        session_duration_minutes=session_duration,
+    )
+    return formatted
+
+
+def _sys(extra="", session_context: dict = None, question_data: dict = None):
+    """Build system prompt with formatted DIDI_BASE."""
+    if session_context:
+        base = _format_didi_base(session_context, question_data)
+    else:
+        # Fallback for backward compat - use unformatted base with placeholders shown
+        base = DIDI_BASE.format(
+            medium_of_instruction="hinglish",
+            confusion_count=0,
+            student_name="Student",
+            board_name="NCERT",
+            class_level=8,
+            chapter_number="6",
+            chapter_name="Squares and Square Roots",
+            current_topic="Perfect Squares",
+            fsm_state="TEACHING",
+            topics_covered="None yet",
+            session_duration_minutes=0,
+        )
+    return base + extra
 
 
 def _build_ask_topic(a, ctx, q, sk, prev):
@@ -158,7 +308,7 @@ def _build_ask_topic(a, ctx, q, sk, prev):
         msg = f'Student said: "{a.student_text}". Couldn\'t identify subject. Ask specifically: "{retry_ask}"'
     else:
         msg = "Student just logged in. Ask warmly what they studied in school today. Ask about their day first, then the subject."
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
 
 def _build_apologize_no_subject(a, ctx, q, sk, prev):
@@ -169,7 +319,7 @@ def _build_apologize_no_subject(a, ctx, q, sk, prev):
         apology = f"Right now I only have Math, but {s} is coming soon! Want to practice math?"
     else:
         apology = f"Abhi mere paas sirf Math hai, lekin jaldi {s} bhi aa jayega! Chalo math practice karte hain?"
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student wants {s}, but only Math available. Say warmly: "{apology}"'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student wants {s}, but only Math available. Say warmly: "{apology}"'}]
 
 
 def _build_probe_understanding(a, ctx, q, sk, prev):
@@ -177,7 +327,7 @@ def _build_probe_understanding(a, ctx, q, sk, prev):
     lang_pref = ctx.get("language_pref", "hinglish")
     ch = ctx.get("chapter", "rational numbers")
     example = "If the denominator is the same, how do you add?" if lang_pref == "english" else "Agar denominator same hai, toh add kaise karte hain?"
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student studied {ch}. Ask ONE simple concept-check question (not calculation). Example for fractions: "{example}"'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student studied {ch}. Ask ONE simple concept-check question (not calculation). Example for fractions: "{example}"'}]
 
 
 def _build_teach_concept(a, ctx, q, sk, prev):
@@ -313,15 +463,15 @@ def _build_read_question(a, ctx, q, sk, prev):
     use_english = lang_pref == "english"
     if not q:
         done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke saare questions ho gaye! Bahut achhi practice hui."
-        return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'No more questions. Say: "{done_msg}"'}]
+        return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'No more questions. Say: "{done_msg}"'}]
     if a.extra.get("nudge"):
         nudge_lang = "Present in English." if use_english else ""
-        return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". {nudge_lang} Gently nudge them to try.'}]
+        return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". {nudge_lang} Gently nudge them to try.'}]
     d = "This is an easier question. " if a.extra.get("difficulty") == "easy" else ""
     ask_prompt = 'End: "Tell me, what is the answer?"' if use_english else 'End: "Batao, kya answer hai?"'
     # v7.3.25: Tell LLM to present question in session language
     lang_instruction = "Present this question in English (translate any Hindi)." if use_english else "Read this question naturally."
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'{d}{lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'{d}{lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
 
 
 def _build_evaluate_answer(a, ctx, q, sk, prev):
@@ -392,7 +542,7 @@ def _build_show_solution(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware encouragement
     lang_pref = ctx.get("language_pref", "hinglish")
     encouragement = "It's okay, now you understand." if lang_pref == "english" else "Koi baat nahi, ab samajh aa gaya hoga."
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'3rd wrong. Show solution: "{sol}". Walk through in 2-3 sentences. Be encouraging: "{encouragement}" No new question.'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'3rd wrong. Show solution: "{sol}". Walk through in 2-3 sentences. Be encouraging: "{encouragement}" No new question.'}]
 
 
 def _build_pick_next_question(a, ctx, q, sk, prev):
@@ -406,12 +556,12 @@ def _build_pick_next_question(a, ctx, q, sk, prev):
 
     if a.extra.get("follow_up"):
         if q:
-            return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "{transition}" Then read: "{q["question_voice"]}". {q_lang}'}]
-        return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'After solution, say briefly: "{transition}"'}]
+            return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "{transition}" Then read: "{q["question_voice"]}". {q_lang}'}]
+        return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'After solution, say briefly: "{transition}"'}]
     if q:
         # Include praise for correct answer + the next question
         return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}". {q_lang}'}]
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'No more questions available. Say: "{done_msg}"'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'No more questions available. Say: "{done_msg}"'}]
 
 
 def _build_comfort_student(a, ctx, q, sk, prev):
@@ -431,14 +581,14 @@ def _build_end_session(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware session ending
     lang_pref = ctx.get("language_pref", "hinglish")
     goodbye = "See you tomorrow!" if lang_pref == "english" else "Kal phir milte hain!"
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Session ending. {qc}/{qa} correct. Summarize warmly. Encourage return tomorrow. "{goodbye}" 3 sentences max.'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Session ending. {qc}/{qa} correct. Summarize warmly. Encourage return tomorrow. "{goodbye}" 3 sentences max.'}]
 
 
 def _build_acknowledge_homework(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware homework acknowledgment
     lang_pref = ctx.get("language_pref", "hinglish")
     msg = "Oh, you have homework? Send a photo or read me the question." if lang_pref == "english" else "Achha, homework hai? Photo bhejo ya question padh ke batao."
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
 
 
 def _build_replay_heard(a, ctx, q, sk, prev):
@@ -448,14 +598,14 @@ def _build_replay_heard(a, ctx, q, sk, prev):
         msg = f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "I heard: [heard]. If I misheard, please try again." Be apologetic.'
     else:
         msg = f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "Mujhe aisa suna: [heard]. Agar galat suna toh phir try karo." Be apologetic.'
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
 
 def _build_ask_repeat(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware repeat request
     lang_pref = ctx.get("language_pref", "hinglish")
     msg = "Sorry, I didn't understand. Could you please say that again?" if lang_pref == "english" else "Sorry, samajh nahi aaya. Ek baar phir boliye?"
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
 
 
 # v7.2.0: New builders for language switch and meta questions
@@ -470,7 +620,7 @@ def _build_acknowledge_language_switch(a, ctx, q, sk, prev):
         msg = 'Student switched to Hindi. Acknowledge briefly ("ठीक है, हिंदी में") and CONTINUE teaching the current topic in Hindi. Do NOT ask what they want. 2 sentences max.'
     else:
         msg = 'Student switched to Hinglish. Acknowledge briefly ("Theek hai") and CONTINUE teaching the current topic in Hinglish. Do NOT ask what they want. 2 sentences max.'
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
 
 def _build_answer_meta_question(a, ctx, q, sk, prev):
@@ -501,14 +651,14 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
     else:
         msg = f'Student asked: "{a.student_text}". Answer briefly about {ch}. 2 sentences.'
 
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": msg}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
 
 def _build_fallback(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware fallback
     lang_pref = ctx.get("language_pref", "hinglish")
     fallback_msg = "Let's move on." if lang_pref == "english" else "Chalo, aage badhte hain."
-    return [{"role": "system", "content": _sys()}, {"role": "user", "content": f'Something unexpected. Say naturally: "{fallback_msg}"'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Something unexpected. Say naturally: "{fallback_msg}"'}]
 
 
 _BUILDERS = {

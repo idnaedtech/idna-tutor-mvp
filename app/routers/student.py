@@ -46,7 +46,8 @@ from app.fsm.handlers import handle_state
 from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer, Verdict
 from app.tutor.answer_evaluator import evaluate_answer
-from app.tutor.instruction_builder import build_prompt
+from app.tutor.instruction_builder import build_prompt, CHAPTER_NAMES
+from app.tutor.preprocessing import preprocess_student_message
 from content_bank.loader import get_content_bank
 from app.tutor.enforcer import enforce, light_enforce, get_safe_fallback
 from app.tutor.llm import get_llm
@@ -323,6 +324,43 @@ async def process_message(
             stt_latency=stt_latency,
         )
 
+    # ── Step 1.5: Preprocessing (v8.1.0 P0 fixes) ─────────────────────────
+    # Order: meta-question (bypass LLM) → language switch → confusion → LLM
+    chapter_name = CHAPTER_NAMES.get(session.chapter or "", session.chapter or "")
+    current_skill = ""
+    if session.current_question_id:
+        q_data = _load_question(db, session.current_question_id)
+        current_skill = q_data.get("target_skill", "") if q_data else ""
+
+    preprocess_result = preprocess_student_message(
+        text=student_text,
+        chapter=session.chapter or "",
+        chapter_name=chapter_name,
+        subject=session.subject or "math",
+        current_skill=current_skill,
+        language_pref=session.language_pref or "hinglish",
+    )
+
+    # Meta-question: bypass LLM entirely
+    if preprocess_result.bypass_llm:
+        logger.info(f"v8.1.0: Bypassing LLM for meta-question: {preprocess_result.meta_question_type}")
+        return _quick_response(
+            db, session,
+            preprocess_result.template_response,
+            student_text=student_text,
+            stt_latency=stt_latency,
+        )
+
+    # Language switch: update session preference
+    if preprocess_result.language_switched:
+        session.language_pref = preprocess_result.new_language
+        logger.info(f"v8.1.0: Language switched to '{session.language_pref}'")
+
+    # Confusion: increment counter
+    if preprocess_result.confusion_detected:
+        session.confusion_count = (session.confusion_count or 0) + 1
+        logger.info(f"v8.1.0: Confusion detected, count now {session.confusion_count}")
+
     # ── Step 2: Classify input ────────────────────────────────────────────
     # MVP: No topic discovery (math only). Subject detection removed.
 
@@ -480,6 +518,8 @@ async def process_message(
             if verdict_obj.correct:
                 session.questions_correct += 1
                 session.current_hint_level = 0
+                # v8.1.0: Reset confusion_count on correct answer
+                session.confusion_count = 0
                 # Update skill mastery
                 memory.update_skill(
                     db, session.student_id, session.subject,
@@ -545,6 +585,11 @@ async def process_message(
     elif action.teaching_turn > 0:
         session.teaching_turn = action.teaching_turn
 
+    # v8.1.0: Calculate session duration
+    from datetime import datetime
+    now = datetime.utcnow()
+    duration_minutes = int((now - session.started_at).total_seconds() / 60) if session.started_at else 0
+
     session_ctx = {
         "subject": session.subject,
         "chapter": session.chapter,
@@ -554,6 +599,15 @@ async def process_message(
         # v7.2.0: Include language preference for prompt injection
         "language_pref": session.language_pref or "hinglish",
         "explanations_given": session.explanations_given or [],
+        # v8.1.0: Include confusion count for escalation protocol
+        "confusion_count": session.confusion_count or 0,
+        # v8.1.0: Additional context for system prompt
+        "student_name": session.student.name if session.student else "Student",
+        "class_level": session.student.class_level if session.student else 8,
+        "board_name": session.board_name or "NCERT",
+        "state": session.state,
+        "topics_covered": session.topics_covered or [],
+        "session_duration_minutes": duration_minutes,
     }
 
     # v7.3.0: Record student input to conversation history
@@ -734,6 +788,54 @@ async def process_message_stream(
 
         return StreamingResponse(garbled_stream(), media_type="text/event-stream")
 
+    # ── Preprocessing (v8.1.0 P0 fixes) ──
+    chapter_name = CHAPTER_NAMES.get(session.chapter or "", session.chapter or "")
+    current_skill = ""
+    if session.current_question_id:
+        q_data = _load_question(db, session.current_question_id)
+        current_skill = q_data.get("target_skill", "") if q_data else ""
+
+    preprocess_result = preprocess_student_message(
+        text=student_text,
+        chapter=session.chapter or "",
+        chapter_name=chapter_name,
+        subject=session.subject or "math",
+        current_skill=current_skill,
+        language_pref=session.language_pref or "hinglish",
+    )
+
+    # Meta-question: bypass LLM entirely
+    if preprocess_result.bypass_llm:
+        logger.info(f"v8.1.0 (stream): Bypassing LLM for meta-question: {preprocess_result.meta_question_type}")
+        tts = get_tts()
+        tts_result = tts.synthesize(preprocess_result.template_response, get_tts_language(session))
+        audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+
+        if session.conversation_history is None:
+            session.conversation_history = []
+        session.conversation_history.append({"role": "user", "content": student_text})
+        session.conversation_history.append({"role": "assistant", "content": preprocess_result.template_response})
+        flag_modified(session, "conversation_history")
+        await run_in_threadpool(lambda: db.commit())
+
+        async def meta_stream():
+            yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
+            yield f"data: {json.dumps({'type': 'text', 'content': preprocess_result.template_response})}\n\n"
+            yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'state': session.state})}\n\n"
+
+        return StreamingResponse(meta_stream(), media_type="text/event-stream")
+
+    # Language switch: update session preference
+    if preprocess_result.language_switched:
+        session.language_pref = preprocess_result.new_language
+        logger.info(f"v8.1.0 (stream): Language switched to '{session.language_pref}'")
+
+    # Confusion: increment counter
+    if preprocess_result.confusion_detected:
+        session.confusion_count = (session.confusion_count or 0) + 1
+        logger.info(f"v8.1.0 (stream): Confusion detected, count now {session.confusion_count}")
+
     # ── Classify ──
     # v7.3.0: Use async LLM classifier (module-level singleton)
     classify_result = await classify(
@@ -897,6 +999,8 @@ async def process_message_stream(
             if verdict.correct:
                 session.questions_correct += 1
                 session.current_hint_level = 0
+                # v8.1.0: Reset confusion_count on correct answer
+                session.confusion_count = 0
             else:
                 session.current_hint_level += 1
                 session.total_hints_used += 1
@@ -938,12 +1042,25 @@ async def process_message_stream(
 
     # ── Build prompt ──
     # v7.3.22 Fix 2: Include language_pref in session_ctx for streaming endpoint
+    # v8.1.0: Include confusion_count and full context for escalation protocol
+    from datetime import datetime
+    now = datetime.utcnow()
+    duration_minutes = int((now - session.started_at).total_seconds() / 60) if session.started_at else 0
+
     session_ctx = {
         "subject": session.subject,
         "chapter": session.chapter,
         "questions_attempted": session.questions_attempted,
         "questions_correct": session.questions_correct,
         "language_pref": session.language_pref or "hinglish",
+        "confusion_count": session.confusion_count or 0,
+        # v8.1.0: Additional context for system prompt
+        "student_name": session.student.name if session.student else "Student",
+        "class_level": session.student.class_level if session.student else 8,
+        "board_name": session.board_name or "NCERT",
+        "state": session.state,
+        "topics_covered": session.topics_covered or [],
+        "session_duration_minutes": duration_minutes,
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
 
