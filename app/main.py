@@ -41,6 +41,9 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     init_db()
 
+    # v8.1.0: Auto-migrate missing columns (no Alembic in project)
+    _run_migrations()
+
     # Seed question bank if empty
     db = SessionLocal()
     try:
@@ -111,6 +114,51 @@ async def lifespan(app: FastAPI):
     logger.info("IDNA Didi v8.1.0 ready")
     yield
     logger.info("Shutting down")
+
+
+def _run_migrations():
+    """v8.1.0: Add missing columns to production DB (no Alembic).
+
+    This runs on every startup and uses IF NOT EXISTS to be idempotent.
+    Safe to run multiple times.
+    """
+    from sqlalchemy import text
+    from app.database import engine
+
+    migrations = [
+        # v8.1.0: P0 bug fixes
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS confusion_count INTEGER DEFAULT 0",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS board_name VARCHAR(20) DEFAULT 'NCERT'",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS topics_covered JSONB",
+    ]
+
+    with engine.connect() as conn:
+        for migration in migrations:
+            try:
+                conn.execute(text(migration))
+                conn.commit()
+                logger.info(f"Migration OK: {migration[:50]}...")
+            except Exception as e:
+                # Column might already exist or different DB (SQLite vs PostgreSQL)
+                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                    pass  # Expected on subsequent runs
+                elif "syntax error" in str(e).lower():
+                    # SQLite doesn't support IF NOT EXISTS for ALTER TABLE
+                    # Try without IF NOT EXISTS
+                    try:
+                        simple_migration = migration.replace(" IF NOT EXISTS", "")
+                        conn.execute(text(simple_migration))
+                        conn.commit()
+                        logger.info(f"Migration OK (SQLite): {simple_migration[:50]}...")
+                    except Exception as e2:
+                        if "duplicate column" in str(e2).lower():
+                            pass  # Already exists
+                        else:
+                            logger.warning(f"Migration skipped: {e2}")
+                else:
+                    logger.warning(f"Migration skipped: {e}")
+
+    logger.info("Database migrations complete")
 
 
 def _seed_questions(db):
