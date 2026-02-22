@@ -431,23 +431,26 @@ def _build_teach_concept(a, ctx, q, sk, prev):
 
     # v7.4.2: Phase-based prompts with progressive reteach
     # Only force transition after Turn 3 (exhausted CB teaching material)
+    # v8.1.0: Add translation instruction for Content Bank material when English mode
+    translate_instruction = "TRANSLATE TO ENGLISH if the content below is in Hindi/Hinglish. " if use_english else ""
+
     if a.extra.get("forced_transition") and teaching_turn >= 3:
         # Turn 3+: Force to question with gentle transition
         msg = f'Say: "{transition_phrase}" Then read the question.'
     elif approach == "answer_question":
-        msg = f'Student asked: "{a.student_text}". Answer their question about {ch}. {teach_content if teach_content else "Use simple example."} 2 sentences.'
+        msg = f'{translate_instruction}Student asked: "{a.student_text}". Answer their question about {ch}. {teach_content if teach_content else "Use simple example."} 2 sentences.'
     elif approach == "different_example" or teaching_turn > 0:
         # v7.4.2: Reteach with progressive examples - ALWAYS end with samajh aaya?
         # Do NOT transition to question until student gives ACK
         if teaching_turn == 1:
-            msg = f'Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
+            msg = f'{translate_instruction}Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
         elif teaching_turn == 2:
-            msg = f'Student still confused. Try this simpler approach: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
+            msg = f'{translate_instruction}Student still confused. Try this simpler approach: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
         elif teaching_turn >= 3:
             # Exhausted content bank, now can transition
             msg = f'Say: "{transition_phrase}" Then read the question.'
         else:
-            msg = f"Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"{understand_check}\""
+            msg = f"{translate_instruction}Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"{understand_check}\""
     else:
         # Turn 0: Initial teaching
         if teach_content:
