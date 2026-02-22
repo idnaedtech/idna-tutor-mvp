@@ -4,7 +4,7 @@
 > **Last updated:** 2026-02-23
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v8.0.1
+> **Current version:** v8.1.0
 > **Can be modified by CEO only.**
 
 ---
@@ -422,7 +422,7 @@ If your change adds latency, flag it.
 ## 15. DEPLOYMENT NOTES
 
 - Railway auto-deploys from `main` branch on GitHub
-- Health check: `GET /health` → `{"status":"ok","version":"8.0.1"}`
+- Health check: `GET /health` → `{"status":"ok","version":"8.1.0"}`
 - Environment variables are set in Railway dashboard — **never hardcode secrets**
 - If deploy fails, check Railway build logs first
 - TTS cache is in PostgreSQL — survives container restarts
