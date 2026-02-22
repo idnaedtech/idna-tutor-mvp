@@ -57,6 +57,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/student", tags=["student"])
 
 
+# v8.1.0: Normalize legacy state names to v8.0 TutorState values
+def _normalize_state(state_str: str) -> TutorState:
+    """Map legacy state names to v8.0 TutorState enum.
+
+    Legacy FSM uses: HINT_1, HINT_2, FULL_SOLUTION, SESSION_COMPLETE, etc.
+    v8.0 FSM uses: HINT, SESSION_END, etc.
+    """
+    # Direct mapping for states that exist in both
+    try:
+        return TutorState(state_str)
+    except ValueError:
+        pass
+
+    # Map legacy states to v8.0 states
+    legacy_mapping = {
+        "HINT_1": TutorState.HINT,
+        "HINT_2": TutorState.HINT,
+        "FULL_SOLUTION": TutorState.HINT,
+        "SESSION_COMPLETE": TutorState.SESSION_END,
+        "WRAP_UP": TutorState.SESSION_END,
+        "EVALUATING": TutorState.WAITING_ANSWER,  # Evaluation happens during WAITING_ANSWER
+    }
+
+    if state_str in legacy_mapping:
+        return legacy_mapping[state_str]
+
+    # Default fallback - shouldn't happen
+    logger.warning(f"Unknown state '{state_str}', defaulting to TEACHING")
+    return TutorState.TEACHING
+
+
 def get_tts_language(session) -> str:
     """
     v7.3.19 Fix 1: Map language_pref to TTS language code.
@@ -420,7 +451,7 @@ async def process_message(
     state_before = session.state
 
     # v8.0: Get transition from new FSM
-    transition_result = get_transition(TutorState(session.state), category)
+    transition_result = get_transition(_normalize_state(session.state), category)
     logger.info(f"v8.0: {session.state} × {category} → {transition_result.next_state.value} (action={transition_result.action})")
 
     # v8.0: CRITICAL - Store language BEFORE calling handler
@@ -585,10 +616,17 @@ async def process_message(
     elif action.teaching_turn > 0:
         session.teaching_turn = action.teaching_turn
 
-    # v8.1.0: Calculate session duration
-    from datetime import datetime
-    now = datetime.utcnow()
-    duration_minutes = int((now - session.started_at).total_seconds() / 60) if session.started_at else 0
+    # v8.1.0: Calculate session duration (handle both naive and aware datetimes)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if session.started_at:
+        started = session.started_at
+        # Handle naive datetimes from old DB records
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        duration_minutes = int((now - started).total_seconds() / 60)
+    else:
+        duration_minutes = 0
 
     session_ctx = {
         "subject": session.subject,
@@ -901,7 +939,7 @@ async def process_message_stream(
     }
 
     # v8.0: Get transition from new FSM
-    transition_result = get_transition(TutorState(session.state), category)
+    transition_result = get_transition(_normalize_state(session.state), category)
     logger.info(f"v8.0 (stream): {session.state} × {category} → {transition_result.next_state.value}")
 
     # v8.0: CRITICAL - Store language BEFORE calling handler
@@ -1043,9 +1081,16 @@ async def process_message_stream(
     # ── Build prompt ──
     # v7.3.22 Fix 2: Include language_pref in session_ctx for streaming endpoint
     # v8.1.0: Include confusion_count and full context for escalation protocol
-    from datetime import datetime
-    now = datetime.utcnow()
-    duration_minutes = int((now - session.started_at).total_seconds() / 60) if session.started_at else 0
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if session.started_at:
+        started = session.started_at
+        # Handle naive datetimes from old DB records
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        duration_minutes = int((now - started).total_seconds() / 60)
+    else:
+        duration_minutes = 0
 
     session_ctx = {
         "subject": session.subject,
