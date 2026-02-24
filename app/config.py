@@ -53,9 +53,12 @@ MAX_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 15
 
 # ─── TTS Settings ────────────────────────────────────────────────────────────
+# UX: "simran" is the warmest/youngest female Hindi voice in Sarvam Bulbul v3
 TTS_SPEAKER = os.getenv("TTS_SPEAKER", "simran")
-TTS_PACE = float(os.getenv("TTS_PACE", "0.90"))
-TTS_TEMPERATURE = float(os.getenv("TTS_TEMPERATURE", "0.6"))
+# UX FIX: Slower pace (0.85) for children - easier to follow, sounds warmer
+TTS_PACE = float(os.getenv("TTS_PACE", "0.85"))
+# UX: Lower temperature (0.5) for more consistent, natural prosody
+TTS_TEMPERATURE = float(os.getenv("TTS_TEMPERATURE", "0.5"))
 TTS_MODEL = os.getenv("TTS_MODEL", "bulbul:v3")
 TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", "24000"))
 SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"

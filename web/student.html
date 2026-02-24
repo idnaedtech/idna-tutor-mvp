@@ -178,7 +178,13 @@
             display: none;
         }
 
-        .typing.show { display: flex; gap: 5px; }
+        .typing.show { display: flex; gap: 5px; align-items: center; }
+
+        .typing-text {
+            font-size: 13px;
+            color: var(--text-light);
+            margin-left: 8px;
+        }
 
         .typing-dot {
             width: 8px;
@@ -380,6 +386,7 @@
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
+            <span class="typing-text" id="typingText">Didi soch rahi hai...</span>
         </div>
     </div>
 
@@ -678,6 +685,115 @@
     }
 
     // ─── Audio Playback ────────────────────────────────
+
+    // UX FIX: Play audio and show text in SYNC (text appears when audio starts)
+    async function playDidiAudioWithText(b64, text) {
+        console.log("[Audio] playDidiAudioWithText called");
+
+        if (!b64 || b64.length === 0) {
+            // No audio - show text after 2s timeout as fallback
+            console.log("[Audio] No audio, showing text after 2s fallback");
+            setTimeout(() => {
+                addMessage('didi', text);
+                startListening();
+            }, 2000);
+            return;
+        }
+
+        isDidiSpeaking = true;
+        pauseListening();
+        updateVoiceUI('didi-speaking');
+
+        return new Promise((resolve) => {
+            try {
+                const bytes = atob(b64);
+                const arr = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+
+                const blob = new Blob([arr], { type: 'audio/mp3' });
+                const url = URL.createObjectURL(blob);
+
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+
+                currentAudio = new Audio(url);
+
+                let hasEnded = false;
+                let textShown = false;
+                let maxTimeout = null;
+                let textFallbackTimeout = null;
+
+                const cleanup = () => {
+                    if (hasEnded) return;
+                    hasEnded = true;
+                    if (maxTimeout) clearTimeout(maxTimeout);
+                    if (textFallbackTimeout) clearTimeout(textFallbackTimeout);
+                    URL.revokeObjectURL(url);
+                    isDidiSpeaking = false;
+                    currentAudio = null;
+                    setTimeout(() => startListening(), 500);
+                    resolve();
+                };
+
+                // KEY FIX: Show text ONLY when audio actually starts playing
+                currentAudio.onplay = () => {
+                    if (!textShown) {
+                        textShown = true;
+                        addMessage('didi', text, b64);
+                        console.log("[Audio] onplay - text bubble rendered");
+                    }
+                };
+
+                currentAudio.onended = () => {
+                    console.log("[Audio] onended");
+                    cleanup();
+                };
+
+                currentAudio.onerror = (e) => {
+                    console.error("[Audio] onerror:", e);
+                    if (!textShown) {
+                        textShown = true;
+                        addMessage('didi', text, b64);
+                    }
+                    cleanup();
+                };
+
+                // Fallback: if audio doesn't start within 2s, show text anyway
+                textFallbackTimeout = setTimeout(() => {
+                    if (!textShown) {
+                        textShown = true;
+                        addMessage('didi', text, b64);
+                        console.log("[Audio] 2s fallback - text bubble rendered");
+                    }
+                }, 2000);
+
+                // Safety timeout
+                maxTimeout = setTimeout(() => {
+                    console.warn("[Audio] Max timeout - forcing cleanup");
+                    cleanup();
+                }, 30000);
+
+                currentAudio.play().catch((e) => {
+                    console.error("[Audio] Play failed:", e);
+                    if (!textShown) {
+                        textShown = true;
+                        addMessage('didi', text, b64);
+                    }
+                    cleanup();
+                });
+
+            } catch (e) {
+                console.error("[Audio] Decode error:", e);
+                addMessage('didi', text);
+                isDidiSpeaking = false;
+                startListening();
+                resolve();
+            }
+        });
+    }
+
     async function playDidiAudio(b64) {
         console.log("[Audio] playDidiAudio called, b64 length:", b64 ? b64.length : 0);
 
@@ -798,7 +914,8 @@
 
         // Show student bubble placeholder
         addMessage('student', '🎤 ...');
-        showTyping(true);
+        // UX: Show typing indicator IMMEDIATELY for perceived speed
+        showTyping(true, 'Sun rahi hoon...');
 
         // Convert blob to base64
         const reader = new FileReader();
@@ -827,7 +944,8 @@
                 return sendAudioNonStreaming(wavBlob);
             }
 
-            showTyping(false);
+            // UX: Update typing message now that we're processing
+            showTyping(true, 'Didi soch rahi hai...');
 
             // Process SSE stream with proper buffering for partial chunks
             const eventReader = resp.body.getReader();
@@ -869,6 +987,7 @@
                                 isDidiSpeaking = true;
                                 pauseListening();
                                 updateVoiceUI('didi-speaking');
+                                showTyping(false);  // UX: Hide typing when audio starts
                                 playNextChunk();
                             }
                         }
@@ -987,11 +1106,12 @@
                 lastStudent.querySelector('.text').textContent = text;
             }
 
-            addMessage('didi', data.didi_text, data.didi_audio_b64);
-
+            // UX FIX: Buffer text until audio plays (voice/text sync)
             if (data.didi_audio_b64) {
-                await playDidiAudio(data.didi_audio_b64);
+                await playDidiAudioWithText(data.didi_audio_b64, data.didi_text);
             } else {
+                // No audio - show text immediately with 2s fallback
+                addMessage('didi', data.didi_text);
                 startListening();
             }
 
@@ -1016,7 +1136,8 @@
         clearInactivityTimer();
 
         addMessage('student', text);
-        showTyping(true);
+        // UX: Show typing indicator IMMEDIATELY for perceived speed
+        showTyping(true, 'Didi soch rahi hai...');
         updateVoiceUI('processing');
 
         const formData = new FormData();
@@ -1046,11 +1167,11 @@
             const data = await resp.json();
             logLatency(data);
 
-            addMessage('didi', data.didi_text, data.didi_audio_b64);
-
+            // UX FIX: Buffer text until audio plays (voice/text sync)
             if (data.didi_audio_b64) {
-                await playDidiAudio(data.didi_audio_b64);
+                await playDidiAudioWithText(data.didi_audio_b64, data.didi_text);
             } else {
+                addMessage('didi', data.didi_text);
                 startListening();
             }
 
@@ -1130,13 +1251,11 @@
             sessionId = data.session_id;
             headerStatus.textContent = 'Online';
 
-            // Show greeting
-            addMessage('didi', data.greeting_text, data.greeting_audio_b64);
-
-            // Play greeting, then start listening
+            // UX FIX: Show greeting text synced with audio playback
             if (data.greeting_audio_b64) {
-                await playDidiAudio(data.greeting_audio_b64);
+                await playDidiAudioWithText(data.greeting_audio_b64, data.greeting_text);
             } else {
+                addMessage('didi', data.greeting_text);
                 startListening();
             }
 
@@ -1223,8 +1342,10 @@
         chatArea.scrollTop = chatArea.scrollHeight;
     }
 
-    function showTyping(show) {
+    function showTyping(show, message = 'Didi soch rahi hai...') {
         typing.classList.toggle('show', show);
+        const typingTextEl = document.getElementById('typingText');
+        if (typingTextEl) typingTextEl.textContent = message;
         if (show) scrollToBottom();
     }
 
