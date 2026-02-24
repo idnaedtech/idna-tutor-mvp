@@ -207,9 +207,24 @@ def start_session(
     db.commit()
     db.refresh(session)
 
+    # P1 fix: Get questions already answered by this student (across ALL sessions)
+    # This prevents serving the same question on page refresh
+    prev_answered = (
+        db.query(SessionTurn.question_id)
+        .join(Session)
+        .filter(
+            Session.student_id == student_id,
+            SessionTurn.question_id.isnot(None),
+            SessionTurn.verdict.in_(("CORRECT", "INCORRECT")),
+        )
+        .distinct()
+        .all()
+    )
+    asked_question_ids = [q[0] for q in prev_answered]
+
     # Pick first question (or weakest skill question for returning students)
     first_question = memory.pick_next_question(
-        db, student_id, "math", chapter, asked_question_ids=[]
+        db, student_id, "math", chapter, asked_question_ids=asked_question_ids
     )
     if first_question:
         session.current_question_id = first_question["id"]
