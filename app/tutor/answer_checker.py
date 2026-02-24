@@ -173,8 +173,8 @@ def _parse_fraction_from_text(text: str) -> Optional[Fraction]:
         frac = Fraction(num, den)
         return -frac if is_negative else frac
 
-    # "X by Y", "X baata Y", "X upon Y", "X over Y"
-    for sep in ["by", "baata", "upon", "over", "bata"]:
+    # "X by Y", "X baata Y", "X upon Y", "X over Y", "X बटा Y" (Devanagari)
+    for sep in ["by", "baata", "upon", "over", "bata", "बटा"]:
         parts = text.split(sep)
         if len(parts) == 2:
             num_word = parts[0].strip()

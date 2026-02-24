@@ -81,6 +81,11 @@ class SarvamBulbulTTS:
         language: str = "hi-IN",
         speaker: str = TTS_SPEAKER,
     ) -> TTSResult:
+        # Guard against empty text to avoid wasting API quota
+        if not text or not text.strip():
+            logger.warning("TTS called with empty text, returning empty audio")
+            return TTSResult(audio_bytes=b'', latency_ms=0, cached=False, cache_path=None)
+
         # Check cache first
         cache_key = self._cache_key(text, language, speaker)
         cache_path = AUDIO_CACHE_DIR / f"{cache_key}.mp3"
@@ -163,6 +168,11 @@ class SarvamBulbulTTS:
         speaker: str = TTS_SPEAKER,
     ) -> TTSResult:
         """Async version of synthesize for parallel TTS calls."""
+        # Guard against empty text to avoid wasting API quota
+        if not text or not text.strip():
+            logger.warning("TTS [async] called with empty text, returning empty audio")
+            return TTSResult(audio_bytes=b'', latency_ms=0, cached=False, cache_path=None)
+
         # Check cache first
         cache_key = self._cache_key(text, language, speaker)
         cache_path = AUDIO_CACHE_DIR / f"{cache_key}.mp3"

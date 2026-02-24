@@ -55,6 +55,12 @@ FAST_STOP = {
     "khatam", "खतम",
 }
 
+# P1 Fix: Homework-related phrases → map to CONCEPT_REQUEST (don't add new category)
+FAST_HOMEWORK = {
+    "homework", "होमवर्क", "home work", "गृहकार्य",
+    "assignment", "classwork", "class work",
+}
+
 # ─── LLM Classifier System Prompt ────────────────────────────────────────────
 
 CLASSIFIER_SYSTEM = """You classify student input for an Indian tutoring system.
@@ -140,6 +146,10 @@ async def classify(
         # Contains digits → likely an answer
         if re.search(r'\d', text):
             return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
+
+    # ─── Fast Path: homework-related → CONCEPT_REQUEST (P1 fix) ───────────────
+    if any(hw_word in normalized for hw_word in FAST_HOMEWORK):
+        return {"category": "CONCEPT_REQUEST", "confidence": 0.90, "extras": {"is_homework": True}}
 
     # ─── LLM Classification ───────────────────────────────────────────────────
     if client is None:

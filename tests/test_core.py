@@ -67,6 +67,15 @@ class TestFractionParsing:
     def test_sunya(self):
         assert _parse_fraction_from_text("sunya") == Fraction(0)
 
+    # P1 regression test: Devanagari बटा parser
+    def test_devanagari_bata(self):
+        """v8.1.1 P1 fix: Hindi Devanagari 'बटा' should work like 'baata'."""
+        assert _parse_fraction_from_text("2 बटा 7") == Fraction(2, 7)
+
+    def test_devanagari_bata_negative(self):
+        """v8.1.1 P1 fix: Negative fractions with Devanagari बटा."""
+        assert _parse_fraction_from_text("minus 3 बटा 9") == Fraction(-3, 9)
+
 
 # ─── Answer Checking Tests ────────────────────────────────────────────────────
 
@@ -321,6 +330,24 @@ class TestInputClassifierAsync:
 
         result = asyncio.run(classify("", "TEACHING", client=None))
         assert result["category"] == "REPEAT"
+
+    # P1 regression test: HOMEWORK_HELP detection
+    def test_homework_detected_as_concept_request(self):
+        """v8.1.1 P1 fix: Homework input maps to CONCEPT_REQUEST."""
+        import asyncio
+        from app.tutor.input_classifier import classify
+
+        result = asyncio.run(classify("mera homework question hai", "TEACHING", client=None))
+        assert result["category"] == "CONCEPT_REQUEST"
+        assert result["extras"].get("is_homework") is True
+
+    def test_homework_devanagari(self):
+        """v8.1.1 P1 fix: होमवर्क (Hindi) detected."""
+        import asyncio
+        from app.tutor.input_classifier import classify
+
+        result = asyncio.run(classify("होमवर्क problem solve karna hai", "TEACHING", client=None))
+        assert result["category"] == "CONCEPT_REQUEST"
 
 
 # ─── Enforcer Tests ───────────────────────────────────────────────────────────

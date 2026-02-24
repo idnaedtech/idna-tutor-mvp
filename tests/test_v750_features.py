@@ -139,3 +139,36 @@ class TestTTSPrecache:
         save_to_cache("any text", b"audio", "hi-IN")  # Should not raise
         stats = get_cache_stats()
         assert stats["files"] == 0
+
+
+class TestTTSEmptyGuard:
+    """v8.1.1 P1 fix: TTS empty text guard tests."""
+
+    def test_empty_text_returns_empty_audio(self):
+        """v8.1.1 P1 fix: Empty text should return empty audio without API call."""
+        from app.voice.tts import SarvamBulbulTTS
+
+        tts = SarvamBulbulTTS()
+        result = tts.synthesize("", "hi-IN")
+        assert result.audio_bytes == b''
+        assert result.latency_ms == 0
+        assert result.cached is False
+
+    def test_whitespace_only_returns_empty_audio(self):
+        """v8.1.1 P1 fix: Whitespace-only text should return empty audio."""
+        from app.voice.tts import SarvamBulbulTTS
+
+        tts = SarvamBulbulTTS()
+        result = tts.synthesize("   \n\t  ", "hi-IN")
+        assert result.audio_bytes == b''
+        assert result.latency_ms == 0
+
+    def test_async_empty_text_returns_empty_audio(self):
+        """v8.1.1 P1 fix: Async TTS with empty text should return empty audio."""
+        import asyncio
+        from app.voice.tts import SarvamBulbulTTS
+
+        tts = SarvamBulbulTTS()
+        result = asyncio.run(tts.synthesize_async("", "hi-IN"))
+        assert result.audio_bytes == b''
+        assert result.latency_ms == 0
