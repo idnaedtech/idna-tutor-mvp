@@ -398,10 +398,12 @@ async def process_message(
             stt_latency=stt_latency,
         )
 
-    # Language switch: update session preference
+    # Language switch: update session preference AND commit immediately
+    # P0 Bug A fix: Language must persist across requests
     if preprocess_result.language_switched:
         session.language_pref = preprocess_result.new_language
-        logger.info(f"v8.1.0: Language switched to '{session.language_pref}'")
+        db.commit()  # P0 fix: Commit immediately so next request sees the change
+        logger.info(f"P0 FIX: Language switched to '{session.language_pref}' and COMMITTED to DB")
 
     # Confusion: increment counter
     if preprocess_result.confusion_detected:
@@ -421,8 +423,11 @@ async def process_message(
     category = classify_result["category"]
     logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
     # Handle LANGUAGE_SWITCH preference from classifier
+    # P0 Bug A fix: Commit language change immediately
     if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
         session.language_pref = classify_result["extras"]["preferred_language"]
+        db.commit()  # P0 fix: Persist language change
+        logger.info(f"P0 FIX: Classifier set language to '{session.language_pref}' and COMMITTED")
 
     # v7.3.28 Fix 3: Empathy one turn max
     # If we already gave empathy, force next message to be ACK and go to TEACHING
@@ -880,10 +885,12 @@ async def process_message_stream(
 
         return StreamingResponse(meta_stream(), media_type="text/event-stream")
 
-    # Language switch: update session preference
+    # Language switch: update session preference AND commit immediately
+    # P0 Bug A fix: Language must persist across requests
     if preprocess_result.language_switched:
         session.language_pref = preprocess_result.new_language
-        logger.info(f"v8.1.0 (stream): Language switched to '{session.language_pref}'")
+        await run_in_threadpool(lambda: db.commit())  # P0 fix: Commit immediately
+        logger.info(f"P0 FIX (stream): Language switched to '{session.language_pref}' and COMMITTED to DB")
 
     # Confusion: increment counter
     if preprocess_result.confusion_detected:
@@ -901,8 +908,11 @@ async def process_message_stream(
     category = classify_result["category"]
     logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
     # Handle LANGUAGE_SWITCH preference from classifier (Break 4 fix)
+    # P0 Bug A fix: Commit language change immediately
     if category == "LANGUAGE_SWITCH" and classify_result.get("extras", {}).get("preferred_language"):
         session.language_pref = classify_result["extras"]["preferred_language"]
+        await run_in_threadpool(lambda: db.commit())  # P0 fix: Persist language change
+        logger.info(f"P0 FIX (stream): Classifier set language to '{session.language_pref}' and COMMITTED")
 
     # v7.3.28 Fix 3: Empathy one turn max (streaming endpoint)
     # If we already gave empathy, force next message to be ACK and go to TEACHING

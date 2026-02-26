@@ -180,9 +180,60 @@ def _get_language_instruction(session_context: dict) -> str:
 
 
 def _get_confusion_instruction(session_context: dict) -> str:
-    """Get confusion escalation context based on confusion_count."""
+    """
+    Get confusion escalation context based on confusion_count.
+
+    P0 Bug C fix: Add actual escalation logic, not just a count.
+    - Count 1-2: Normal re-explanation
+    - Count 3: Simplify significantly, use different approach
+    - Count 4+: Offer a break, acknowledge difficulty
+    """
     count = session_context.get("confusion_count", 0)
-    return f"\nCONFUSION COUNT: {count}"
+    lang_pref = session_context.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
+
+    if count == 0:
+        return ""
+    elif count <= 2:
+        return f"\nCONFUSION COUNT: {count}. Student is slightly confused. Try a different explanation approach."
+    elif count == 3:
+        if use_english:
+            return f"""
+CONFUSION COUNT: {count}. Student is struggling significantly.
+ESCALATION REQUIRED:
+- Use MUCH simpler language
+- Break into smaller steps
+- Use a concrete real-world example
+- Ask "Would you like me to explain this differently?"
+"""
+        else:
+            return f"""
+CONFUSION COUNT: {count}. Student bahut struggle kar raha hai.
+ESCALATION REQUIRED:
+- Bahut simple language use karo
+- Chhote chhote steps mein samjhao
+- Real-world example do
+- Pucho "Kya alag tarike se samjhaun?"
+"""
+    else:  # count >= 4
+        if use_english:
+            return f"""
+CONFUSION COUNT: {count}. Student is very frustrated. OFFER A BREAK.
+YOU MUST SAY ONE OF THESE:
+- "This is a tricky topic. Would you like to take a short break?"
+- "It's okay to find this difficult. Let's pause for a moment."
+- "Should we try a different topic and come back to this later?"
+DO NOT continue teaching the same way. ACKNOWLEDGE their difficulty first.
+"""
+        else:
+            return f"""
+CONFUSION COUNT: {count}. Student bahut frustrated hai. BREAK OFFER KARO.
+YEH ZAROOR BOLO:
+- "Yeh mushkil topic hai. Thoda break lena chahoge?"
+- "Koi baat nahi, mushkil hai. Ek minute ruko."
+- "Chalo kuch aur try karte hain, phir wapas aayenge is pe?"
+SAME explanation mat do. PEHLE unki difficulty acknowledge karo.
+"""
 
 
 def _get_chapter_context(session_context: dict, question_data: dict = None) -> str:
