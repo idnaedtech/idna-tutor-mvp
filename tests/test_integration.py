@@ -554,5 +554,114 @@ class TestBugDGreetingNotDumpingLesson:
         assert result.action == "start_teaching"
 
 
+class TestLanguagePersistenceE2E:
+    """
+    End-to-end tests for language persistence (Bug A/B fix).
+    Tests that language switch persists across multiple turns.
+    """
+
+    def test_tts_language_mapping_english(self):
+        """Bug B: get_tts_language should return 'en-IN' when language_pref is 'english'."""
+        from unittest.mock import MagicMock
+        from app.routers.student import get_tts_language
+
+        session = MagicMock()
+        session.language_pref = "english"
+        session.language = "hi-IN"  # Default
+
+        result = get_tts_language(session)
+        assert result == "en-IN", f"Expected en-IN for english, got {result}"
+
+    def test_tts_language_mapping_hindi(self):
+        """TTS should return hi-IN for hindi/hinglish."""
+        from unittest.mock import MagicMock
+        from app.routers.student import get_tts_language
+
+        session = MagicMock()
+        session.language_pref = "hinglish"
+        session.language = "hi-IN"
+
+        result = get_tts_language(session)
+        assert result == "hi-IN", f"Expected hi-IN for hinglish, got {result}"
+
+    def test_language_switch_detection(self):
+        """Language switch phrases should be detected correctly."""
+        from app.tutor.preprocessing import detect_language_switch
+
+        # English switch
+        assert detect_language_switch("speak in English please") == "english"
+        assert detect_language_switch("can you speak in english?") == "english"
+        assert detect_language_switch("I don't understand Hindi") == "english"
+
+        # Hindi switch
+        assert detect_language_switch("Hindi mein bolo") == "hindi"
+        assert detect_language_switch("speak in Hindi") == "hindi"
+
+
+class TestConfusionEscalationE2E:
+    """
+    End-to-end tests for confusion escalation (Bug C fix).
+    Tests that confusion_count triggers escalation at count >= 4.
+    """
+
+    def test_confusion_instruction_at_count_4(self):
+        """Bug C: At confusion_count >= 4, LLM prompt should include break offer."""
+        from app.tutor.instruction_builder import _get_confusion_instruction
+
+        # Count 0: no instruction
+        ctx = {"confusion_count": 0, "language_pref": "english"}
+        result = _get_confusion_instruction(ctx)
+        assert result == "", f"Expected empty string at count 0, got {result}"
+
+        # Count 1-2: mild instruction
+        ctx["confusion_count"] = 2
+        result = _get_confusion_instruction(ctx)
+        assert "Student is slightly confused" in result
+
+        # Count 3: escalation
+        ctx["confusion_count"] = 3
+        result = _get_confusion_instruction(ctx)
+        assert "ESCALATION REQUIRED" in result
+
+        # Count 4+: OFFER A BREAK
+        ctx["confusion_count"] = 4
+        result = _get_confusion_instruction(ctx)
+        assert "OFFER A BREAK" in result
+        assert "break" in result.lower()
+
+    def test_confusion_instruction_injected_in_prompt(self):
+        """Bug C: _sys() should include confusion instruction from _get_confusion_instruction()."""
+        from app.tutor.instruction_builder import _sys
+
+        # At count 4, the system prompt should include break offer
+        ctx = {
+            "confusion_count": 4,
+            "language_pref": "english",
+            "student_name": "Priya",
+            "board_name": "NCERT",
+            "class_level": 8,
+            "state": "TEACHING",
+        }
+        result = _sys(session_context=ctx)
+        assert "OFFER A BREAK" in result, "Confusion escalation not injected into prompt"
+
+    def test_confusion_patterns_hindi(self):
+        """Bug C: Hindi confusion patterns should be detected."""
+        from app.tutor.preprocessing import detect_confusion
+
+        # Devanagari patterns
+        assert detect_confusion("समझ में नहीं आया") is True
+        assert detect_confusion("कुछ समझ में नहीं") is True
+        assert detect_confusion("मुझे समझ में नहीं आया") is True
+
+        # Romanized patterns
+        assert detect_confusion("samajh mein nahi aaya") is True
+        assert detect_confusion("kuch samajh nahi") is True
+
+        # English patterns
+        assert detect_confusion("I can't understand") is True
+        assert detect_confusion("I don't understand this") is True
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
