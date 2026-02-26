@@ -111,7 +111,7 @@ CONFUSION_PATTERNS = [
     # Hindi/Hinglish patterns
     r"(nahi|nai)\s+samajh",
     r"(nahi|nai)\s+samjha",
-    r"samajh\s+(nahi|nai|me nahi)",
+    r"samajh\s+(nahi|nai|me nahi|mein nahi)",
     r"samjha\s+(nahi|nai)",
     r"(nahi|nai)\s+aaya",
     r"समझ\s+नहीं",
@@ -122,6 +122,16 @@ CONFUSION_PATTERNS = [
     r"phir\s+se\s+(bolo|batao|samjhao)",
     r"dobara\s+(bolo|batao|samjhao)",
     r"ek\s+baar\s+aur",
+    # Bug C fix: Additional confusion patterns
+    r"समझ\s+में\s+नहीं\s+आया",  # samajh mein nahi aaya (Devanagari)
+    r"कुछ\s+समझ\s+में\s+नहीं",  # kuch samajh mein nahi
+    r"मुझे.*समझ.*नहीं",  # mujhe samajh nahi
+    r"samajh\s+mein\s+nahi",  # romanized
+    r"kuch\s+samajh\s+nahi",  # romanized
+    r"can'?t\s+understand",
+    r"don'?t\s+understand",
+    r"didn'?t\s+understand",
+    r"not\s+understand",
 ]
 
 _CONFUSION_RE = re.compile("|".join(CONFUSION_PATTERNS), re.IGNORECASE)

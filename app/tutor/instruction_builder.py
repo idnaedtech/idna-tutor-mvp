@@ -332,6 +332,10 @@ def _sys(extra="", session_context: dict = None, question_data: dict = None):
     """Build system prompt with formatted DIDI_BASE."""
     if session_context:
         base = _format_didi_base(session_context, question_data)
+        # Bug C fix: Inject confusion escalation instruction
+        confusion_instruction = _get_confusion_instruction(session_context)
+        if confusion_instruction:
+            base += confusion_instruction
     else:
         # Fallback for backward compat - use unformatted base with placeholders shown
         base = DIDI_BASE.format(

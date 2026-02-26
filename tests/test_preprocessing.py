@@ -106,6 +106,31 @@ class TestConfusionDetector:
     def test_no_confusion_normal_sentence(self):
         assert detect_confusion("I think the answer is 49") is False
 
+    # Bug C fix: Test new Hindi confusion patterns
+    def test_samajh_mein_nahi_aaya_devanagari(self):
+        """Bug C: Devanagari 'samajh mein nahi aaya' must be detected."""
+        assert detect_confusion("समझ में नहीं आया") is True
+
+    def test_kuch_samajh_mein_nahi_devanagari(self):
+        """Bug C: 'kuch samajh mein nahi' in Devanagari."""
+        assert detect_confusion("कुछ समझ में नहीं") is True
+
+    def test_mujhe_samajh_nahi_devanagari(self):
+        """Bug C: 'mujhe samajh nahi' in Devanagari."""
+        assert detect_confusion("मुझे कुछ समझ में नहीं आया") is True
+
+    def test_samajh_mein_nahi_romanized(self):
+        """Bug C: Romanized 'samajh mein nahi'."""
+        assert detect_confusion("samajh mein nahi aaya") is True
+
+    def test_cant_understand(self):
+        """Bug C: English 'can't understand'."""
+        assert detect_confusion("I can't understand this") is True
+
+    def test_dont_understand(self):
+        """Bug C: English 'don't understand'."""
+        assert detect_confusion("I don't understand") is True
+
 
 class TestMetaQuestionDetector:
     """Test meta-question detection patterns."""
