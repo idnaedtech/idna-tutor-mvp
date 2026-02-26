@@ -468,10 +468,12 @@ async def process_message(
     logger.info(f"v8.0: {session.state} × {category} → {transition_result.next_state.value} (action={transition_result.action})")
 
     # v8.0: CRITICAL - Store language BEFORE calling handler
+    # Bug A fix: Ensure commit happens here too (classifier may have already done it)
     extras = classify_result.get("extras", {})
     if transition_result.special == "store_language" and extras.get("preferred_language"):
         session.language_pref = extras["preferred_language"]
-        logger.info(f"v8.0: Language set to '{session.language_pref}' BEFORE handler")
+        db.commit()  # Bug A fix: Persist immediately
+        logger.info(f"v8.0: Language set to '{session.language_pref}' BEFORE handler and COMMITTED")
 
     # Use old transition for Action object (for backward compat with answer eval)
     new_state, action = transition(session.state, category, ctx)
@@ -961,10 +963,12 @@ async def process_message_stream(
     logger.info(f"v8.0 (stream): {session.state} × {category} → {transition_result.next_state.value}")
 
     # v8.0: CRITICAL - Store language BEFORE calling handler
+    # Bug A fix: Ensure commit happens here too (classifier may have already done it)
     extras = classify_result.get("extras", {})
     if transition_result.special == "store_language" and extras.get("preferred_language"):
         session.language_pref = extras["preferred_language"]
-        logger.info(f"v8.0: Language set to '{session.language_pref}' BEFORE handler")
+        await run_in_threadpool(lambda: db.commit())  # Bug A fix: Persist immediately
+        logger.info(f"v8.0 (stream): Language set to '{session.language_pref}' BEFORE handler and COMMITTED")
 
     # Use old transition for Action object (backward compat with answer eval)
     new_state, action = transition(session.state, category, ctx)
