@@ -1,280 +1,264 @@
 ---
 name: idna-edtech-tutor
 description: >
-  IDNA EdTech AI voice tutor development skill. Use this skill whenever the user
-  mentions IDNA, Didi tutor, voice tutoring, Learn IDNA, EdTech MVP, NCERT tutoring,
-  Hindi-English voice pipeline, Sarvam TTS, Groq Whisper, agentic tutor,
-  student session flow, parent voice reports, or any work related to building an
-  AI-powered tutor for Indian K-10 students. Also trigger when discussing
-  tutor system prompts, teaching flows, input classification, question banks,
-  voice pipeline latency, Hinglish code-switching, or any NCERT subject including
-  Mathematics, Science, Social Science (History, Geography, Civics, Economics),
-  English, Hindi, and Sanskrit. This skill covers all NCERT Class 6-10 subjects
-  with math as the current MVP focus and expansion to all subjects planned.
-  Activate even for tangentially related requests like debugging FastAPI endpoints,
-  improving LLM prompts for education, working with speech-to-text/text-to-speech
-  pipelines in Hindi, or building curriculum-aligned content for Indian schools.
+  IDNA EdTech AI voice tutor skill. Trigger when user mentions IDNA, Didi tutor,
+  voice tutoring, Learn IDNA, EdTech MVP, NCERT tutoring, Sarvam TTS/STT, agentic
+  tutor, session flow, parent reports, IDNA-Bench, multi-board tutoring, or building
+  AI tutors for Indian K-10 students. Also trigger for teaching flows, input
+  classification, question banks, voice pipeline, Hinglish code-switching, content
+  banks, board expansion, benchmark evaluation, NCERT/state board subjects. Covers
+  all boards (CBSE, ICSE, IB, 29+ state boards), 22 languages, Classes 6-10, 12
+  subjects. Activate for FastAPI debugging, LLM prompts for education, TTS/STT
+  pipelines, curriculum content, schema migrations, Alembic, benchmark design,
+  content factory, or IDNA-Bench layers. Also trigger for GPT-5-mini tutor prompts,
+  GPT-4o-mini classifier logic, SessionState dataclass, FSM transitions/handlers,
+  verify.py checks, Railway deployment issues, or any file in the app/ package.
+  Do NOT trigger for generic FastAPI tutorials, general PostgreSQL questions,
+  or Python coding tasks unrelated to the IDNA codebase or EdTech domain.
 metadata:
   author: Hemant Ghosh
-  version: 6.2.4
+  version: 2.1.0
   category: edtech
-  stack: python-fastapi-openai-sarvam
+  stack: python-fastapi-gpt5mini-gpt4omini-sarvam-postgresql-railway
+  last_updated: 2026-02-27
+  app_version: 8.1.5
 ---
 
-# IDNA EdTech — Voice Tutor Development Skill
+# IDNA EdTech — Voice Tutor Development Skill (v2.0.0)
 
-## What is IDNA
+## 1. What is IDNA
 
-IDNA EdTech builds "Didi" (दीदी), an AI-powered Hindi-English voice tutor
-for Class 6-10 students in India's Tier 2/3 cities. The tutor speaks Hinglish
-naturally, teaches NCERT concepts across ALL subjects with culturally relevant
-Indian examples, and guides students through problems step-by-step like a
-patient older sister.
+IDNA EdTech builds "Didi" (दीदी), an AI-powered multilingual voice tutor for
+Class 6-10 students across India. The tutor speaks the student's preferred language
+naturally, teaches board-specific curriculum with culturally relevant Indian examples,
+and guides students through problems step-by-step like a patient older sister.
 
-**Subject Roadmap:**
+India's education system: 33+ examination boards, 22 scheduled languages, 10 class
+levels, 8-12 subjects per class. Realistic content matrix: 10,000-15,000 active
+curriculum units.
 
-| Phase | Subjects | Status |
-|-------|----------|--------|
-| MVP (Phase 1) | Mathematics (Class 8) | Active development |
-| Phase 2 | Science (Physics, Chemistry, Biology) | Planned |
-| Phase 3 | Social Science (History, Geography, Civics, Economics) | Planned |
-| Phase 4 | English, Hindi, Sanskrit (Language & Literature) | Planned |
-| Phase 5 | Classes 6, 7, 9, 10 expansion across all subjects | Planned |
+## 2. Current Status (v8.1.5)
 
-The architecture is **subject-agnostic** — the voice pipeline (STT → LLM → TTS),
-session state machine, input classifier, and teaching flow work identically
-across subjects. Only the **question bank**, **teaching content**, and
-**answer evaluation logic** change per subject.
+| Item | Status |
+|------|--------|
+| Version | **v8.1.5 LIVE on Railway** |
+| URL | https://idna-tutor-mvp-production.up.railway.app |
+| Health | /health → {"status":"ok","version":"8.1.5"} |
+| Tests | **218 passing** (including 27 integration + 5 P1 regression tests) |
+| Verify | **22/22 checks passing** via verify.py |
+| Content | Chapter 1: 50 questions, 20 skills (Squares & Cubes) |
+| P1 Bugs | **ALL 6 FIXED** (v8.1.1 - v8.1.5) |
+| Phase 0 | COMPLETE — ready for Phase 1 |
 
-## Tech Stack (Locked — Do Not Change Without Explicit Approval)
+## 3. Architecture Principles (NON-NEGOTIABLE)
+
+1. **FSM = skeleton, content/board/language = parameterized flesh.** New board = DATA insert, zero CODE change.
+2. **bench_score gates at database level.** Nothing reaches a student below threshold.
+3. **Phase gates are strict.** P0=live test (GATE) → P1=schema evolve → P2=multi-board → P3=platform → P4=device.
+4. **One Didi, always.** Sarvam Bulbul v3, speaker simran, hi-IN. No TTS fallback.
+
+## 4. Tech Stack (v8.0.1 — Locked)
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| LLM | GPT-4o | Multi-turn reasoning, Hinglish generation |
-| STT | Groq Whisper (whisper-large-v3-turbo) | language="hi" forced |
-| TTS | Sarvam Bulbul v3 | Speaker: simran, hi-IN, pace 0.90 |
-| Backend | FastAPI (Python) | Async endpoints |
-| Frontend | HTML/JS (single page) | Web-based voice interface |
-| Database | SQLite | Session logs, student profiles |
-| Hosting | Railway | Current deployment |
-| Repo | github.com/idnaedtech/idna-tutor-mvp | main branch |
+| Didi LLM | GPT-5-mini | Teaching responses, multi-turn reasoning |
+| Classifier LLM | GPT-4o-mini | Input classification (10 categories) |
+| STT | Sarvam Saarika v2.5 | Default language from STT_DEFAULT_LANGUAGE |
+| TTS | Sarvam Bulbul v3 | Speaker: simran, hi-IN, pace 0.90, temp 0.7 |
+| Backend | FastAPI (Python 3.11) | Async endpoints |
+| Frontend | HTML/JS (single page) | web/student.html |
+| Database | PostgreSQL (Railway managed) | Migrated from SQLite in v7.x |
+| TTS Cache | PostgreSQL | Moved from filesystem in v7.5.2 |
+| Hosting | Railway | Auto-deploy from GitHub main |
 
-**Future stack (Phase 2-3, NOT for MVP):**
-NVIDIA PersonaPlex 7B, Ollama/LocalAI, Asynq task queue, Milvus vector DB,
-RuleGo FSM, Gorse adaptive questions, gosseract handwriting OCR,
-Smol2Operator GUI agent, checkpoint-engine model updates, Memory-R1 RL memory.
+For Phase 2-4 tech stack (PersonaPlex, Milvus, Memory-R1, etc.), consult `references/stack-future.md`.
 
-## Codebase Structure
+## 5. Codebase Structure
 
 ```
-idna-tutor-mvp/
-├── server.py              # FastAPI app, all endpoints
-├── agentic_tutor.py       # Session state machine, teaching flow
-├── didi_voice.py          # DIDI_PROMPT, instruction builders
-├── input_classifier.py    # Classifies student input (ACK/IDK/ANSWER/etc.)
-├── tutor_states.py        # State definitions and transitions
-├── questions.py           # Question bank + SKILL_LESSONS
-├── voice_input.py         # Whisper STT module
-├── voice_output.py        # TTS module (Sarvam)
-├── web/
-│   └── index.html         # Student-facing web UI
-├── static/
-│   └── student_new.html   # Alternate UI
-└── tests/
-    ├── test_answer_checker.py
-    ├── test_input_classifier.py
-    ├── test_tutor_states.py
-    └── test_regression_live.py
+app/
+├── routers/student.py          # FastAPI endpoints (async, v8.0 FSM)
+├── state/session.py            # SessionState dataclass, TutorState enum
+├── fsm/transitions.py          # 60-combo transition matrix
+├── fsm/handlers.py             # Per-state handlers
+├── tutor/input_classifier.py   # GPT-4o-mini classifier: 10 categories
+├── tutor/llm.py                # GPT-5-mini Didi calls
+├── tutor/instruction_builder_v8.py # Language-aware prompt builder
+├── tutor/enforcer.py           # Response quality enforcement
+├── voice/stt.py                # Sarvam Saarika v2.5 STT
+├── voice/tts.py                # Sarvam Bulbul v3 TTS
+├── content/ch1_square_and_cube.py  # Chapter 1: 50 questions, 20 skills
+├── models.py                   # ORM models (Question, Student, Session)
+web/student.html                # Student-facing web UI
+tests/test_*.py                 # 152 tests
+verify.py                       # 22 automated checks
+CLAUDE.md                       # Claude Code operating rules
+IDNA_v8_ARCHITECTURE.md         # THE architecture spec
+alembic/                        # Database migrations
 ```
 
-## Current Version: v6.2.4
+**CRITICAL:** Do NOT create `app/models/` directory — it shadows `app/models.py`.
 
-### What's Working (DO NOT BREAK)
-- Teaching flow: greet → teach concept with Indian example → "Samajh aaya?" → student ACK → read question
-- Hinglish tone: natural older-sister voice, "aap" form, warm but focused
-- Sarvam Bulbul v3 TTS: single voice (simran), hi-IN locked, no fallback, single API call (no chunking)
-- Session state machine: GREETING → TEACHING → WAITING_ANSWER → EVALUATING
-- Progressive hints: first wrong → hint, second wrong → full solution
-- `clean_for_tts()`: converts fractions/symbols to speakable text
-- Groq Whisper STT with `language="hi"` forced
-- Full response playback (TTS cutoff fixed in v6.2.4)
+## 6. FSM Architecture (60-Combination Matrix)
 
-### Known Bugs (Still Active)
-1. **Repetition loop**: Sub-steps re-asked after student answers correctly
-2. **False praise**: "Bahut accha!" said when student gave no answer or wrong answer
-3. **Transcription quality**: Whisper still garbles Hindi-English mixed speech and background noise
-4. **Language preference**: Student asks for English but Didi reverts to Hinglish next turn
-5. **Answer parsing**: Hindi-transliterated math answers ("minus one by seven") not recognized as correct
+### 6 States
+`GREETING`, `TEACHING`, `WAITING_ANSWER`, `HINT`, `NEXT_QUESTION`, `SESSION_END`
 
-## Session Flow Architecture
+### 10 Input Categories
+`ACK`, `IDK`, `REPEAT`, `ANSWER`, `LANGUAGE_SWITCH`, `CONCEPT_REQUEST`, `COMFORT`, `STOP`, `TROLL`, `GARBLED`
 
+### Key Transitions
 ```
-Student speaks → Groq Whisper (STT, language="hi")
-    → Confidence check (if < 0.4: "Ek baar phir boliye?")
-    → Input Classifier (ACK / IDK / ANSWER / CONCEPT_REQUEST / COMFORT / STOP)
-    → State Machine (determines action based on current state + input category)
-    → Instruction Builder (builds LLM prompt for this specific action)
-    → GPT-4o (generates Didi's response)
-    → clean_for_tts() (fraction/symbol conversion)
-    → Sarvam TTS (single API call, full text)
-    → Audio plays in browser
+GREETING → TEACHING
+TEACHING + ACK → WAITING_ANSWER (via NEXT_QUESTION)
+TEACHING + IDK → TEACHING (reteach, cap at 3, then force WAITING_ANSWER)
+TEACHING + REPEAT → TEACHING (reteach, same cap)
+WAITING_ANSWER + ANSWER → evaluate → HINT or NEXT_QUESTION
+WAITING_ANSWER + IDK → HINT (hint 1 → hint 2 → full solution)
+NEXT_QUESTION → TEACHING (next topic) or SESSION_END
 ```
 
-## Input Categories
+### v8.0 Key Features
+1. **Language persistence**: preferred_language set by LANGUAGE_SWITCH, never resets
+2. **Reteach cap**: After 3 IDKs/REPEATs, forces transition to WAITING_ANSWER
+3. **No KeyError**: All 60 combinations defined in transition matrix
+4. **Content Bank injection**: teach_material_index → 0=definition, 1=analogy, 2=vedic_trick
 
-| Category | Examples | Action |
-|----------|---------|--------|
-| ACK | "haan", "samajh gaya", "हां", "okay" | Advance to next step |
-| IDK | "nahi samjha", "पता नहीं", "I don't know" | Reteach with different example |
-| ANSWER | Any numeric/mathematical response | Evaluate correctness |
-| CONCEPT_REQUEST | "explain karo", "बताइए", "what is this" | Teach concept |
-| COMFORT | "you're rude", "बहुत मुश्किल", "I give up" | Comfort, no teaching |
-| STOP | "bye", "band karo", "let's stop" | End session gracefully |
-| TROLL | Off-topic, jokes | Brief redirect to math |
+## 7. Voice Pipeline
 
-## Teaching Principles (Embedded in Didi's Personality)
+```
+Student speaks
+  → Sarvam Saarika v2.5 STT (~300ms)
+  → Confidence check (threshold 0.4)
+  → Input Classifier (GPT-4o-mini, 10 categories)
+  → FSM (state + input → action via transitions.py)
+  → Instruction Builder v8 (language-aware LLM prompt)
+  → GPT-5-mini (~800-1200ms)
+  → clean_for_tts()
+  → Sarvam TTS (single call, max 2000 chars)
+  → Audio plays in browser
+```
+
+### clean_for_tts() Rules
+| Input | Output |
+|-------|--------|
+| `-3/7` | `minus 3 by 7` |
+| `2/3` | `2 by 3` |
+| `+` → `plus`, `-` → `minus`, `×` → `multiplied by`, `=` → `equals` |
+| Strip markdown formatting |
+
+### Hallucination Detection (STT)
+Reject: "Thank you for watching", "Subscribe", "[Music]", "[Applause]",
+"(silence)", only punctuation, text < 2 chars, confidence < 0.4
+
+## 8. Teaching Principles (Embedded in Didi's Personality)
 
 1. **One idea per turn.** Never teach AND ask a question in the same turn.
-2. **Show, don't tell.** Math: show equations. Science: show cause-effect. History: show timeline.
-3. **Indian examples.** Roti, cricket, Diwali, monsoon, local geography — not abstract or Western examples.
-4. **Respectful Hindi.** "Aap" form, "dekhiye", "sochiye". Never "tum" or casual forms.
-5. **No false praise.** Never say "Bahut accha!" unless student actually gave correct answer.
-6. **Sub-step tracking (math).** Once a step is confirmed correct, NEVER re-ask it.
-7. **Comfort first.** If student is frustrated, acknowledge feelings before any teaching.
-8. **Subject-appropriate evaluation.** Math: exact answer. Science/SST: key concept coverage. Language: grammar + meaning.
+2. **Show, don't tell.** Math: show equations. Science: cause-effect.
+3. **Indian examples.** Roti, cricket, Diwali, monsoon, laddoo, tiles — not Western.
+4. **Respectful Hindi.** "Aap" form, "dekhiye", "sochiye". Never "tum" or casual.
+5. **No false praise.** Never say "Bahut accha!" unless answer is actually correct.
+6. **Sub-step tracking (math).** Once confirmed correct, NEVER re-ask.
+7. **Comfort first.** If frustrated, acknowledge feelings before any teaching.
+8. **Board-appropriate evaluation.** CBSE notation vs state board notation.
+9. **Language respect.** Student sets language once, ALL turns respect it.
+10. **Reteach cap.** Max 3 reteaches per concept. On 4th IDK, advance to question.
 
-## Key Development Rules
+## 9. P1 Backlog (ALL FIXED in v8.1.x)
 
-When modifying ANY file in this codebase:
+| # | Bug | Fix Version | Status |
+|---|-----|-------------|--------|
+| 1 | Same-Q reload | v8.1.2 | FIXED |
+| 2 | HOMEWORK_HELP trap | v8.1.1 | FIXED |
+| 3 | Devanagari बटा parser | v8.1.1 | FIXED |
+| 4 | Empty TTS sentence | v8.1.1 | FIXED |
+| 5 | Parent split()[0] bug | v8.1.5 | FIXED |
+| 6 | Weakest-skill dead end | v8.1.5 | FIXED |
 
-1. **Run tests after every change:**
-   ```bash
-   python -m pytest tests/ -v
-   ```
+## 10. Development Rules
 
-2. **Never change the TTS voice or add fallbacks.**
-   Sarvam simran is the only voice. No OpenAI TTS fallback. One Didi, always.
+1. **Run tests after every change:** `python -m pytest tests/ -v`
+2. **Run verify.py:** 22/22 checks must pass before commit
+3. **Never change TTS voice.** Sarvam simran only.
+4. **Never rewrite DIDI_PROMPT.** Append rules, don't replace.
+5. **New board = data insert, zero code change.**
+6. **Alembic for all schema changes.**
+7. **Commit format:** `v{major}.{minor}.{patch}: brief description`
+8. **One change per commit.** Atomic. Tested. Proven.
+9. **Don't edit MEMORY.md mid-session.**
+10. **Don't create app/models/ directory** (shadows app/models.py).
 
-3. **Never rewrite the full DIDI_PROMPT.**
-   Append rules, don't replace. The teaching tone is calibrated and working.
+## 11. Troubleshooting
 
-4. **Always force `language="hi"` in Whisper calls.**
-   Without this, Hindi speech becomes English garbage.
+### Sarvam TTS returns empty/silent audio
+1. Check if `clean_for_tts()` output is empty string — P1 bug #4
+2. Verify text length ≤ 2000 chars (Sarvam limit)
+3. Check API key validity in Railway env vars
+4. Never switch to a different TTS provider — fix the input
 
-5. **Keep the state machine simple.**
-   States: GREETING → TEACHING → WAITING_ANSWER → EVALUATING → NEXT_QUESTION
-   Don't add states without explicit approval.
+### Railway deploy fails
+1. Check `railway logs` for Python import errors
+2. Verify `requirements.txt` matches local env
+3. Check PostgreSQL connection string in Railway dashboard
+4. Confirm health endpoint responds: `/health`
 
-6. **Commit messages follow this format:**
-   `v6.X.Y: brief description of what changed`
+### SessionState KeyError
+1. This should NOT happen in v8.0 — all 60 combos are defined
+2. If it does: check `app/fsm/transitions.py` for the missing (state, input) pair
+3. Run `python -m pytest tests/test_integration.py -v` to catch gaps
 
-7. **Test with actual Hindi voice input** before marking any STT change as done.
+### STT returns hallucinated text
+1. Check hallucination detection list in `app/voice/stt.py`
+2. Verify confidence threshold is 0.4
+3. Add new hallucination patterns to the reject list, don't lower threshold
 
-## API Endpoints Reference
+### LLM response doesn't follow language preference
+1. Check `preferred_language` in SessionState — it should persist across turns
+2. Verify `instruction_builder_v8.py` injects the language into the prompt
+3. Never reset language mid-session — only LANGUAGE_SWITCH input changes it
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/` | GET | Serve web interface |
-| `/api/session/start` | POST | Start tutoring session |
-| `/api/session/select-chapter` | POST | Select chapter |
-| `/api/session/{id}/question` | GET | Get next question |
-| `/api/session/answer` | POST | Submit answer, get feedback |
-| `/api/session/{id}/summary` | GET | Session summary |
-| `/api/speech/transcribe` | POST | STT (Groq Whisper) |
-| `/api/text-to-speech` | POST | TTS (Sarvam Bulbul v3) |
-| `/api/text-to-speech/stream` | POST | Streaming TTS (SSE) |
+## 12. Examples
 
-## NCERT Content Scope
+**Example 1: Fix a voice pipeline bug**
+User: "The TTS is returning empty audio for some responses"
+Claude should:
+1. Check `app/voice/tts.py` for empty string handling
+2. Check `clean_for_tts()` output in the pipeline
+3. Run `python -m pytest tests/ -k tts -v`
+4. Never change TTS voice or provider settings
 
-### MVP: Mathematics Class 8
+**Example 2: Add content for a new chapter**
+User: "Create content bank for Chapter 2 Linear Equations"
+Claude should:
+1. Follow the pattern in `app/content/ch1_square_and_cube.py`
+2. Include questions, skills, and teaching material at 3 layers (definition, analogy, vedic_trick)
+3. Use Indian examples (roti, cricket, tiles)
+4. Verify content integrates with FSM content injection
 
-**Chapter 1: Rational Numbers (परिमेय संख्याएँ)** — Currently implemented
-- Adding/subtracting/multiplying/dividing fractions
-- Additive & multiplicative inverse
-- Properties (closure, commutative, associative, distributive)
-- Number line representation
+**Example 3: Debug FSM transition**
+User: "Student says IDK 5 times and the session loops forever"
+Claude should:
+1. Check reteach cap logic in `app/fsm/handlers.py`
+2. Verify transition matrix in `app/fsm/transitions.py` for (TEACHING, IDK) after cap
+3. Run integration tests: `python -m pytest tests/test_integration.py -v`
+4. The cap is 3 — on 4th IDK, must force WAITING_ANSWER
 
-**Remaining Math Chapters** — To be built
-- Ch 2: Linear Equations in One Variable
-- Ch 3: Understanding Quadrilaterals
-- Ch 4: Data Handling
-- Ch 5: Squares and Square Roots
-- Ch 6: Cubes and Cube Roots
-- Ch 7: Comparing Quantities
-- Ch 8: Algebraic Expressions and Identities
-- Ch 9: Mensuration
-- Ch 10-16: Remaining chapters
+**Example 4: Database schema change**
+User: "Add a new column to the students table"
+Claude should:
+1. Create Alembic migration: `alembic revision --autogenerate -m "description"`
+2. Update `app/models.py` (NOT create app/models/ directory)
+3. Run migration: `alembic upgrade head`
+4. Update tests, run verify.py
+5. For v8.1.0 schema plans, consult `references/schema-v81.md`
 
-### Future Subjects — Architecture Notes
+## 13. Reference Files
 
-All subjects use the same pipeline. Subject-specific differences:
+For detailed specifications beyond the core skill, consult these references as needed:
 
-| Subject | Answer Type | Evaluation Method | Teaching Style |
-|---------|------------|-------------------|---------------|
-| Math | Numeric/expression | Exact match + equivalence check | Step-by-step solving |
-| Science | Conceptual + numeric | Keyword matching + LLM evaluation | Explain → experiment analogy → verify |
-| Social Science | Descriptive | LLM semantic evaluation | Story/narrative → key facts → connect |
-| English | Text/grammar | LLM evaluation + rule-based grammar | Read → discuss → practice |
-| Hindi/Sanskrit | Text/grammar | LLM evaluation | Similar to English, Hindi-medium |
-
-**Key architecture decisions for multi-subject:**
-- `questions.py` → split into `questions/{subject}/{chapter}.py`
-- `input_classifier.py` → subject-aware (math answers vs descriptive answers)
-- `answer_checker.py` → pluggable evaluators per subject type
-- `SKILL_LESSONS` → organized by `{subject}_{chapter}_{skill}`
-- SubStepTracker → math-only; other subjects use LLM-based evaluation
-
-## Common Tasks & How To Do Them
-
-### Adding a new question to the bank
-Edit `questions.py`. Follow existing format:
-```python
-{
-    "id": "rat_add_6",
-    "chapter": "ch1_rational_numbers",
-    "type": "fraction_add_same_denom",
-    "question": "What is -5/9 + 2/9?",
-    "answer": "-3/9",
-    "simplified_answer": "-1/3",
-    "hints": ["Denominator same hai, sirf numerators add karo", "Minus 5 plus 2 kitna hota hai?"],
-    "target_skill": "addition_same_denom",
-}
-```
-
-### Adding a new teaching concept
-Edit `questions.py` → `SKILL_LESSONS` dict. Add the skill key and teaching text.
-Then add pre-teach text in `agentic_tutor.py` → `start_session()`.
-
-### Debugging voice pipeline issues
-1. Check Groq Whisper response: log `result["text"]` and `result["confidence"]`
-2. Check Sarvam TTS: log response time and audio length
-3. Check `clean_for_tts()`: print before/after to verify fraction conversion
-4. Check frontend: browser console for audio playback errors
-
-### Deploying to Railway
-```bash
-git add -A
-git commit -m "v6.X.Y: description"
-git push origin main
-# Railway auto-deploys from main branch
-```
-
-## Troubleshooting
-
-| Problem | Likely Cause | Fix |
-|---------|-------------|-----|
-| No voice output | TTS text too long (>2500 chars) | Check `sarvam_tts()` truncation at 2000 chars |
-| Hindi transcribed as English | `language` param missing in Whisper | Force `language="hi"` |
-| "Bahut accha!" after wrong answer | LLM ignoring verdict | Check VERDICT tag in instruction |
-| Same step re-asked | SubStepTracker not marking done | Check `mark_current_done()` call |
-| Student speaks English, Didi replies Hindi | No language preference tracking | Add session-level language pref |
-| Hindi math answer not recognized | Answer checker only handles digits | Add transliterated number parsing |
-| Session crashes | SQLite lock | Check concurrent session handling |
-| Didi speaks English | Sarvam language set wrong | Verify `hi-IN` in TTS payload |
-
-## For Detailed Reference
-
-- `references/teaching-flow.md` — Full state machine diagram and transition rules
-- `references/question-bank-format.md` — Question JSON schema and examples
-- `references/tts-pipeline.md` — Streaming TTS architecture and latency breakdown
-- `references/classifier-phrases.md` — All classifier categories with Hindi/English phrases
+| File | Contents | When to read |
+|------|----------|--------------|
+| `references/schema-v81.md` | v8.1.0 database schema: boards, textbooks, content_units, student_profiles tables | Schema evolution, multi-board work |
+| `references/bench-spec.md` | IDNA-Bench 7 layers, thresholds, content factory pipeline | Benchmark design, quality gating |
+| `references/roadmap.md` | Phase timeline, board expansion tiers, 22 languages, strategic positioning | Planning, investor context, government partnerships |
+| `references/stack-future.md` | Phase 2-4 tech: PersonaPlex, Milvus, Memory-R1, Ollama, on-device SLM | Future architecture decisions |
