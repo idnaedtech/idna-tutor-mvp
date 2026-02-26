@@ -229,30 +229,22 @@ def start_session(
     if first_question:
         session.current_question_id = first_question["id"]
 
-    # Generate greeting WITH teaching (P0 fix: don't skip teaching)
+    # Generate greeting ONLY — teaching happens in TEACHING state after ACK
+    # Bug D fix: GREETING must be max 2 sentences, no teaching content
     if first_question:
-        # Get skill teaching content
+        # Get skill teaching content for topic announcement only
         from app.content.seed_questions import SKILL_TEACHING
         skill = first_question.get("target_skill", "")
         lesson = SKILL_TEACHING.get(skill, {})
 
-        # Get pre_teach content (new format) or teaching (old format)
-        pre_teach = lesson.get("pre_teach") or lesson.get("teaching", "")
-
-        if pre_teach:
-            # Start with teaching, then ask question
-            greeting_text = (
-                f"Namaste {student.name}! Aaj hum {lesson.get('title_hi', lesson.get('name', 'math'))} "
-                f"seekhenge. {pre_teach} Samajh aaya?"
-            )
-            session.state = "TEACHING"
-        else:
-            # No teaching content available, ask question directly (fallback)
-            greeting_text = (
-                f"Namaste {student.name}! Chalo math practice karte hain. "
-                f"Pehla sawaal: {first_question['question_voice']}"
-            )
-            session.state = "WAITING_ANSWER"
+        # GREETING: announce topic only, wait for ACK before teaching
+        topic_name = lesson.get("title_hi") or lesson.get("name", "math")
+        greeting_text = (
+            f"Namaste {student.name}! Aaj hum {topic_name} seekhenge. "
+            f"Shuru karein?"
+        )
+        # Stay in GREETING — FSM will transition to TEACHING on ACK
+        session.state = "GREETING"
     else:
         # P1 fix: Use valid TutorState value SESSION_END (not SESSION_COMPLETE)
         greeting_text = f"Namaste {student.name}! Aapne is chapter ke saare sawaal kar liye hain. Bahut accha! Kal naye sawaal milenge."

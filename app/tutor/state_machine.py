@@ -116,8 +116,12 @@ def transition(
     # GREETING state only used if someone manually sets it.
 
     if current_state == "GREETING":
-        # Go directly to waiting for answer (question already picked at session start)
-        return "WAITING_ANSWER", Action("read_question", student_text=text)
+        # Bug D fix: GREETING + ACK → TEACHING (not WAITING_ANSWER)
+        # Student must hear the concept before being asked a question
+        if category == "ACK":
+            return "TEACHING", Action("teach_concept", student_text=text)
+        # Any other input: stay in GREETING and re-greet
+        return "GREETING", Action("re_greet", student_text=text)
 
     # ── CHECKING_UNDERSTANDING ────────────────────────────────────────────
 

@@ -518,5 +518,41 @@ class TestFullSessionSimulation:
         assert new_state == TutorState.WAITING_ANSWER
 
 
+class TestBugDGreetingNotDumpingLesson:
+    """Bug D fix: GREETING must not dump entire lesson in one turn."""
+
+    def test_old_state_machine_greeting_ack_goes_to_teaching(self):
+        """
+        Bug D: Old state machine must return TEACHING (not WAITING_ANSWER) for GREETING + ACK.
+        Before fix: GREETING + any → WAITING_ANSWER (skipped teaching entirely)
+        After fix: GREETING + ACK → TEACHING
+        """
+        from app.tutor.state_machine import transition
+
+        ctx = {"student_text": "haan"}
+        new_state, action = transition("GREETING", "ACK", ctx)
+
+        # Bug D fix: GREETING + ACK must go to TEACHING first
+        assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
+        assert action.action_type == "teach_concept", f"Expected teach_concept, got {action.action_type}"
+
+    def test_old_state_machine_greeting_non_ack_stays(self):
+        """Non-ACK inputs in GREETING should stay in GREETING."""
+        from app.tutor.state_machine import transition
+
+        ctx = {"student_text": "kya?"}
+        new_state, action = transition("GREETING", "TROLL", ctx)
+
+        assert new_state == "GREETING", f"Expected GREETING, got {new_state}"
+        assert action.action_type == "re_greet", f"Expected re_greet, got {action.action_type}"
+
+    def test_v8_fsm_greeting_ack_goes_to_teaching(self):
+        """v8.0 FSM transition for GREETING + ACK → TEACHING."""
+        result = get_transition(TutorState.GREETING, "ACK")
+
+        assert result.next_state == TutorState.TEACHING
+        assert result.action == "start_teaching"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
