@@ -165,11 +165,16 @@ def pick_next_question(
 
     # If parent instruction exists, try to match skill
     if parent_instruction and parent_instruction.instruction:
-        instruction_text = parent_instruction.instruction.lower()
-        # Try to find questions matching the instruction topic
-        matching = base_q.filter(
-            Question.target_skill.ilike(f"%{instruction_text.split()[0]}%")
-        ).first()
+        instruction_text = parent_instruction.instruction.lower().strip()
+        # P1 fix: Guard against empty instruction causing IndexError on split()[0]
+        matching = None
+        if instruction_text:
+            words = instruction_text.split()
+            if words:
+                # Try to find questions matching the instruction topic
+                matching = base_q.filter(
+                    Question.target_skill.ilike(f"%{words[0]}%")
+                ).first()
         if matching:
             # Mark instruction as fulfilled
             parent_instruction.fulfilled = True

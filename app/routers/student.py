@@ -254,8 +254,9 @@ def start_session(
             )
             session.state = "WAITING_ANSWER"
     else:
-        greeting_text = f"Namaste {student.name}! Chalo math practice karte hain."
-        session.state = "SESSION_COMPLETE"  # No questions available
+        # P1 fix: Use valid TutorState value SESSION_END (not SESSION_COMPLETE)
+        greeting_text = f"Namaste {student.name}! Aapne is chapter ke saare sawaal kar liye hain. Bahut accha! Kal naye sawaal milenge."
+        session.state = "SESSION_END"  # No questions available
 
     tts = get_tts()
     tts_result = tts.synthesize(greeting_text, student.preferred_language)
