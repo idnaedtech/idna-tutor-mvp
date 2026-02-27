@@ -47,6 +47,7 @@ from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer, Verdict
 from app.tutor.answer_evaluator import evaluate_answer
 from app.tutor.instruction_builder import build_prompt, CHAPTER_NAMES
+from app.tutor import instruction_builder_v9 as ib_v9
 from app.tutor.preprocessing import preprocess_student_message
 from content_bank.loader import get_content_bank
 from app.tutor.enforcer import enforce, light_enforce, get_safe_fallback
@@ -669,7 +670,74 @@ async def process_message(
     session.conversation_history.append({"role": "user", "content": student_text})
     flag_modified(session, "conversation_history")
 
-    messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response, session.conversation_history)
+    # ── v9.0: Use LLM-powered handlers via instruction_builder_v9 ────────
+    # Create SessionState adapter from DB session for handle_state
+    from app.state.session import SessionState as SS, TutorState as TS
+    session_state = SS(
+        session_id=str(session.id),
+        student_name=session.student.name if session.student else "Student",
+        student_pin="",
+        current_state=TS(_normalize_state(session.state).value),
+        preferred_language=session.language_pref or "hinglish",
+        current_concept_id=session.current_concept_id or session.chapter or "ch1_square_and_cube",
+        reteach_count=session.current_reteach_count or 0,
+        teach_material_index=session.teaching_turn or 0,
+        current_question=question_data,
+        hints_given=session.current_hint_level or 0,
+        score=session.questions_correct or 0,
+        total_questions_asked=session.questions_attempted or 0,
+    )
+
+    # Get content bank for material lookup
+    cb = None
+    try:
+        cb = get_content_bank()
+    except Exception:
+        pass
+
+    # Call handle_state to get _llm_instruction
+    extras = classify_result.get("extras", {})
+    handler_response, handler_state, handler_updates = await handle_state(
+        session_state, category, extras, student_text,
+        content_bank=cb, llm_call=None,
+    )
+
+    # Check if handler wants LLM to generate response
+    if handler_response is None and "_llm_instruction" in handler_updates:
+        inst = handler_updates["_llm_instruction"]
+        # Use instruction_builder_v9 to build LLM prompt
+        prompt = ib_v9.build(
+            action=inst.get("action", "teach"),
+            session=session_state,
+            instruction=inst,
+            already_tried=session.explanations_given or [],
+        )
+        messages = [
+            {"role": "system", "content": prompt["system"]},
+            {"role": "user", "content": prompt["user"]},
+        ]
+        logger.info(f"v9.0: Using LLM instruction action={inst.get('action')}")
+
+        # Apply session updates from handler (except internal keys)
+        for key, val in handler_updates.items():
+            if key.startswith("_"):
+                continue
+            # Map SessionState fields to DB Session fields
+            field_map = {
+                "preferred_language": "language_pref",
+                "reteach_count": "current_reteach_count",
+                "teach_material_index": "teaching_turn",
+                "hints_given": "current_hint_level",
+            }
+            db_field = field_map.get(key, key)
+            if hasattr(session, db_field):
+                setattr(session, db_field, val)
+
+        # Update state from handler
+        new_state = handler_state.value if hasattr(handler_state, 'value') else str(handler_state)
+    else:
+        # Fallback: use old build_prompt
+        messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response, session.conversation_history)
 
     # ── Step 7: LLM generate ─────────────────────────────────────────────
     llm = get_llm()

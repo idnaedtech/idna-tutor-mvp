@@ -466,7 +466,10 @@ class TestGarbledInputHandling:
         ))
 
         assert new_state == TutorState.TEACHING
-        assert "phir boliye" in response.lower() or "repeat" in response.lower()
+        # v9.0: Handlers now return None + _llm_instruction for LLM generation
+        assert response is None
+        assert "_llm_instruction" in updates
+        assert updates["_llm_instruction"]["action"] == "handle_garbled"
 
 
 class TestSessionEndTerminal:
