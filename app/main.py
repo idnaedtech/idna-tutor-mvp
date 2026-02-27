@@ -111,7 +111,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v9.0.1 ready")
+    logger.info("IDNA Didi v9.0.2 ready")
     yield
     logger.info("Shutting down")
 
@@ -215,7 +215,7 @@ def _seed_test_student(db):
 app = FastAPI(
     title="IDNA Didi v8.0",
     description="AI Voice Tutor for Class 8 NCERT",
-    version="9.0.1",
+    version="9.0.2",
     lifespan=lifespan,
 )
 

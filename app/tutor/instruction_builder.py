@@ -336,6 +336,9 @@ def _sys(extra="", session_context: dict = None, question_data: dict = None):
         confusion_instruction = _get_confusion_instruction(session_context)
         if confusion_instruction:
             base += confusion_instruction
+        # P0 FIX: Language enforcement (was defined but never injected!)
+        lang_instruction = _get_language_instruction(session_context)
+        base += lang_instruction
     else:
         # Fallback for backward compat - use unformatted base with placeholders shown
         base = DIDI_BASE.format(
@@ -719,6 +722,21 @@ def _build_fallback(a, ctx, q, sk, prev):
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Something unexpected. Say naturally: "{fallback_msg}"'}]
 
 
+def _build_re_greet(a, ctx, q, sk, prev):
+    """P0 FIX: Handle non-ACK inputs during GREETING state."""
+    lang_pref = ctx.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
+    ch_key = ctx.get("chapter", "")
+    ch = CHAPTER_NAMES.get(ch_key, ch_key.replace("_", " ").title())
+
+    if use_english:
+        msg = f'Student is in greeting phase but hasn\'t started. Warmly re-invite: "No worries! Ready to start learning {ch}?" 1 sentence max.'
+    else:
+        msg = f'Student greeting phase mein hai, start nahi kiya. Warmly re-invite karo: "Koi baat nahi! {ch} shuru karein?" 1 sentence max.'
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)},
+            {"role": "user", "content": msg}]
+
+
 _BUILDERS = {
     "ask_topic": _build_ask_topic, "apologize_no_subject": _build_apologize_no_subject,
     "probe_understanding": _build_probe_understanding, "teach_concept": _build_teach_concept,
@@ -730,4 +748,6 @@ _BUILDERS = {
     # v7.2.0: New action builders
     "acknowledge_language_switch": _build_acknowledge_language_switch,
     "answer_meta_question": _build_answer_meta_question,
+    # P0 FIX: re_greet was falling to _build_fallback
+    "re_greet": _build_re_greet,
 }

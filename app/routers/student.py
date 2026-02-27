@@ -240,16 +240,45 @@ def start_session(
 
         # GREETING: announce topic only, wait for ACK before teaching
         topic_name = lesson.get("title_hi") or lesson.get("name", "math")
-        greeting_text = (
-            f"Namaste {student.name}! Aaj hum {topic_name} seekhenge. "
-            f"Shuru karein?"
-        )
+        topic_name_en = lesson.get("name") or lesson.get("title_hi", "math")
+
+        # P0 FIX: Respect student language preference for greeting
+        # Normalize BCP-47 codes to label format
+        lang_raw = student.preferred_language or "hi-IN"
+        LANG_NORMALIZE = {
+            "hi-IN": "hinglish", "en-IN": "english",
+            "hindi": "hindi", "english": "english", "hinglish": "hinglish",
+        }
+        lang = LANG_NORMALIZE.get(lang_raw, "hinglish")
+
+        if lang == "english":
+            greeting_text = (
+                f"Hello {student.name}! Today we'll learn {topic_name_en}. "
+                f"Ready to start?"
+            )
+        else:
+            greeting_text = (
+                f"Namaste {student.name}! Aaj hum {topic_name} seekhenge. "
+                f"Shuru karein?"
+            )
         # Stay in GREETING — FSM will transition to TEACHING on ACK
         session.state = "GREETING"
+        # P0 FIX: Initialize language_pref from student preference (normalized)
+        session.language_pref = lang
     else:
-        # P1 fix: Use valid TutorState value SESSION_END (not SESSION_COMPLETE)
-        greeting_text = f"Namaste {student.name}! Aapne is chapter ke saare sawaal kar liye hain. Bahut accha! Kal naye sawaal milenge."
+        # P0 FIX: Language-aware session-end greeting
+        lang_raw = student.preferred_language or "hi-IN"
+        LANG_NORMALIZE = {
+            "hi-IN": "hinglish", "en-IN": "english",
+            "hindi": "hindi", "english": "english", "hinglish": "hinglish",
+        }
+        lang = LANG_NORMALIZE.get(lang_raw, "hinglish")
+        if lang == "english":
+            greeting_text = f"Hello {student.name}! You've completed all questions in this chapter. Great work! New questions coming tomorrow."
+        else:
+            greeting_text = f"Namaste {student.name}! Aapne is chapter ke saare sawaal kar liye hain. Bahut accha! Kal naye sawaal milenge."
         session.state = "SESSION_END"  # No questions available
+        session.language_pref = lang
 
     tts = get_tts()
     tts_result = tts.synthesize(greeting_text, student.preferred_language)
@@ -888,7 +917,8 @@ async def process_message_stream(
 
     # Handle garbled transcription
     if stt_garbled:
-        nudge = "Ek baar phir boliye?"
+        pref = session.language_pref or "hinglish"
+        nudge = "Could you say that again?" if pref == "english" else "Ek baar phir boliye?"
         tts = get_tts()
         tts_result = tts.synthesize(nudge, get_tts_language(session))
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
@@ -984,7 +1014,8 @@ async def process_message_stream(
 
     # Handle silence without LLM
     if category == "SILENCE":
-        nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
+        pref = session.language_pref or "hinglish"
+        nudge = "Are you there? Feel free to ask any question." if pref == "english" else "Aap wahan ho? Koi sawaal hai toh puchiye."
         tts = get_tts()
         tts_result = tts.synthesize(nudge, get_tts_language(session))
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
@@ -1328,15 +1359,26 @@ def end_session(
     if not session:
         raise HTTPException(404, "Session not found")
 
-    # Generate summary
-    summary = (
-        f"Aaj aapne {session.questions_attempted} sawaal kiye, "
-        f"{session.questions_correct} sahi the. "
-    )
-    if session.questions_attempted > 0:
-        acc = session.questions_correct / session.questions_attempted * 100
-        summary += f"Accuracy: {acc:.0f}%. "
-    summary += "Kal phir milte hain!"
+    # P0 FIX: Language-aware summary
+    pref = session.language_pref or "hinglish"
+    if pref == "english":
+        summary = (
+            f"Today you attempted {session.questions_attempted} questions, "
+            f"{session.questions_correct} were correct. "
+        )
+        if session.questions_attempted > 0:
+            acc = session.questions_correct / session.questions_attempted * 100
+            summary += f"Accuracy: {acc:.0f}%. "
+        summary += "See you tomorrow!"
+    else:
+        summary = (
+            f"Aaj aapne {session.questions_attempted} sawaal kiye, "
+            f"{session.questions_correct} sahi the. "
+        )
+        if session.questions_attempted > 0:
+            acc = session.questions_correct / session.questions_attempted * 100
+            summary += f"Accuracy: {acc:.0f}%. "
+        summary += "Kal phir milte hain!"
 
     # TTS for summary
     tts = get_tts()
