@@ -114,12 +114,10 @@ def prepare_for_tts(text: str, session) -> str:
     return cleaned
 
 # Module-level singleton for OpenAI client (Fix 3: avoid creating per request)
-_openai_client: AsyncOpenAI = None
+# PERF: Initialize client at module load to avoid 1.2s delay on first request
+_openai_client: AsyncOpenAI = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 def get_openai_client() -> AsyncOpenAI:
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     return _openai_client
 
 
