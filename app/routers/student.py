@@ -114,10 +114,12 @@ def prepare_for_tts(text: str, session) -> str:
     return cleaned
 
 # Module-level singleton for OpenAI client (Fix 3: avoid creating per request)
-# PERF: Initialize client at module load to avoid 1.2s delay on first request
-_openai_client: AsyncOpenAI = AsyncOpenAI(api_key=OPENAI_API_KEY)
+_openai_client: AsyncOpenAI = None
 
 def get_openai_client() -> AsyncOpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     return _openai_client
 
 
@@ -913,11 +915,6 @@ async def process_message_stream(
     audio_b64 = body.get("audio")
     text_input = body.get("text")
 
-    # ── TIMING INSTRUMENTATION ──
-    import time
-    t_start = time.time()
-
-    t_db = time.time()
     session = await run_in_threadpool(
         lambda: db.query(Session).filter(Session.id == session_id).first()
     )
@@ -927,7 +924,6 @@ async def process_message_stream(
     student = await run_in_threadpool(
         lambda: db.query(Student).filter(Student.id == session.student_id).first()
     )
-    logger.info(f"TIMING: db_load={time.time() - t_db:.3f}s")
     state_before = session.state
 
     # ── STT ──
@@ -1021,7 +1017,6 @@ async def process_message_stream(
     # P0 fix: Classifier picks ONE category, so "teach me in English" may classify
     # as CONCEPT_REQUEST instead of LANGUAGE_SWITCH. This pre-scan catches language
     # intent regardless of classifier result.
-    t_prescan = time.time()
     _text_lower = student_text.lower()
     _english_triggers = ["english", "इंग्लिश", "अंग्रेजी", "in english",
                          "speak english", "teach english", "english mein",
@@ -1041,11 +1036,9 @@ async def process_message_stream(
                 await run_in_threadpool(lambda: db.commit())
                 logger.info(f"LANGUAGE PRE-SCAN (stream): switched to hindi")
                 break
-    logger.info(f"TIMING: prescan={time.time() - t_prescan:.3f}s")
 
     # ── Classify ──
     # v7.3.0: Use async LLM classifier (module-level singleton)
-    t_classify_start = time.time()
     classify_result = await classify(
         student_text,
         current_state=session.state,
@@ -1053,8 +1046,6 @@ async def process_message_stream(
         client=get_openai_client(),
     )
     category = classify_result["category"]
-    t_classify_end = time.time()
-    logger.info(f"TIMING: classifier={t_classify_end - t_classify_start:.3f}s")
     logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
     # Handle LANGUAGE_SWITCH preference from classifier (Break 4 fix)
     # P0 Bug A fix: Commit language change immediately
@@ -1115,7 +1106,6 @@ async def process_message_stream(
     }
 
     # v8.0: Get transition from new FSM
-    t_fsm_start = time.time()
     transition_result = get_transition(_normalize_state(session.state), category)
     logger.info(f"v8.0 (stream): {session.state} × {category} → {transition_result.next_state.value}")
 
@@ -1129,8 +1119,6 @@ async def process_message_stream(
 
     # Use old transition for Action object (backward compat with answer eval)
     new_state, action = transition(session.state, category, ctx)
-    t_fsm_end = time.time()
-    logger.info(f"TIMING: fsm={t_fsm_end - t_fsm_start:.3f}s")
 
     # P0 FIX: Save state IMMEDIATELY after transition, not inside generator
     # This ensures state persists even if generator doesn't fully execute
@@ -1268,7 +1256,6 @@ async def process_message_stream(
     # ── Build prompt ──
     # v7.3.22 Fix 2: Include language_pref in session_ctx for streaming endpoint
     # v8.1.0: Include confusion_count and full context for escalation protocol
-    t_ctx = time.time()
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     if session.started_at:
@@ -1296,7 +1283,6 @@ async def process_message_stream(
         "session_duration_minutes": duration_minutes,
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
-    logger.info(f"TIMING: ctx_build={time.time() - t_ctx:.3f}s")
 
     # v7.3.0: Record student input to conversation history
     if session.conversation_history is None:
@@ -1304,11 +1290,7 @@ async def process_message_stream(
     session.conversation_history.append({"role": "user", "content": student_text})
     flag_modified(session, "conversation_history")
 
-    t_prompt_start = time.time()
     messages = build_prompt(action, session_ctx, question_data, None, prev_response, session.conversation_history)
-    t_prompt_end = time.time()
-    logger.info(f"TIMING: prompt={t_prompt_end - t_prompt_start:.3f}s")
-    logger.info(f"TIMING: prompt_tokens~={len(str(messages))//4}")
 
     # ── Streaming LLM + TTS ──
     llm = get_llm()
@@ -1320,16 +1302,10 @@ async def process_message_stream(
         full_text = ""
         sentence_index = 0
         cancelled = False
-        t_llm_start = time.time()
-        first_token_logged = False
 
         # Fix 2: Wrap in try/finally to persist state on cancellation
         try:
             async for sentence in llm.generate_streaming(messages):
-                # Log time to first token
-                if not first_token_logged:
-                    logger.info(f"TIMING: llm_first_token={time.time() - t_llm_start:.3f}s")
-                    first_token_logged = True
                 # Clean for TTS (v7.3.20: includes digits→words for English)
                 cleaned = prepare_for_tts(sentence, session)
 
@@ -1340,9 +1316,7 @@ async def process_message_stream(
 
                 # Generate TTS for this sentence
                 try:
-                    t_tts = time.time()
                     tts_result = await tts.synthesize_async(cleaned, get_tts_language(session))
-                    logger.info(f"TIMING: tts_sentence_{sentence_index}={time.time() - t_tts:.3f}s")
                     audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
 
                     # Stream audio chunk to frontend
@@ -1352,8 +1326,6 @@ async def process_message_stream(
                     logger.error(f"TTS error for sentence: {e}")
 
             # Mark last chunk
-            t_llm_done = time.time()
-            logger.info(f"TIMING: llm_full_generation={t_llm_done - t_llm_start:.3f}s")
             if sentence_index > 0:
                 yield f"data: {json.dumps({'type': 'last_chunk'})}\n\n"
 
@@ -1373,8 +1345,6 @@ async def process_message_stream(
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
-            logger.info(f"TIMING: post_llm={time.time() - t_llm_done:.3f}s")
-            logger.info(f"TIMING: total={time.time() - t_start:.3f}s")
 
         except asyncio.CancelledError:
             # Fix 2: Handle cancellation gracefully - persist partial state
