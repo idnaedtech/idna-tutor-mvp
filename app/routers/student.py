@@ -496,6 +496,35 @@ async def process_message(
                 break
     # === END LANGUAGE PRE-SCAN ===
 
+    # === CORRECTION DETECTION (runs on every message) ===
+    # Detects when student corrects Didi's math error.
+    # Sets a flag so instruction builder acknowledges the correction.
+    _correction_triggers = [
+        "that's wrong", "thats wrong", "that is wrong",
+        "you're wrong", "youre wrong", "you are wrong",
+        "wrong answer", "galat", "गलत",
+        "that's not right", "not right", "not correct",
+        "check again", "check karo", "check kijiye",
+        "चेक कीजिए", "चेक करो", "गलत है",
+        "nahi", "74 nahi", "that's not",
+    ]
+    # Pattern: student says "[X] nahi, [Y] hota hai" = correction
+    _is_correction = False
+    for trigger in _correction_triggers:
+        if trigger in _text_lower:
+            _is_correction = True
+            break
+    # Also detect pattern: "X nahi" or "X नहीं" followed by a number
+    import re as _re
+    if not _is_correction and _re.search(r'\d+\s*(nahi|नहीं|nhi|wrong|galat)', _text_lower):
+        _is_correction = True
+    if not _is_correction and _re.search(r'(nahi|नहीं|nhi|wrong|galat)\s*.*\d+', _text_lower):
+        _is_correction = True
+
+    if _is_correction:
+        logger.info(f"CORRECTION DETECTED: student correcting Didi's math")
+    # === END CORRECTION DETECTION ===
+
     # ── Step 2: Classify input ────────────────────────────────────────────
     # MVP: No topic discovery (math only). Subject detection removed.
 
@@ -755,6 +784,9 @@ async def process_message(
         "state": session.state,
         "topics_covered": session.topics_covered or [],
         "session_duration_minutes": duration_minutes,
+        # P0 Bug A: Flag for correction detection
+        "student_is_correcting": _is_correction,
+        "student_text": student_text,
     }
 
     # v7.3.0: Record student input to conversation history
@@ -1117,6 +1149,35 @@ async def process_message_stream(
                 break
     # === END LANGUAGE PRE-SCAN ===
 
+    # === CORRECTION DETECTION (runs on every message) ===
+    # Detects when student corrects Didi's math error.
+    # Sets a flag so instruction builder acknowledges the correction.
+    _correction_triggers = [
+        "that's wrong", "thats wrong", "that is wrong",
+        "you're wrong", "youre wrong", "you are wrong",
+        "wrong answer", "galat", "गलत",
+        "that's not right", "not right", "not correct",
+        "check again", "check karo", "check kijiye",
+        "चेक कीजिए", "चेक करो", "गलत है",
+        "nahi", "74 nahi", "that's not",
+    ]
+    # Pattern: student says "[X] nahi, [Y] hota hai" = correction
+    _is_correction = False
+    for trigger in _correction_triggers:
+        if trigger in _text_lower:
+            _is_correction = True
+            break
+    # Also detect pattern: "X nahi" or "X नहीं" followed by a number
+    import re as _re
+    if not _is_correction and _re.search(r'\d+\s*(nahi|नहीं|nhi|wrong|galat)', _text_lower):
+        _is_correction = True
+    if not _is_correction and _re.search(r'(nahi|नहीं|nhi|wrong|galat)\s*.*\d+', _text_lower):
+        _is_correction = True
+
+    if _is_correction:
+        logger.info(f"CORRECTION DETECTED (stream): student correcting Didi's math")
+    # === END CORRECTION DETECTION ===
+
     # ── Classify ──
     # v7.3.0: Use async LLM classifier (module-level singleton)
     classify_result = await classify(
@@ -1361,6 +1422,9 @@ async def process_message_stream(
         "state": session.state,
         "topics_covered": session.topics_covered or [],
         "session_duration_minutes": duration_minutes,
+        # P0 Bug A: Flag for correction detection
+        "student_is_correcting": _is_correction,
+        "student_text": student_text,
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
 

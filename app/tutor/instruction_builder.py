@@ -260,6 +260,21 @@ def _get_chapter_context(session_context: dict, question_data: dict = None) -> s
 
 
 def build_prompt(action, session_context, question_data=None, skill_data=None, previous_didi_response=None, conversation_history=None):
+    # P0 Bug A: If student is correcting Didi, override action to acknowledge
+    if session_context and session_context.get("student_is_correcting"):
+        # Force acknowledgment regardless of what FSM decided
+        student_text = getattr(action, 'student_text', None) or session_context.get('student_text', '')
+        lang_pref = session_context.get("language_pref", "hinglish")
+        use_english = lang_pref == "english"
+        if use_english:
+            correction_msg = f'Student corrected your math: "{student_text}". You MUST acknowledge: "You\'re right, thank you for catching that!" Then give the correct fact. Do NOT ignore the correction. Do NOT continue with a different topic. 2 sentences max.'
+        else:
+            correction_msg = f'Student ne tumhari math correct ki: "{student_text}". Tum ZAROOR acknowledge karo: "Haan, sahi pakda! Thank you!" Phir correct fact batao. Correction ignore MAT karo. 2 sentences max.'
+        return [
+            {"role": "system", "content": _sys(session_context=session_context, question_data=question_data)},
+            {"role": "user", "content": correction_msg}
+        ]
+
     at = action.action_type
     builder = _BUILDERS.get(at, _build_fallback)
     messages = builder(action, session_context, question_data, skill_data, previous_didi_response)
@@ -339,6 +354,15 @@ def _sys(extra="", session_context: dict = None, question_data: dict = None):
         # P0 FIX: Language enforcement (was defined but never injected!)
         lang_instruction = _get_language_instruction(session_context)
         base += lang_instruction
+
+        # P0 Bug A fix: Arithmetic guardrail
+        base += """
+ARITHMETIC RULE: NEVER calculate or enumerate mathematical facts from memory.
+If you list squares, cubes, or any computed values, use ONLY the content provided to you.
+If you are not sure of a calculation, say "let me think" and work it out step by step.
+NEVER say something like "eight squared is seventy-four" — if unsure, skip that example.
+Wrong math destroys trust. When in doubt, use fewer examples with correct math.
+"""
     else:
         # Fallback for backward compat - use unformatted base with placeholders shown
         base = DIDI_BASE.format(
@@ -412,6 +436,19 @@ def _build_teach_concept(a, ctx, q, sk, prev):
 
     # Get skill key for content lookup
     skill_key = q.get("target_skill", "") if q else ctx.get("skill", "")
+
+    # v9.0.10: Verified squares/cubes data to prevent hallucination
+    # NEVER let LLM compute these from memory - inject verified facts
+    _VERIFIED_SQUARES = {
+        "perfect_square_identification": "Verified squares: 1²=1, 2²=4, 3²=9, 4²=16, 5²=25, 6²=36, 7²=49, 8²=64, 9²=81, 10²=100",
+        "last_digit_pattern": "Verified last digits of squares 1-10: 1,4,9,6,5,6,9,4,1,0. Only 0,1,4,5,6,9 appear. Never 2,3,7,8.",
+        "square_estimation": "Verified: 6²=36, 7²=49, 8²=64, 9²=81, 10²=100, 11²=121, 12²=144, 13²=169, 14²=196, 15²=225",
+        "cube_identification": "Verified cubes: 1³=1, 2³=8, 3³=27, 4³=64, 5³=125, 6³=216, 7³=343, 8³=512, 9³=729, 10³=1000",
+        "cube_estimation": "Verified: 4³=64, 5³=125, 6³=216, 7³=343, 8³=512. For 300, closest is 7³=343 or 6³=216.",
+    }
+    verified_data = _VERIFIED_SQUARES.get(skill_key, "")
+    if verified_data:
+        extra += f"\n\n⚠️ USE ONLY THESE VERIFIED VALUES (do NOT compute from memory): {verified_data}\n"
 
     # v7.4.0: Try content bank first for verified RAG content
     # v7.5.3: Enhanced logging and full methodology injection
