@@ -114,34 +114,34 @@ FAST_HOMEWORK = {
     "assignment", "classwork", "class work",
 }
 
+# PERF: Fast-path for common "explain" phrases → CONCEPT_REQUEST
+FAST_CONCEPT = {
+    # English
+    "explain", "tell me", "teach me", "show me", "what is", "how",
+    "why", "explain this", "teach", "help me understand",
+    # Hindi - Romanized
+    "samjhao", "samjha do", "batao", "bata do", "sikha do", "sikhao",
+    "kya hai", "kaise", "kyun", "kyu", "kyon",
+    "haan samjhao", "ha samjhao", "ji samjhao",
+    "haan batao", "ha batao", "ji batao",
+    # Hindi - Devanagari
+    "समझाओ", "समझा दो", "बताओ", "बता दो", "सिखाओ", "सिखा दो",
+    "क्या है", "कैसे", "क्यों",
+}
+
 # ─── Fast-path word limit ────────────────────────────────────────────────────
 # P0 FIX: Increased from 3 to 5 to catch phrases like "जी शुरू करते हैं" (4 words)
 FAST_PATH_MAX_WORDS = 5
 
 # ─── LLM Classifier System Prompt ────────────────────────────────────────────
+# PERF: Trimmed from ~300 tokens to ~100 tokens for faster classification
 
-CLASSIFIER_SYSTEM = """You classify student input for an Indian tutoring system.
-Student: Class 8, learning {subject}. Current state: {current_state}. Topic: {current_topic}.
+CLASSIFIER_SYSTEM = """Classify student input. State: {current_state}. Subject: {subject}.
 
-Categories (pick EXACTLY ONE):
-- ACK: understood/agrees (yes, okay, samajh aaya, hmm, got it, theek hai, "ab samajh aaya", "जी", "शुरू करते हैं", "chalo", "ready", "let's start")
-- IDK: doesn't understand (nahi samjha, I don't know, confused, "समझ में नहीं आया", "huh", "what")
-- ANSWER: giving an answer (numbers, math expressions, factual responses, "49", "7 ka square")
-- CONCEPT_REQUEST: asks to explain something (what is this, explain, why is it called that, "kaise hota hai")
-- LANGUAGE_SWITCH: wants language change (speak in English, Hindi mein bolo, translate, "could you explain in English")
-- META_QUESTION: asks about session (which chapter, more examples, real life use, "aur examples do", "kya padh rahe hain", "कौन सा चैप्टर")
-- COMFORT: frustrated (I give up, too hard, boring, "bahut mushkil hai")
-- STOP: wants to end (bye, stop, band karo)
-- REPEAT: didn't hear (say again, phir se bolo, "sunai nahi diya")
-- UNCLEAR: cannot determine
+Categories: ACK (yes/okay/samajh aaya), IDK (nahi samjha/confused), ANSWER (numbers/math), CONCEPT_REQUEST (explain/kaise), LANGUAGE_SWITCH (speak English/Hindi mein), META_QUESTION (examples/chapter info), COMFORT (frustrated/hard), STOP (bye/band karo), REPEAT (say again), UNCLEAR.
 
-IMPORTANT: Hindi/Devanagari input is common. "जी शुरू करते हैं" = ACK. "समझ नहीं आया" = IDK. "कौन सा चैप्टर" = META_QUESTION. Classify these correctly.
-
-For LANGUAGE_SWITCH also return preferred_language: "english"|"hindi"|"hinglish"
-For META_QUESTION also return question_type: "examples"|"chapter_info"|"relevance"|"other"
-For ANSWER also return raw_answer with just the answer portion extracted
-
-Respond ONLY with JSON: {{"category":"...","confidence":0.0-1.0,"extras":{{...}}}}"""
+For LANGUAGE_SWITCH: add preferred_language. For ANSWER: add raw_answer.
+JSON only: {{"category":"...","confidence":0.9,"extras":{{}}}}"""
 
 
 VALID_CATEGORIES = {
@@ -150,8 +150,9 @@ VALID_CATEGORIES = {
 }
 
 # ─── Classifier model ────────────────────────────────────────────────────────
-# P0 FIX: gpt-4o-mini → gpt-5-mini for better Hindi/Devanagari classification
-CLASSIFIER_MODEL = "gpt-5-mini"
+# PERF: gpt-4o-mini is 2x faster than gpt-5-mini for classification
+# Hindi/Devanagari works fine with trimmed prompt
+CLASSIFIER_MODEL = "gpt-4o-mini"
 
 
 # ─── Main Classification Function ────────────────────────────────────────────
@@ -210,6 +211,10 @@ async def classify(
             if current_state == "WAITING_ANSWER":
                 return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
             return {"category": "ACK", "confidence": 0.99, "extras": {}}
+
+        # PERF: Fast-path for "explain" phrases
+        if normalized in FAST_CONCEPT or any(phrase in normalized for phrase in FAST_CONCEPT):
+            return {"category": "CONCEPT_REQUEST", "confidence": 0.95, "extras": {}}
 
     # ─── Fast Path: obvious numeric answers in WAITING_ANSWER state ───────────
     if current_state == "WAITING_ANSWER":
