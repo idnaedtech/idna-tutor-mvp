@@ -66,6 +66,44 @@ await run_in_threadpool(lambda: db.commit())
 **Correction:** Added `session_context=ctx, question_data=q` to all 6 _sys() calls.
 **Rule:** NEVER call `_sys()` without session_context. Grep for `_sys(` to find violations.
 
+### Lesson 11: GREETING Must Accept All Engagement Signals
+**Mistake:** GREETING state only transitioned to TEACHING on ACK category.
+**Root Cause:** Real students say compound things like "teach me in English" that classify as CONCEPT_REQUEST.
+**Symptom:** Students trapped in GREETING loop when not saying pure acknowledgment.
+**Correction:** Updated `state_machine.py` GREETING handler to accept all categories except STOP, COMFORT, LANGUAGE_SWITCH, REPEAT.
+**Rule:** GREETING + (any engagement) → TEACHING. Only explicit disengagement stays in GREETING.
+
+### Lesson 12: Language Pre-Scan Before Classifier
+**Mistake:** "teach me in English" was classified as CONCEPT_REQUEST, language switch ignored.
+**Root Cause:** Classifier picks ONE category. Language switch intent lost if student combines it with other content.
+**Symptom:** Language preference not set despite explicit request.
+**Correction:** Added language trigger pre-scan BEFORE classifier in BOTH endpoints:
+```python
+_english_triggers = ["english", "इंग्लिश", "अंग्रेजी", ...]
+for trigger in _english_triggers:
+    if trigger in _text_lower:
+        session.language_pref = "english"
+        db.commit()
+        break
+```
+**Rule:** Check for language triggers BEFORE running classifier. Set language_pref immediately.
+
+### Lesson 13: Dual FSM Architecture — Update BOTH
+**Mistake:** Fixed GREETING in `state_machine.py` (v7.3) but forgot `fsm/transitions.py` (v8.0).
+**Root Cause:** Non-streaming endpoint uses v8.0 handler which overrides state at line 790.
+**Symptom:** Fix worked in streaming, failed in non-streaming (text input).
+**Correction:** Updated v8.0 FSM `get_transition()` fallback: GREETING + unknown → map to ACK (→TEACHING).
+**Rule:** When fixing state transitions, check BOTH FSMs:
+- `app/tutor/state_machine.py` (v7.3) — actual transitions
+- `app/fsm/transitions.py` (v8.0) — handler fallbacks
+
+### Lesson 14: v8.0 FSM Fallback Maps Unknown to GARBLED
+**Mistake:** UNCLEAR category (from classifier) fell back to GARBLED in v8.0 FSM.
+**Root Cause:** `get_transition()` line 420: `return TRANSITIONS[(state, "GARBLED")]`
+**Symptom:** GREETING + UNCLEAR → GREETING (GARBLED stays in GREETING) instead of TEACHING.
+**Correction:** Added special case for GREETING: unknown → ACK (which transitions to TEACHING).
+**Rule:** v8.0 FSM fallback must consider state context. GREETING fallback should engage, not loop.
+
 ---
 
 ## Patterns to Check Before Claiming "Done"
