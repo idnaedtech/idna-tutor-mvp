@@ -150,8 +150,8 @@ VALID_CATEGORIES = {
 }
 
 # ─── Classifier model ────────────────────────────────────────────────────────
-# P0 FIX: gpt-4o-mini → gpt-5-mini for better Hindi/Devanagari classification
-CLASSIFIER_MODEL = "gpt-5-mini"
+# P0 FIX: gpt-4.1-mini — gpt-5-mini rejected temperature param (reasoning model)
+CLASSIFIER_MODEL = "gpt-4.1-mini"
 
 
 # ─── Main Classification Function ────────────────────────────────────────────

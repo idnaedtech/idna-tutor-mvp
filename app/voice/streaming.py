@@ -18,12 +18,12 @@ SENTENCE_SPLIT = re.compile(r'(?<=[.!?।])\s+')
 
 async def stream_llm_sentences(
     messages: list,
-    model: str = "gpt-4o",
+    model: str = "gpt-4.1",
     api_key: str = "",
     max_tokens: int = 300,
 ) -> AsyncGenerator[str, None]:
     """
-    Stream GPT-4o response and yield complete sentences.
+    Stream GPT-4.1 response and yield complete sentences.
 
     Uses OpenAI streaming API. Accumulates tokens until a sentence
     boundary is detected, then yields the complete sentence.
@@ -76,7 +76,7 @@ async def stream_pipeline(
     messages: list,
     tts_func: Callable[[str, str], Awaitable[bytes]],
     lang: str = "hi-IN",
-    model: str = "gpt-4o",
+    model: str = "gpt-4.1",
     api_key: str = "",
 ) -> AsyncGenerator[Tuple[str, bytes], None]:
     """

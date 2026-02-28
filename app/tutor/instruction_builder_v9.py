@@ -464,7 +464,7 @@ IN app/routers/student.py — after handler returns:
         response = await llm_call(
             system_prompt=prompt["system"],
             user_prompt=prompt["user"],
-            model="gpt-5-mini",
+            model="gpt-4.1",
             max_tokens=200,
             temperature=0.7,
         )

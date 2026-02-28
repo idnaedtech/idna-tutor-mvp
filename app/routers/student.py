@@ -27,7 +27,7 @@ from app.config import (
     SESSION_TIMEOUT_MINUTES, STT_CONFIDENCE_THRESHOLD, MAX_ENFORCE_RETRIES,
     ENABLE_HOMEWORK_OCR,
 )
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.models import Student, Session, SessionTurn, Question
 from app.routers.auth import get_current_user
 
@@ -432,29 +432,69 @@ async def process_message(
         session.confusion_count = (session.confusion_count or 0) + 1
         logger.info(f"v8.1.0: Confusion detected, count now {session.confusion_count}")
 
-    # === LANGUAGE PRE-SCAN (runs on every message, before classifier) ===
-    # P0 fix: Classifier picks ONE category, so "teach me in English" may classify
-    # as CONCEPT_REQUEST instead of LANGUAGE_SWITCH. This pre-scan catches language
-    # intent regardless of classifier result.
+    # === LANGUAGE PRE-SCAN (runs on every message) ===
+    # Detects language switch requests BEFORE classification.
+    # Uses intent patterns, not bare keywords, to avoid false positives.
+    # Example false positive: "Why are you speaking in Hindi?" contains "Hindi"
+    # but the student wants ENGLISH, not Hindi.
     _text_lower = student_text.lower()
-    _english_triggers = ["english", "इंग्लिश", "अंग्रेजी", "in english",
-                         "speak english", "teach english", "english mein",
-                         "english please", "इंग्लिश में"]
-    _hindi_triggers = ["hindi", "हिंदी", "hindi mein", "हिंदी में"]
 
+    # English triggers: student wants English
+    _english_triggers = [
+        "in english", "speak english", "teach english", "english mein",
+        "english please", "english me", "talk english", "explain english",
+        "respond english", "switch to english", "change to english",
+        "can you speak english", "can you teach english",
+        "इंग्लिश में", "अंग्रेजी में", "इंग्लिश में बोलो",
+        "अंग्रेजी में बोलो", "अंग्रेजी में बात करो",
+    ]
+    # Also catch: "Why are you speaking in Hindi?" = wants English (complaining about Hindi)
+    _complaining_about_hindi = [
+        "why hindi", "why in hindi", "why are you speaking hindi",
+        "why are you speaking in hindi", "stop speaking hindi",
+        "don't speak hindi", "dont speak hindi", "not in hindi",
+        "no hindi", "stop hindi", "I said english",
+        "हिंदी में क्यों", "हिंदी क्यों",
+    ]
+    # Hindi triggers: student explicitly WANTS Hindi (intent to switch TO Hindi)
+    _hindi_intent_triggers = [
+        "speak hindi", "speak in hindi", "talk in hindi",
+        "in hindi please", "hindi mein bolo", "hindi me bolo",
+        "switch to hindi", "change to hindi", "teach in hindi",
+        "hindi mein samjhao", "hindi mein baat karo",
+        "हिंदी में बोलो", "हिंदी में समझाओ", "हिंदी में बात करो",
+    ]
+
+    _switched = False
+    # Check English triggers first
     for trigger in _english_triggers:
         if trigger in _text_lower:
             session.language_pref = "english"
             db.commit()
-            logger.info(f"LANGUAGE PRE-SCAN: switched to english")
+            logger.info(f"LANGUAGE PRE-SCAN: switched to english (trigger: {trigger})")
+            _switched = True
             break
-    else:
-        for trigger in _hindi_triggers:
+
+    # Check complaints about Hindi (= wants English)
+    if not _switched:
+        for trigger in _complaining_about_hindi:
+            if trigger in _text_lower:
+                session.language_pref = "english"
+                db.commit()
+                logger.info(f"LANGUAGE PRE-SCAN: switched to english (complaint: {trigger})")
+                _switched = True
+                break
+
+    # Check Hindi intent triggers LAST (requires explicit intent)
+    if not _switched:
+        for trigger in _hindi_intent_triggers:
             if trigger in _text_lower:
                 session.language_pref = "hindi"
                 db.commit()
-                logger.info(f"LANGUAGE PRE-SCAN: switched to hindi")
+                logger.info(f"LANGUAGE PRE-SCAN: switched to hindi (trigger: {trigger})")
+                _switched = True
                 break
+    # === END LANGUAGE PRE-SCAN ===
 
     # ── Step 2: Classify input ────────────────────────────────────────────
     # MVP: No topic discovery (math only). Subject detection removed.
@@ -1013,29 +1053,69 @@ async def process_message_stream(
         session.confusion_count = (session.confusion_count or 0) + 1
         logger.info(f"v8.1.0 (stream): Confusion detected, count now {session.confusion_count}")
 
-    # === LANGUAGE PRE-SCAN (runs on every message, before classifier) ===
-    # P0 fix: Classifier picks ONE category, so "teach me in English" may classify
-    # as CONCEPT_REQUEST instead of LANGUAGE_SWITCH. This pre-scan catches language
-    # intent regardless of classifier result.
+    # === LANGUAGE PRE-SCAN (runs on every message) ===
+    # Detects language switch requests BEFORE classification.
+    # Uses intent patterns, not bare keywords, to avoid false positives.
+    # Example false positive: "Why are you speaking in Hindi?" contains "Hindi"
+    # but the student wants ENGLISH, not Hindi.
     _text_lower = student_text.lower()
-    _english_triggers = ["english", "इंग्लिश", "अंग्रेजी", "in english",
-                         "speak english", "teach english", "english mein",
-                         "english please", "इंग्लिश में"]
-    _hindi_triggers = ["hindi", "हिंदी", "hindi mein", "हिंदी में"]
 
+    # English triggers: student wants English
+    _english_triggers = [
+        "in english", "speak english", "teach english", "english mein",
+        "english please", "english me", "talk english", "explain english",
+        "respond english", "switch to english", "change to english",
+        "can you speak english", "can you teach english",
+        "इंग्लिश में", "अंग्रेजी में", "इंग्लिश में बोलो",
+        "अंग्रेजी में बोलो", "अंग्रेजी में बात करो",
+    ]
+    # Also catch: "Why are you speaking in Hindi?" = wants English (complaining about Hindi)
+    _complaining_about_hindi = [
+        "why hindi", "why in hindi", "why are you speaking hindi",
+        "why are you speaking in hindi", "stop speaking hindi",
+        "don't speak hindi", "dont speak hindi", "not in hindi",
+        "no hindi", "stop hindi", "I said english",
+        "हिंदी में क्यों", "हिंदी क्यों",
+    ]
+    # Hindi triggers: student explicitly WANTS Hindi (intent to switch TO Hindi)
+    _hindi_intent_triggers = [
+        "speak hindi", "speak in hindi", "talk in hindi",
+        "in hindi please", "hindi mein bolo", "hindi me bolo",
+        "switch to hindi", "change to hindi", "teach in hindi",
+        "hindi mein samjhao", "hindi mein baat karo",
+        "हिंदी में बोलो", "हिंदी में समझाओ", "हिंदी में बात करो",
+    ]
+
+    _switched = False
+    # Check English triggers first
     for trigger in _english_triggers:
         if trigger in _text_lower:
             session.language_pref = "english"
             await run_in_threadpool(lambda: db.commit())
-            logger.info(f"LANGUAGE PRE-SCAN (stream): switched to english")
+            logger.info(f"LANGUAGE PRE-SCAN (stream): switched to english (trigger: {trigger})")
+            _switched = True
             break
-    else:
-        for trigger in _hindi_triggers:
+
+    # Check complaints about Hindi (= wants English)
+    if not _switched:
+        for trigger in _complaining_about_hindi:
+            if trigger in _text_lower:
+                session.language_pref = "english"
+                await run_in_threadpool(lambda: db.commit())
+                logger.info(f"LANGUAGE PRE-SCAN (stream): switched to english (complaint: {trigger})")
+                _switched = True
+                break
+
+    # Check Hindi intent triggers LAST (requires explicit intent)
+    if not _switched:
+        for trigger in _hindi_intent_triggers:
             if trigger in _text_lower:
                 session.language_pref = "hindi"
                 await run_in_threadpool(lambda: db.commit())
-                logger.info(f"LANGUAGE PRE-SCAN (stream): switched to hindi")
+                logger.info(f"LANGUAGE PRE-SCAN (stream): switched to hindi (trigger: {trigger})")
+                _switched = True
                 break
+    # === END LANGUAGE PRE-SCAN ===
 
     # ── Classify ──
     # v7.3.0: Use async LLM classifier (module-level singleton)
@@ -1296,6 +1376,17 @@ async def process_message_stream(
     llm = get_llm()
     tts = get_tts()
 
+    # === Pre-load session values before generator (prevents DetachedInstanceError) ===
+    # The generator runs AFTER FastAPI closes the DB session dependency.
+    # Any lazy-loaded SQLAlchemy attributes accessed inside the generator will fail.
+    # Pre-load everything we need into local variables.
+    _session_id = session.id
+    _session_language_pref = session.language_pref
+    _session_current_question_id = session.current_question_id
+    _session_turns_count = len(session.turns) if session.turns else 0
+    _session_conversation_history = list(session.conversation_history) if session.conversation_history else []
+    # === END Pre-load ===
+
     async def stream_response():
         """SSE: stream audio chunks as sentences complete."""
         nonlocal new_state  # v7.5.2: Fix UnboundLocalError - new_state is modified in finally block
@@ -1352,48 +1443,61 @@ async def process_message_stream(
             logger.info(f"Stream cancelled after {sentence_index} sentences, persisting partial state")
 
         finally:
-            # Fix 2: Always persist state in finally block
+            # Fix: Use fresh DB session to avoid DetachedInstanceError
+            # The original `db` session from FastAPI dependency may be closed by now.
             full_text = full_text.strip()
-
-            # Record Didi's response to conversation history (even if partial)
-            if full_text:
-                session.conversation_history.append({"role": "assistant", "content": full_text})
-                flag_modified(session, "conversation_history")
-
-            # Fix 5: Create separate turns for student and didi
-            turn_base = len(session.turns) + 1
-            student_turn = SessionTurn(
-                session_id=session.id,
-                turn_number=turn_base,
-                speaker="student",
-                transcript=student_text,
-                input_category=category,
-                state_before=state_before,
-                state_after=new_state,
-                question_id=session.current_question_id,
-                verdict=verdict_str,
-                stt_latency_ms=stt_latency,
-            )
-            await run_in_threadpool(lambda: db.add(student_turn))
-
-            if full_text:
-                didi_turn = SessionTurn(
-                    session_id=session.id,
-                    turn_number=turn_base + 1,
-                    speaker="didi",
-                    state_before=state_before,
-                    state_after=new_state,
-                    question_id=session.current_question_id,
-                    didi_response=full_text,
-                )
-                await run_in_threadpool(lambda: db.add(didi_turn))
 
             # v7.3.26 Fix: NEXT_QUESTION is transient - after asking, state becomes WAITING_ANSWER
             if new_state == "NEXT_QUESTION" and action.action_type == "pick_next_question":
                 new_state = "WAITING_ANSWER"
 
-            session.state = new_state
-            await run_in_threadpool(lambda: db.commit())
+            # Get fresh DB session for final writes
+            fresh_db = SessionLocal()
+            try:
+                fresh_session = fresh_db.query(Session).filter(Session.id == _session_id).first()
+                if fresh_session:
+                    # Update conversation history
+                    if full_text:
+                        if fresh_session.conversation_history is None:
+                            fresh_session.conversation_history = []
+                        fresh_session.conversation_history.append({"role": "assistant", "content": full_text})
+                        flag_modified(fresh_session, "conversation_history")
+
+                    # Create separate turns for student and didi
+                    turn_base = _session_turns_count + 1
+                    student_turn = SessionTurn(
+                        session_id=_session_id,
+                        turn_number=turn_base,
+                        speaker="student",
+                        transcript=student_text,
+                        input_category=category,
+                        state_before=state_before,
+                        state_after=new_state,
+                        question_id=_session_current_question_id,
+                        verdict=verdict_str,
+                        stt_latency_ms=stt_latency,
+                    )
+                    fresh_db.add(student_turn)
+
+                    if full_text:
+                        didi_turn = SessionTurn(
+                            session_id=_session_id,
+                            turn_number=turn_base + 1,
+                            speaker="didi",
+                            state_before=state_before,
+                            state_after=new_state,
+                            question_id=_session_current_question_id,
+                            didi_response=full_text,
+                        )
+                        fresh_db.add(didi_turn)
+
+                    fresh_session.state = new_state
+                    fresh_db.commit()
+            except Exception as e:
+                logger.error(f"Error saving session in generator finally: {e}")
+                fresh_db.rollback()
+            finally:
+                fresh_db.close()
 
             if cancelled:
                 raise asyncio.CancelledError()
