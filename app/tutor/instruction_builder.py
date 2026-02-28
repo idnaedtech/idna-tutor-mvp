@@ -515,7 +515,7 @@ def _build_teach_concept(a, ctx, q, sk, prev):
             msg = f'Teach this concept naturally in {lang_mode}: "{teach_content}". 2 sentences. End: "{understand_short}"'
         else:
             msg = f"Teach one concept from {ch}. Use Indian example. 2 sentences. End: \"{understand_short}\""
-    return [{"role": "system", "content": _sys(extra)}, {"role": "user", "content": msg}]
+    return [{"role": "system", "content": _sys(extra, session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
 
 def _build_read_question(a, ctx, q, sk, prev):
@@ -545,9 +545,9 @@ def _build_evaluate_answer(a, ctx, q, sk, prev):
     # Note: When correct, route_after_evaluation changes action_type to pick_next_question,
     # so this "correct" branch rarely executes. Kept for edge cases.
     if v.correct:
-        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". CORRECT. Praise briefly referencing their answer. 1 sentence only.'}]
+        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". CORRECT. Praise briefly referencing their answer. 1 sentence only.'}]
     reference = 'Say "You said..."' if use_english else 'Say "Aapne ... bola"'
-    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". Diagnostic: "{v.diagnostic}". Tell what went wrong. {reference}. Do NOT reveal answer. 2 sentences.'}]
+    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". Diagnostic: "{v.diagnostic}". Tell what went wrong. {reference}. Do NOT reveal answer. 2 sentences.'}]
 
 
 def _build_give_hint(a, ctx, q, sk, prev):
@@ -585,7 +585,7 @@ def _build_give_hint(a, ctx, q, sk, prev):
 
     # v7.3.24: Use appropriate language instruction
     lang_instruction = "Say naturally in English." if use_english else "Say naturally in Hinglish."
-    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
+    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
 
 
 def _build_show_solution(a, ctx, q, sk, prev):
@@ -621,7 +621,7 @@ def _build_pick_next_question(a, ctx, q, sk, prev):
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'After solution, say briefly: "{transition}"'}]
     if q:
         # Include praise for correct answer + the next question
-        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}". {q_lang}'}]
+        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}". {q_lang}'}]
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'No more questions available. Say: "{done_msg}"'}]
 
 
@@ -632,7 +632,7 @@ def _build_comfort_student(a, ctx, q, sk, prev):
         comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "It\'s okay", "This is difficult, isn\'t it?". End: "Let me know when you\'re ready."\n'
     else:
         comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "Koi baat nahi", "Mushkil lag raha hai na?". End: "Jab ready ho, batana."\n'
-    return [{"role": "system", "content": _sys(comfort_mode)},
+    return [{"role": "system", "content": _sys(comfort_mode, session_context=ctx, question_data=q)},
             {"role": "user", "content": f'Student said: "{a.student_text}". They are frustrated. Comfort. 2 sentences.'}]
 
 
