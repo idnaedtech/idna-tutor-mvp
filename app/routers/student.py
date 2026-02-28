@@ -830,6 +830,9 @@ async def process_message(
     # Check if handler wants LLM to generate response
     if handler_response is None and "_llm_instruction" in handler_updates:
         inst = handler_updates["_llm_instruction"]
+        # v9.0.10: Add correction detection to instruction for ib_v9
+        inst["student_is_correcting"] = _is_correction
+        inst["student_text"] = student_text
         # Use instruction_builder_v9 to build LLM prompt
         prompt = ib_v9.build(
             action=inst.get("action", "teach"),

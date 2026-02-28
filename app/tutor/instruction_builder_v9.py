@@ -182,6 +182,30 @@ def build(
         Dict with "system" and "user" keys ready for the LLM API call.
     """
 
+    # v9.0.10: Correction handler — intercept if student is correcting Didi's math
+    if instruction.get("student_is_correcting"):
+        student_text = instruction.get("student_text", "")
+        lang_pref = getattr(session, 'preferred_language', 'hinglish')
+        use_english = lang_pref == "english"
+
+        system = DIDI_SYSTEM_PROMPT.format(
+            language=lang_pref,
+            max_sentences=2,
+            student_name=getattr(session, 'student_name', 'Student'),
+            board_name=getattr(session, 'board_name', 'CBSE'),
+            class_level=getattr(session, 'class_level', 8),
+            chapter_number=getattr(session, 'chapter_number', ''),
+            chapter_name=getattr(session, 'chapter_name', ''),
+            topic=instruction.get('topic', getattr(session, 'current_concept_id', 'mathematics')),
+        )
+
+        if use_english:
+            user_prompt = f'Student corrected your math: "{student_text}". You MUST acknowledge: "You\'re right, thank you for catching that!" Then give the correct fact. Do NOT ignore the correction. 2 sentences max.'
+        else:
+            user_prompt = f'Student ne tumhari math correct ki: "{student_text}". Pehle maafi maango: "Haan, sahi kaha aapne, sorry!" Phir sahi answer do. 2 sentences max.'
+
+        return {"system": system, "user": user_prompt}
+
     # --- Build system prompt with session context ---
     system = DIDI_SYSTEM_PROMPT.format(
         language=getattr(session, 'preferred_language', 'hindi'),
