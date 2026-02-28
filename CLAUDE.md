@@ -4,7 +4,7 @@
 > **Last updated:** 2026-02-28
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v9.0.9
+> **Current version:** v9.0.10
 > **Can be modified by CEO only.**
 
 ---
@@ -336,6 +336,34 @@ Student says "speak in English"
 
 If ANY step breaks, the student gets Hindi when they asked for English.
 
+### Correction Detection Flow (v9.0.10)
+
+```
+Student says "that's wrong" or "galat"
+  → student.py detects correction trigger in _correction_triggers list
+  → _is_correction = True
+  → session_ctx["student_is_correcting"] = True
+  → session_ctx["student_text"] = original student input
+  → build_prompt() intercepts BEFORE regular builder
+  → Returns apology + recalculation prompt in correct language
+  → LLM apologizes and fixes the math error
+```
+
+If correction is ignored, student loses trust in Didi.
+
+### Arithmetic Guardrail (v9.0.10)
+
+```
+_sys() injects this rule into EVERY system prompt:
+  "ARITHMETIC RULE: NEVER calculate or enumerate mathematical facts from memory.
+   If you list squares, cubes, or any computed values, use ONLY the content provided."
+
+_build_teach_concept() injects verified data for math skills:
+  "⚠️ USE ONLY THESE VERIFIED VALUES: 1²=1, 2²=4, 3²=9, 4²=16, 5²=25..."
+```
+
+Prevents hallucinations like "8²=74". LLMs cannot reliably compute arithmetic.
+
 ---
 
 ## 10. KNOWN ISSUES (P1 BACKLOG)
@@ -438,6 +466,8 @@ If you catch yourself doing any of these, stop immediately:
 12. **Hardcoding Hindi strings** without checking language_pref first
 13. **Editing v8 FSM files** (`transitions.py`, `handlers.py`) for streaming behavior — they're side-effect-only
 14. **Creating `app/models/` directory** — shadows `app/models.py`, breaks imports
+15. **Letting LLM compute math from memory** — use verified data injection (`_VERIFIED_SQUARES` in `_build_teach_concept`)
+16. **Ignoring student corrections** — "that's wrong"/"galat" must trigger apology handler in `build_prompt()`
 
 ---
 
