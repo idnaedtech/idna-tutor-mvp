@@ -416,7 +416,10 @@ def get_transition(state: TutorState, input_category: str) -> TransitionResult:
         return TRANSITIONS[key]
 
     # Fallback for unknown categories (should never happen with proper classifier)
-    # Map to GARBLED to handle gracefully
+    # v9.0.8 P0 fix: GREETING + unknown = student engaged, transition to TEACHING
+    # Other states: map to GARBLED to handle gracefully
+    if state == TutorState.GREETING:
+        return TRANSITIONS[(state, "ACK")]  # ACK transitions to TEACHING
     return TRANSITIONS[(state, "GARBLED")]
 
 
