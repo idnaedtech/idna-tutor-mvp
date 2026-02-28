@@ -206,15 +206,16 @@ async def classify(
         if normalized in FAST_STOP or any(phrase in normalized for phrase in FAST_STOP):
             return {"category": "STOP", "confidence": 0.99, "extras": {}}
 
+        # PERF: Fast-path for "explain" phrases - check BEFORE ACK
+        # "haan samjhao" should be CONCEPT_REQUEST, not ACK
+        if normalized in FAST_CONCEPT or any(phrase in normalized for phrase in FAST_CONCEPT):
+            return {"category": "CONCEPT_REQUEST", "confidence": 0.95, "extras": {}}
+
         if normalized in FAST_ACK or any(phrase in normalized for phrase in FAST_ACK):
             # In WAITING_ANSWER state, "haan"/"yes" could be actual answers
             if current_state == "WAITING_ANSWER":
                 return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
             return {"category": "ACK", "confidence": 0.99, "extras": {}}
-
-        # PERF: Fast-path for "explain" phrases
-        if normalized in FAST_CONCEPT or any(phrase in normalized for phrase in FAST_CONCEPT):
-            return {"category": "CONCEPT_REQUEST", "confidence": 0.95, "extras": {}}
 
     # ─── Fast Path: obvious numeric answers in WAITING_ANSWER state ───────────
     if current_state == "WAITING_ANSWER":
