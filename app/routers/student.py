@@ -919,6 +919,7 @@ async def process_message_stream(
     import time
     t_start = time.time()
 
+    t_db = time.time()
     session = await run_in_threadpool(
         lambda: db.query(Session).filter(Session.id == session_id).first()
     )
@@ -928,6 +929,7 @@ async def process_message_stream(
     student = await run_in_threadpool(
         lambda: db.query(Student).filter(Student.id == session.student_id).first()
     )
+    logger.info(f"TIMING: db_load={time.time() - t_db:.3f}s")
     state_before = session.state
 
     # ── STT ──
@@ -1021,6 +1023,7 @@ async def process_message_stream(
     # P0 fix: Classifier picks ONE category, so "teach me in English" may classify
     # as CONCEPT_REQUEST instead of LANGUAGE_SWITCH. This pre-scan catches language
     # intent regardless of classifier result.
+    t_prescan = time.time()
     _text_lower = student_text.lower()
     _english_triggers = ["english", "इंग्लिश", "अंग्रेजी", "in english",
                          "speak english", "teach english", "english mein",
@@ -1040,6 +1043,7 @@ async def process_message_stream(
                 await run_in_threadpool(lambda: db.commit())
                 logger.info(f"LANGUAGE PRE-SCAN (stream): switched to hindi")
                 break
+    logger.info(f"TIMING: prescan={time.time() - t_prescan:.3f}s")
 
     # ── Classify ──
     # v7.3.0: Use async LLM classifier (module-level singleton)
@@ -1266,6 +1270,7 @@ async def process_message_stream(
     # ── Build prompt ──
     # v7.3.22 Fix 2: Include language_pref in session_ctx for streaming endpoint
     # v8.1.0: Include confusion_count and full context for escalation protocol
+    t_ctx = time.time()
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     if session.started_at:
@@ -1293,6 +1298,7 @@ async def process_message_stream(
         "session_duration_minutes": duration_minutes,
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
+    logger.info(f"TIMING: ctx_build={time.time() - t_ctx:.3f}s")
 
     # v7.3.0: Record student input to conversation history
     if session.conversation_history is None:
@@ -1348,6 +1354,8 @@ async def process_message_stream(
                     logger.error(f"TTS error for sentence: {e}")
 
             # Mark last chunk
+            t_llm_done = time.time()
+            logger.info(f"TIMING: llm_full_generation={t_llm_done - t_llm_start:.3f}s")
             if sentence_index > 0:
                 yield f"data: {json.dumps({'type': 'last_chunk'})}\n\n"
 
@@ -1367,6 +1375,7 @@ async def process_message_stream(
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
+            logger.info(f"TIMING: post_llm={time.time() - t_llm_done:.3f}s")
             logger.info(f"TIMING: total={time.time() - t_start:.3f}s")
 
         except asyncio.CancelledError:
