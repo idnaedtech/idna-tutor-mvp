@@ -10,6 +10,7 @@ P0 FIX (2026-02-28):
   3. FAST_IDK expanded: added "samajh nahi aaya", "I don't get it", "huh", "what", etc.
   4. Fast-path word limit: 3 → 5 (catches "जी शुरू करते हैं" = 4 words)
   5. Both async classify() and sync classify_student_input() updated consistently.
+  6. Added _normalize() to strip punctuation (।,.!?) from STT output before matching.
 
 Categories (Student):
     ACK            — understood/agrees (yes, okay, samajh aaya, hmm, got it)
@@ -34,6 +35,20 @@ import json
 import re
 from typing import Literal, Optional
 from openai import AsyncOpenAI
+
+# ─── Punctuation Normalization ───────────────────────────────────────────────
+# P0 FIX: STT adds punctuation (Hindi danda ।, commas, periods) that breaks
+# fast-path matching. Strip before comparison.
+_PUNCT_RE = re.compile(r'[.,!?;:।॰\-\'"()]+')
+
+
+def _normalize(text: str) -> str:
+    """Normalize text for fast-path matching: lowercase, strip punctuation, collapse spaces."""
+    t = text.strip().lower()
+    t = _PUNCT_RE.sub(' ', t)       # replace punctuation with space
+    t = re.sub(r'\s+', ' ', t)      # collapse multiple spaces
+    return t.strip()
+
 
 # ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -62,6 +77,7 @@ FAST_ACK = {
     "चलो", "चलो शुरू करते हैं", "चलिए", "चलो शुरू करो",
     "हां शुरू करो", "हां शुरू करते हैं",
     "जी शुरू करते हैं", "जी शुरू करो", "जी हां शुरू करते हैं",
+    "जी शुरू कीजिए",
     # Hindi - Romanized
     "samajh gaya", "samajh gayi", "samajh aa gaya",
     "theek hai", "thik hai", "accha", "acha",
@@ -69,7 +85,7 @@ FAST_ACK = {
     "chalo", "chaliye", "chalo shuru karte hain", "chalo shuru karo",
     "ji", "ji haan", "ji ha",
     "haan shuru karo", "haan shuru karte hain",
-    "ji shuru karte hain", "ji shuru karo",
+    "ji shuru karte hain", "ji shuru karo", "ji shuru kijiye",
 }
 
 FAST_IDK = {
@@ -165,10 +181,10 @@ async def classify(
     if not text or not text.strip():
         return {"category": "REPEAT", "confidence": 0.99, "extras": {}}
 
-    normalized = text.strip().lower()
+    normalized = _normalize(text)
 
     # Check for silence marker
-    if normalized == "[silence]":
+    if normalized == "[silence]" or text.strip().lower() == "[silence]":
         return {"category": "SILENCE", "confidence": 1.0, "extras": {}}
 
     # ─── Fast Path: obvious matches (up to 5 words) ──────────────────────────
@@ -271,9 +287,9 @@ def classify_student_input(
     if not text or not text.strip():
         return "REPEAT"
 
-    normalized = text.strip().lower()
+    normalized = _normalize(text)
 
-    if normalized == "[silence]":
+    if normalized == "[silence]" or text.strip().lower() == "[silence]":
         return "SILENCE"
 
     # P0 FIX: Same expanded fast-path as async classify()
