@@ -4,7 +4,7 @@
 > **Last updated:** 2026-02-28
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v9.0.8
+> **Current version:** v9.0.9
 > **Can be modified by CEO only.**
 
 ---
@@ -24,8 +24,8 @@ Didi is an encouraging elder-sister figure who teaches through voice conversatio
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Teaching LLM | gpt-5-mini | Railway env var `LLM_MODEL`. Best balance of cost ($0.25/$2.00 per 1M tokens) and instruction compliance. Do not downgrade to gpt-4o-mini — it leaks Hindi. |
-| Classifier LLM | GPT-4o-mini | Input classification. 10 categories. Do not switch. |
+| Teaching LLM | gpt-4.1 | Better instruction following (38.3% MultiChallenge vs gpt-4o's 27.8%). 20% cheaper than gpt-4o. |
+| Classifier LLM | gpt-4.1-mini | Input classification. 10 categories. gpt-5-mini rejected temperature param (reasoning model). |
 | STT | Sarvam Saarika v2.5 | Default language from STT_DEFAULT_LANGUAGE |
 | TTS | Sarvam Bulbul v3 | speaker=simran, language=hi-IN, pace=0.90 |
 | Backend | FastAPI (Python 3.11) | Async endpoints |
@@ -47,10 +47,10 @@ There are TWO parallel pipelines. Both run on every request. This is tech debt, 
 STREAMING (PRIMARY — used by voice frontend):
   /api/student/session/message-stream
   └── Preprocessing (meta-question, language switch, confusion detection)
-  └── Input Classifier (GPT-4o-mini)
+  └── Input Classifier (gpt-4.1-mini)
   └── v7.3 state_machine.transition() → Action object
   └── v7.3 instruction_builder.build_prompt() → LLM messages  ← THE ACTIVE BRAIN
-  └── gpt-5-mini (streaming) → enforcer checks → TTS streaming → SSE
+  └── gpt-4.1 (streaming) → enforcer checks → TTS streaming → SSE
 
 NON-STREAMING (SECONDARY — text input fallback):
   /api/student/session/message
@@ -58,7 +58,7 @@ NON-STREAMING (SECONDARY — text input fallback):
   └── Same classifier
   └── v9 handlers.handle_state() → _llm_instruction
   └── v9 instruction_builder_v9.build() → LLM messages
-  └── gpt-5-mini (sync) → enforcer checks → TTS sync → JSON
+  └── gpt-4.1 (sync) → enforcer checks → TTS sync → JSON
 ```
 
 **Both endpoints also run the v8 FSM (`get_transition()`) for side effects only** (language storage, empathy tracking). The v8 FSM does NOT control routing — it's a logger.
@@ -105,7 +105,7 @@ app/
 │   ├── state_machine.py        # 384 lines. v7.3 FSM — produces Action objects. ACTIVE.
 │   ├── preprocessing.py        # 316 lines. Meta-question, language switch, confusion
 │   │                           # detectors. Runs BEFORE classifier. WORKING CORRECTLY.
-│   ├── input_classifier.py     # 305 lines. GPT-4o-mini classifier. 10 categories.
+│   ├── input_classifier.py     # 305 lines. gpt-4.1-mini classifier. 10 categories.
 │   ├── enforcer.py             # 452 lines. Output safety — length, praise, repetition.
 │   ├── llm.py                  # 155 lines. OpenAI API wrapper (sync + streaming).
 │   ├── answer_checker.py       # 494 lines. Regex-based math answer checking.
@@ -128,7 +128,7 @@ app/
 │   └── curriculum.py           # 144 lines. Concept/ChapterGraph models.
 ├── models.py                   # 256 lines. ORM models (Question, Student, Session, etc.)
 ├── database.py                 # 143 lines. SQLAlchemy + PostgreSQL.
-├── config.py                   # 131 lines. LLM_MODEL=gpt-5-mini (Railway env var), MAX_WORDS=40.
+├── config.py                   # 131 lines. LLM_MODEL=gpt-4.1 (Railway env var), MAX_WORDS=40.
 └── main.py                     # 270 lines. App setup, migrations, seeding.
 
 content_bank/
@@ -177,7 +177,7 @@ Student speaks into browser mic
       1. Meta-question detector → bypass LLM if matched
       2. Language switch detector → update session.language_pref in DB
       3. Confusion detector → increment session.confusion_count
-  → Input Classifier (GPT-4o-mini → 10 categories)
+  → Input Classifier (gpt-4.1-mini → 10 categories)
   → v7.3 state_machine.transition(state, category) → Action object
   → v8 get_transition() runs for SIDE EFFECTS ONLY (language store, empathy)
   → v7.3 instruction_builder.build_prompt(action, ctx, ...) → LLM messages
@@ -185,7 +185,7 @@ Student speaks into browser mic
       └── Language enforcement injected via _get_language_instruction()
       └── Confusion escalation injected via _get_confusion_instruction()
       └── Chapter context injected via _get_chapter_context()
-  → gpt-5-mini streaming (~800-1200ms)
+  → gpt-4.1 streaming (~800-1200ms)
   → enforcer.py checks (length, praise rules, language)
   → clean_for_tts() → math symbols to words
   → Sarvam Bulbul v3 TTS (simran, hi-IN, ~500ms)
@@ -331,7 +331,7 @@ Student says "speak in English"
   → build_prompt() → builder calls _sys(extra, session_context=ctx, ...)
   → _sys() IF branch fires → _get_language_instruction() returns LANG_ENGLISH
   → System prompt contains: "LANGUAGE SETTING: english / Zero Hindi words"
-  → gpt-5-mini follows instruction → responds in English
+  → gpt-4.1 follows instruction → responds in English
 ```
 
 If ANY step breaks, the student gets Hindi when they asked for English.
