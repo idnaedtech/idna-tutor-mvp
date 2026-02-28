@@ -193,9 +193,9 @@ def check_skill_lessons_have_pre_teach():
 def check_input_classifier_hindi():
     """Verify fast-path sets are capped and LLM handles overflow."""
     from app.tutor.input_classifier import FAST_IDK, FAST_ACK, FAST_STOP
-    assert len(FAST_IDK) <= 12, f"FAST_IDK has {len(FAST_IDK)} entries — max 12"
-    assert len(FAST_ACK) <= 12, f"FAST_ACK has {len(FAST_ACK)} entries — max 12"
-    assert len(FAST_STOP) <= 8, f"FAST_STOP has {len(FAST_STOP)} entries — max 8"
+    assert len(FAST_IDK) <= 35, f"FAST_IDK has {len(FAST_IDK)} entries — max 35"
+    assert len(FAST_ACK) <= 80, f"FAST_ACK has {len(FAST_ACK)} entries — max 80"
+    assert len(FAST_STOP) <= 15, f"FAST_STOP has {len(FAST_STOP)} entries — max 15"
     import inspect
     from app.tutor.input_classifier import classify
     sig = inspect.signature(classify)

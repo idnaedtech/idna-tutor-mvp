@@ -191,6 +191,12 @@ async def classify(
     # P0 FIX: Expanded from 3 to 5 words to catch Hindi phrases
     # Order matters: Check negative categories (IDK, STOP) before positive (ACK)
     words = normalized.split()
+
+    # ─── Fast Path: homework-related → CONCEPT_REQUEST (P1 fix) ───────────────
+    # MUST check before ACK because "homework question hai" contains "ha" which matches FAST_ACK
+    if any(hw_word in normalized for hw_word in FAST_HOMEWORK):
+        return {"category": "CONCEPT_REQUEST", "confidence": 0.90, "extras": {"is_homework": True}}
+
     if len(words) <= FAST_PATH_MAX_WORDS:
         # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
         if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):
@@ -210,10 +216,6 @@ async def classify(
         # Contains digits → likely an answer
         if re.search(r'\d', text):
             return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
-
-    # ─── Fast Path: homework-related → CONCEPT_REQUEST (P1 fix) ───────────────
-    if any(hw_word in normalized for hw_word in FAST_HOMEWORK):
-        return {"category": "CONCEPT_REQUEST", "confidence": 0.90, "extras": {"is_homework": True}}
 
     # ─── LLM Classification ───────────────────────────────────────────────────
     if client is None:
