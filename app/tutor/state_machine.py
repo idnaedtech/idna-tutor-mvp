@@ -100,7 +100,8 @@ def transition(
             extra={"new_language": pref},
         )
 
-    if category == "COMFORT" and current_state != "COMFORT":
+    # P0 fix: GREETING handles COMFORT specially (stays in GREETING)
+    if category == "COMFORT" and current_state not in ("COMFORT", "GREETING"):
         return "COMFORT", Action(
             "comfort_student", student_text=text,
             extra={"resume_state": current_state},
@@ -116,12 +117,24 @@ def transition(
     # GREETING state only used if someone manually sets it.
 
     if current_state == "GREETING":
-        # Bug D fix: GREETING + ACK → TEACHING (not WAITING_ANSWER)
-        # Student must hear the concept before being asked a question
-        if category == "ACK":
-            return "TEACHING", Action("teach_concept", student_text=text)
-        # Any other input: stay in GREETING and re-greet
-        return "GREETING", Action("re_greet", student_text=text)
+        # P0 fix: GREETING accepts all engagement signals, not just ACK
+        # Real students say compound things that classify as CONCEPT_REQUEST etc.
+        # Only explicit disengagement (STOP, COMFORT) or clarification (REPEAT, LANGUAGE_SWITCH)
+        # should stay in GREETING. Everything else = student is engaged, proceed to TEACHING.
+        if category == "STOP":
+            return "WRAP_UP", Action("end_session", student_text=text)
+        elif category == "COMFORT":
+            return "GREETING", Action("comfort_student", student_text=text)
+        elif category == "LANGUAGE_SWITCH":
+            return "GREETING", Action("acknowledge_language_switch", student_text=text,
+                extra={"new_language": ctx.get("language_pref", "hinglish")})
+        elif category == "REPEAT":
+            return "GREETING", Action("re_greet", student_text=text)
+        else:
+            # ACK, CONCEPT_REQUEST, ANSWER, META_QUESTION, IDK, TROLL, GARBLED, UNCLEAR
+            # Student showed up to learn — proceed to TEACHING
+            return "TEACHING", Action("teach_concept", student_text=text,
+                reteach_count=0, extra={"approach": "fresh"})
 
     # ── CHECKING_UNDERSTANDING ────────────────────────────────────────────
 

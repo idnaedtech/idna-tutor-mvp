@@ -539,15 +539,26 @@ class TestBugDGreetingNotDumpingLesson:
         assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
         assert action.action_type == "teach_concept", f"Expected teach_concept, got {action.action_type}"
 
-    def test_old_state_machine_greeting_non_ack_stays(self):
-        """Non-ACK inputs in GREETING should stay in GREETING."""
+    def test_old_state_machine_greeting_engagement_goes_to_teaching(self):
+        """P0 fix: Most inputs in GREETING should proceed to TEACHING (student is engaged)."""
         from app.tutor.state_machine import transition
 
+        # TROLL, CONCEPT_REQUEST, etc. = student showed up, proceed to teaching
         ctx = {"student_text": "kya?"}
         new_state, action = transition("GREETING", "TROLL", ctx)
 
+        assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
+        assert action.action_type == "teach_concept", f"Expected teach_concept, got {action.action_type}"
+
+    def test_old_state_machine_greeting_comfort_stays(self):
+        """COMFORT in GREETING should stay in GREETING (offer support first)."""
+        from app.tutor.state_machine import transition
+
+        ctx = {"student_text": "mushkil hai"}
+        new_state, action = transition("GREETING", "COMFORT", ctx)
+
         assert new_state == "GREETING", f"Expected GREETING, got {new_state}"
-        assert action.action_type == "re_greet", f"Expected re_greet, got {action.action_type}"
+        assert action.action_type == "comfort_student", f"Expected comfort_student, got {action.action_type}"
 
     def test_v8_fsm_greeting_ack_goes_to_teaching(self):
         """v8.0 FSM transition for GREETING + ACK → TEACHING."""
