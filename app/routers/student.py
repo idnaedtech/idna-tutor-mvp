@@ -432,6 +432,30 @@ async def process_message(
         session.confusion_count = (session.confusion_count or 0) + 1
         logger.info(f"v8.1.0: Confusion detected, count now {session.confusion_count}")
 
+    # === LANGUAGE PRE-SCAN (runs on every message, before classifier) ===
+    # P0 fix: Classifier picks ONE category, so "teach me in English" may classify
+    # as CONCEPT_REQUEST instead of LANGUAGE_SWITCH. This pre-scan catches language
+    # intent regardless of classifier result.
+    _text_lower = student_text.lower()
+    _english_triggers = ["english", "इंग्लिश", "अंग्रेजी", "in english",
+                         "speak english", "teach english", "english mein",
+                         "english please", "इंग्लिश में"]
+    _hindi_triggers = ["hindi", "हिंदी", "hindi mein", "हिंदी में"]
+
+    for trigger in _english_triggers:
+        if trigger in _text_lower:
+            session.language_pref = "english"
+            db.commit()
+            logger.info(f"LANGUAGE PRE-SCAN: switched to english")
+            break
+    else:
+        for trigger in _hindi_triggers:
+            if trigger in _text_lower:
+                session.language_pref = "hindi"
+                db.commit()
+                logger.info(f"LANGUAGE PRE-SCAN: switched to hindi")
+                break
+
     # ── Step 2: Classify input ────────────────────────────────────────────
     # MVP: No topic discovery (math only). Subject detection removed.
 
@@ -988,6 +1012,30 @@ async def process_message_stream(
     if preprocess_result.confusion_detected:
         session.confusion_count = (session.confusion_count or 0) + 1
         logger.info(f"v8.1.0 (stream): Confusion detected, count now {session.confusion_count}")
+
+    # === LANGUAGE PRE-SCAN (runs on every message, before classifier) ===
+    # P0 fix: Classifier picks ONE category, so "teach me in English" may classify
+    # as CONCEPT_REQUEST instead of LANGUAGE_SWITCH. This pre-scan catches language
+    # intent regardless of classifier result.
+    _text_lower = student_text.lower()
+    _english_triggers = ["english", "इंग्लिश", "अंग्रेजी", "in english",
+                         "speak english", "teach english", "english mein",
+                         "english please", "इंग्लिश में"]
+    _hindi_triggers = ["hindi", "हिंदी", "hindi mein", "हिंदी में"]
+
+    for trigger in _english_triggers:
+        if trigger in _text_lower:
+            session.language_pref = "english"
+            await run_in_threadpool(lambda: db.commit())
+            logger.info(f"LANGUAGE PRE-SCAN (stream): switched to english")
+            break
+    else:
+        for trigger in _hindi_triggers:
+            if trigger in _text_lower:
+                session.language_pref = "hindi"
+                await run_in_threadpool(lambda: db.commit())
+                logger.info(f"LANGUAGE PRE-SCAN (stream): switched to hindi")
+                break
 
     # ── Classify ──
     # v7.3.0: Use async LLM classifier (module-level singleton)
