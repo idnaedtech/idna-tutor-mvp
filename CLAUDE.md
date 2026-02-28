@@ -1,17 +1,17 @@
-# IDNA EdTech — Project CLAUDE.md
+# CLAUDE.md — IDNA EdTech Operating Rules
 
 > **This file is read by Claude Code on every session start.**
-> **Last updated:** 2026-02-23
+> **Last updated:** 2026-02-28
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v8.1.0
+> **Current version:** v9.0.3
 > **Can be modified by CEO only.**
 
 ---
 
 ## 0. PRIME DIRECTIVE
 
-You are working on a production voice tutoring platform used by real students.
+You are working on a production voice tutoring platform used by real Indian students.
 **Every broken deploy = a student who can't learn.**
 Read before editing. Prove before claiming done. Ask before touching files outside your scope.
 
@@ -19,228 +19,247 @@ Read before editing. Prove before claiming done. Ask before touching files outsi
 
 ## 1. PROJECT OVERVIEW
 
-Voice-based AI tutor "Didi" for NCERT Class 8 Math, targeting Tier 2/3 Indian students.
+Voice-based AI tutor "Didi" (दीदी) for NCERT Class 8 Math, targeting Tier 2/3 Indian students.
+Didi is an encouraging elder-sister figure who teaches through voice conversation.
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Didi LLM | GPT-5-mini | Teaching responses. Do not switch. |
-| Classifier LLM | GPT-4o-mini | Input classification. Do not switch. |
+| Teaching LLM | gpt-5-mini | Railway env var `LLM_MODEL`. Best balance of cost ($0.25/$2.00 per 1M tokens) and instruction compliance. Do not downgrade to gpt-4o-mini — it leaks Hindi. |
+| Classifier LLM | GPT-4o-mini | Input classification. 10 categories. Do not switch. |
 | STT | Sarvam Saarika v2.5 | Default language from STT_DEFAULT_LANGUAGE |
 | TTS | Sarvam Bulbul v3 | speaker=simran, language=hi-IN, pace=0.90 |
 | Backend | FastAPI (Python 3.11) | Async endpoints |
-| Database | PostgreSQL (Railway managed) | Not SQLite |
-| Hosting | Railway | Auto-deploy from main |
+| Database | PostgreSQL (Railway managed) | Not SQLite. Alembic for all migrations. |
+| Hosting | Railway (3 services) | Auto-deploy from main |
 
 **Do not add new dependencies without explicit permission.**
 **Do not upgrade existing dependencies unless explicitly tasked.**
 
 ---
 
-## 2. ARCHITECTURE — NON-NEGOTIABLE RULES
+## 2. CRITICAL ARCHITECTURE KNOWLEDGE
+
+### The Dual Pipeline (UNDERSTAND THIS FIRST)
+
+There are TWO parallel pipelines. Both run on every request. This is tech debt, not design.
+
+```
+STREAMING (PRIMARY — used by voice frontend):
+  /api/student/session/message-stream
+  └── Preprocessing (meta-question, language switch, confusion detection)
+  └── Input Classifier (GPT-4o-mini)
+  └── v7.3 state_machine.transition() → Action object
+  └── v7.3 instruction_builder.build_prompt() → LLM messages  ← THE ACTIVE BRAIN
+  └── gpt-5-mini (streaming) → enforcer checks → TTS streaming → SSE
+
+NON-STREAMING (SECONDARY — text input fallback):
+  /api/student/session/message
+  └── Same preprocessing
+  └── Same classifier
+  └── v9 handlers.handle_state() → _llm_instruction
+  └── v9 instruction_builder_v9.build() → LLM messages
+  └── gpt-5-mini (sync) → enforcer checks → TTS sync → JSON
+```
+
+**Both endpoints also run the v8 FSM (`get_transition()`) for side effects only** (language storage, empathy tracking). The v8 FSM does NOT control routing — it's a logger.
+
+### What This Means for You
+
+- **If fixing voice/teaching behavior:** Edit `app/tutor/instruction_builder.py` (v7.3)
+- **If fixing text input behavior:** Edit `app/tutor/instruction_builder_v9.py` (v9)
+- **If fixing state transitions:** Edit `app/tutor/state_machine.py` (v7.3, both endpoints)
+- **Do NOT edit** `app/fsm/handlers.py` or `app/fsm/transitions.py` for teaching behavior — they are side-effect-only for the streaming pipeline
+
+---
+
+## 3. NON-NEGOTIABLE RULES
 
 These rules are absolute. Violating any of them is a blocking error.
 
-1. **FSM is frozen.** The 60-combination state machine (6 states × 10 input categories) does not change. No new states. No new input categories. No catch-all fallbacks. No "temporary" transitions.
-2. **New board = data insert, zero code change.** If you are modifying FSM logic to support a new board, **STOP and ask**.
-3. **bench_score gates everything.** No content serves students without a score above threshold (85 for boards, 98% for math truth, 75 for languages). Enforced at DB level.
-4. **One Didi voice.** Sarvam Bulbul v3, speaker=simran, hi-IN, pace=0.90. No TTS fallback. No voice switching. Do not touch voice config.
-5. **Never rewrite DIDI_PROMPT.** Append rules only. Never replace the existing prompt.
-6. **Language persistence is sacred.** `preferred_language` is set by LANGUAGE_SWITCH, injected in EVERY LLM prompt. It must NEVER reset on state transitions.
-7. **Phase gates are strict.** P0 → P1 → P2 → P3 → P4. No features from a later phase unless all prior phase gates have passed.
-8. **Alembic for all schema changes.** No raw SQL DDL against production. Every migration must have a rollback.
-9. **Don't edit MEMORY.md mid-session.**
-10. **Never create `app/models/` directory.** This shadows `app/models.py`. Use `app/state/` for v8.0 modules.
+1. **FSM skeleton is stable.** The v7.3 state machine (6 states × 10 input categories) does not get new states or input categories without explicit permission.
+2. **New board = data insert, zero code change.** The FSM is the skeleton, content/board/language are parameterized flesh.
+3. **bench_score gates everything.** No content serves students without a score above threshold (85 for boards, 98% for math truth, 75 for languages).
+4. **One Didi voice.** Sarvam Bulbul v3, speaker=simran, hi-IN, pace=0.90. No TTS fallback. No voice switching.
+5. **Never rewrite the system prompt from scratch.** Modify sections, don't replace the entire DIDI_BASE.
+6. **Language persistence is sacred.** `session.language_pref` is set by preprocessing language switch detection and injected in EVERY LLM prompt. It must NEVER reset on state transitions.
+7. **Every `_sys()` call MUST pass `session_context=ctx, question_data=q`.** Calling `_sys()` without session_context bypasses ALL language enforcement, confusion escalation, and student context. This was the P0 root cause bug.
+8. **Phase gates are strict.** P0 → P1 → P2 → P3 → P4. No features from a later phase unless all prior phase gates have passed.
+9. **Alembic for all schema changes.** No raw SQL DDL against production. Every migration must have a rollback.
+10. **Never create `app/models/` directory.** This shadows `app/models.py` and breaks imports.
 
 ---
 
-## 3. CODEBASE STRUCTURE
+## 4. CODEBASE STRUCTURE
+
+### Active Code (what actually runs)
 
 ```
 app/
-├── routers/student.py          # FastAPI endpoints (async, uses v8.0 FSM)
-├── state/                      # v8.0: Session state schema
-│   ├── session.py              # SessionState dataclass, TutorState enum
-│   └── __init__.py
-├── fsm/                        # v8.0: Complete FSM (60 state × input combos)
-│   ├── transitions.py          # Transition matrix, get_transition()  [FROZEN]
-│   ├── handlers.py             # Per-state handlers, handle_state()   [FROZEN]
-│   └── __init__.py
+├── routers/
+│   └── student.py              # 1,469 lines. Main router, both endpoints, session mgmt.
+│                                # THIS IS THE MAIN ORCHESTRATOR.
 ├── tutor/
-│   ├── input_classifier.py     # LLM classifier (GPT-4o-mini): 10 categories
-│   ├── state_machine.py        # Legacy FSM (backward compat)
-│   ├── instruction_builder.py  # Builds LLM prompts
-│   ├── instruction_builder_v8.py # v8.0: Language-aware prompts
-│   ├── llm.py                  # GPT-5-mini calls for Didi responses
-│   └── enforcer.py             # Response quality enforcement
+│   ├── instruction_builder.py  # 754 lines. v7.3 ACTIVE BRAIN — builds ALL LLM prompts
+│   │                           # for streaming endpoint. MOST CRITICAL FILE.
+│   ├── instruction_builder_v9.py # 488 lines. v9 brain for non-streaming endpoint.
+│   ├── state_machine.py        # 384 lines. v7.3 FSM — produces Action objects. ACTIVE.
+│   ├── preprocessing.py        # 316 lines. Meta-question, language switch, confusion
+│   │                           # detectors. Runs BEFORE classifier. WORKING CORRECTLY.
+│   ├── input_classifier.py     # 305 lines. GPT-4o-mini classifier. 10 categories.
+│   ├── enforcer.py             # 452 lines. Output safety — length, praise, repetition.
+│   ├── llm.py                  # 155 lines. OpenAI API wrapper (sync + streaming).
+│   ├── answer_checker.py       # 494 lines. Regex-based math answer checking.
+│   ├── answer_evaluator.py     # 183 lines. LLM-based answer evaluation.
+│   └── memory.py               # 261 lines. Question selection, skill tracking.
+├── fsm/
+│   ├── transitions.py          # 447 lines. v8 FSM. SIDE EFFECTS ONLY (language, empathy).
+│   │                           # Does NOT control teaching flow for streaming endpoint.
+│   └── handlers.py             # 811 lines. v9 handlers for non-streaming only.
+├── state/
+│   └── session.py              # 186 lines. SessionState dataclass (v9 adapter).
 ├── voice/
-│   ├── stt.py                  # Sarvam Saarika v2.5 STT             [PROTECTED]
-│   └── tts.py                  # Sarvam Bulbul v3 TTS (simran, hi-IN) [PROTECTED]
+│   ├── stt.py                  # 255 lines. Sarvam Saarika v2.5 STT.       [PROTECTED]
+│   ├── tts.py                  # 343 lines. Sarvam Bulbul v3 TTS (simran). [PROTECTED]
+│   ├── clean_for_tts.py        # 176 lines. Math→words conversion.
+│   └── tts_precache.py         # 210 lines. TTS caching.
 ├── content/
-│   └── ch1_square_and_cube.py  # Chapter 1: 50 questions, 20 skills
-├── models.py                   # ORM models (Question, Student, Session, etc.)
+│   ├── seed_questions.py       # 313 lines. 60+ questions, Hinglish only.
+│   ├── ch1_square_and_cube.py  # 1,968 lines. Chapter metadata + concepts.
+│   └── curriculum.py           # 144 lines. Concept/ChapterGraph models.
+├── models.py                   # 256 lines. ORM models (Question, Student, Session, etc.)
+├── database.py                 # 143 lines. SQLAlchemy + PostgreSQL.
+├── config.py                   # 131 lines. LLM_MODEL=gpt-5-mini (Railway env var), MAX_WORDS=40.
+└── main.py                     # 270 lines. App setup, migrations, seeding.
+
+content_bank/
+├── loader.py                   # 258 lines. JSON content bank loader.
+└── math_8_ch6.json             # ~80KB. Content bank data.
+
 web/
-├── student.html                # Student-facing web UI
+└── student.html                # Student-facing web UI.
+
 tests/
-├── test_*.py                   # Test suite (152 tests)
-├── test_integration.py         # v8.0: 27 integration tests
-verify.py                       # MANDATORY verification script (22 checks)
-CLAUDE.md                       # THIS FILE                           [CEO-ONLY]
-IDNA_v8_ARCHITECTURE.md         # THE spec                            [READ-ONLY]
+├── test_core.py                # Answer checking, fractions
+├── test_integration.py         # FSM transitions, language
+├── test_preprocessing.py       # Meta-Q, language, confusion detectors
+├── test_p0_language_persistence.py  # Language detection, TTS
+├── test_p0_regression.py       # P0 regression — prompt trace tests
+├── test_content_bank.py        # Content bank loader
+├── test_v750_features.py       # Sentence splitter, enforcer
+├── test_p1_fixes.py            # Question picking, memory
+└── test_ch1_square_cube.py     # Question bank validation
+    # Total: 268+ tests. ALL must pass before any commit.
+
 alembic/                        # Database migrations
+```
+
+### Dead Code (DO NOT EDIT, DO NOT IMPORT)
+
+| File | Why Dead |
+|------|----------|
+| `app/tutor/instruction_builder_v8.py` | Never imported by anything. 278 lines of waste. |
+| `app/voice/streaming.py` | Never imported. Streaming is inline in student.py. |
+| `app/parent_engine/__init__.py` | Empty placeholder. |
+| `app/ocr/__init__.py` | Empty placeholder. |
+
+**If you find yourself editing any of these files, STOP. You are editing dead code.**
+
+---
+
+## 5. THE VOICE PIPELINE (Actual Flow)
+
+```
+Student speaks into browser mic
+  → Frontend sends audio to /api/student/session/message-stream
+  → Sarvam Saarika v2.5 STT (~300ms) → transcribed text
+  → Confidence check (threshold 0.4)
+  → Preprocessing layer (runs BEFORE classifier):
+      1. Meta-question detector → bypass LLM if matched
+      2. Language switch detector → update session.language_pref in DB
+      3. Confusion detector → increment session.confusion_count
+  → Input Classifier (GPT-4o-mini → 10 categories)
+  → v7.3 state_machine.transition(state, category) → Action object
+  → v8 get_transition() runs for SIDE EFFECTS ONLY (language store, empathy)
+  → v7.3 instruction_builder.build_prompt(action, ctx, ...) → LLM messages
+      └── _sys(extra, session_context=ctx, question_data=q) ← MUST have session_context
+      └── Language enforcement injected via _get_language_instruction()
+      └── Confusion escalation injected via _get_confusion_instruction()
+      └── Chapter context injected via _get_chapter_context()
+  → gpt-5-mini streaming (~800-1200ms)
+  → enforcer.py checks (length, praise rules, language)
+  → clean_for_tts() → math symbols to words
+  → Sarvam Bulbul v3 TTS (simran, hi-IN, ~500ms)
+  → SSE stream to frontend → audio plays
+
+Latency budget: STT(300ms) + Classify(200ms) + LLM(1200ms) + TTS(500ms) ≈ 2.2s
 ```
 
 ---
 
-## 4. ALLOWED FILES — SCOPE CONSTRAINTS
+## 6. FILE PROTECTION LEVELS
 
-Before every task, Claude Code must declare which files it will touch.
-
-### Module Ownership Map
-
-| Module | Files | Protection | Touch Without Permission? |
-|--------|-------|------------|--------------------------|
-| FSM Transitions | `app/fsm/transitions.py` | **FROZEN** | **NO** — ask first |
-| FSM Handlers | `app/fsm/handlers.py` | **FROZEN** | **NO** — ask first |
-| Session State | `app/state/session.py` | Protected | Only for documented schema extensions |
-| Voice STT | `app/voice/stt.py` | Protected | Only for bugs, never config |
-| Voice TTS | `app/voice/tts.py` | Protected | Only for bugs, never config |
-| DIDI_PROMPT | `app/tutor/instruction_builder*.py` | Protected | **Append only, never replace** |
-| API Endpoints | `app/routers/student.py` | Open | Yes, with test coverage |
-| Input Classifier | `app/tutor/input_classifier.py` | Open | Yes, with test coverage |
-| LLM Calls | `app/tutor/llm.py` | Open | Yes |
-| Enforcer | `app/tutor/enforcer.py` | Open | Yes |
-| Legacy FSM | `app/tutor/state_machine.py` | Deprecated | Only if backward compat breaks |
-| Questions/Content | `app/content/` | Open | Add only, never delete questions |
-| ORM Models | `app/models.py` | Open | Yes, via Alembic only |
-| Tests | `tests/` | Open | Always add, **never delete** |
-| Frontend | `web/student.html` | Open | Yes |
-| Verify Script | `verify.py` | Protected | Only to align checks with current architecture |
-| Architecture Spec | `IDNA_v8_ARCHITECTURE.md` | **READ-ONLY** | **NO** |
-| This File | `CLAUDE.md` | **CEO-ONLY** | **NO** |
-| Sub-agent Files | `.claude/agents/` | **READ-ONLY** | **NO** |
-| Alembic Migrations | `alembic/` | Open | Yes, with rollback |
+| Protection | Meaning | Files |
+|-----------|---------|-------|
+| **CEO-ONLY** | Only Hemant modifies. Never touch. | `CLAUDE.md` |
+| **PROTECTED** | Bug fixes only, never config changes | `voice/stt.py`, `voice/tts.py` |
+| **ACTIVE BRAIN** | Edit carefully — every `_sys()` call needs `session_context` | `instruction_builder.py` |
+| **ACTIVE** | Edit with test coverage | `state_machine.py`, `preprocessing.py`, `student.py` |
+| **OPEN** | Edit freely with tests | `enforcer.py`, `llm.py`, `content/`, `models.py`, `tests/` |
+| **DEAD** | Do not edit, do not import | `instruction_builder_v8.py`, `voice/streaming.py` |
 
 ### Hard Bans
 
 - **Never** rename files or directories
 - **Never** reformat code you didn't write (no style-only diffs)
 - **Never** upgrade dependencies unless explicitly tasked
-- **Never** reorganize imports in files you didn't change
-- **Never** move files between directories
 - **Never** delete tests or questions
 - **Never** run `rm -rf` on anything
 - **Never** modify `.env` or environment variables without explicit permission
 - **Never** create `app/models/` directory (shadows `app/models.py`)
-- **Never** modify verify.py to make checks pass (only to align with architecture)
-- **Never** modify sub-agent files in `.claude/agents/`
+- **Never** call `_sys()` without `session_context=ctx` — this is the #1 bug pattern
+- **Never** edit dead code files thinking they're active
 - If you believe a file outside your declared scope must change: **STOP and state why**
 
 ---
 
-## 5. TASK PROTOCOL — HOW TO WORK
+## 7. TASK PROTOCOL
 
-### Step 0: Pre-Flight
-
-Before ANY edit:
+### Pre-Flight (Before ANY Edit)
 
 ```bash
-python verify.py --quick
+python -m pytest tests/ -v          # Know what's green
+git log --oneline -5                # Know recent changes
 ```
 
-If anything fails, fix it first. Do not proceed with new work on a broken base.
+### Plan Before Execute
 
-Then you must:
+Before editing, state:
+1. **Which files** you will modify
+2. **Which functions/lines** you will change
+3. **Current behavior** (what happens now)
+4. **Desired behavior** (what should happen after)
+5. **Call graph** (what calls this code, what does it call)
 
-1. **List the exact files** you will modify
-2. **Quote the exact functions/lines** you will change
-3. **State current behavior** (what happens now)
-4. **State desired behavior** (what should happen after)
-5. **Identify the call graph** (what calls this code, what does it call)
+If you cannot do all 5, you don't understand the code well enough. Read more first.
 
-If you cannot do all 5, you do not understand the code well enough to edit it. Read more first.
+### Execute One Step at a Time
 
-### Step 1: Plan (No Edits Yet)
+- Make one change
+- Run `python -m pytest tests/ -v`
+- If tests fail, fix before proceeding
+- Never bundle unrelated changes
 
-Write a step-by-step plan. Each step must specify:
-- Which file
-- Which function/line
-- What changes
-- Why
+### Prove It Works
 
-Wait for approval before proceeding.
-
-### Step 2: Execute One Step at a Time
-
-- Make the change for Step 1 only
-- Show the diff
-- Run `verify.py --quick`
-- Only proceed to Step 2 after Step 1 passes
-
-### Step 3: Prove It Works
-
-No change is "done" without evidence. See Section 6.
+No change is "done" without:
+1. All 268+ tests passing (paste output)
+2. For server changes: curl output showing correct behavior
+3. For production: `curl /health` showing correct version
+4. For instruction_builder changes: verify `LANGUAGE SETTING:` appears in build_prompt output
 
 ---
 
-## 6. DEFINITION OF DONE — VALIDATION REQUIREMENTS
-
-### After Every File Change
-
-```bash
-python verify.py --quick
-```
-
-### Before Commit
-
-```bash
-# 1. All existing tests pass
-python -m pytest tests/ -v
-
-# 2. Full verify script passes (22 checks)
-python verify.py
-
-# 3. Import check — app loads without errors
-python -c "from app.models import Question, Student; print('OK')"
-```
-
-### Evidence Required
-
-You are NOT done until:
-
-1. `verify.py` shows **ALL 22/22 PASSED** (paste complete output)
-2. For server changes: actual endpoint responses (curl output)
-3. For production changes: `curl /health` showing correct version
-4. For v8.0 FSM-adjacent changes: reteach cap test passes (3 IDKs → WAITING_ANSWER)
-5. If tests fail: debug until green. Do not claim partial success.
-
-### Railway Deployment Awareness
-
-Claude Code runs locally. The production environment is Railway.
-- CORS, websocket, auth, and environment variable bugs may not reproduce locally
-- If a fix is environment-dependent, state: "This fix is local-only. Verify on Railway with: `railway logs`"
-- After push, always confirm production with `curl /health`
-- Never claim a deployment bug is fixed without Railway log evidence
-
-### Test Requirements for New Code
-
-| Change Type | Test Requirement |
-|-------------|-----------------|
-| Bug fix | Regression test that fails before fix, passes after |
-| New endpoint | Contract test (request → expected response) |
-| Schema change | Migration test + rollback test |
-| FSM change | **NOT ALLOWED** without explicit permission |
-| Input classifier change | Classification test with edge cases (including Devanagari) |
-| Content change | Add only. Content parity test if migrating |
-
-### Definition of "Wired"
-
-A component is **NOT** wired if it exists in a file but no other file calls it.
-A component **IS** wired when wiring-checker shows checkmark for its step.
-**Never claim "wired" without showing the call site (file:line).**
-
----
-
-## 7. COMMIT DISCIPLINE
+## 8. COMMIT DISCIPLINE
 
 ### Format
 
@@ -251,60 +270,115 @@ v{major}.{minor}.{patch}: brief description
 ### Rules
 
 - **One bug or feature per commit.** Never bundle.
-- **Max 1-3 files per commit** in early stages
-- **Never commit failing tests.** Run full test suite before every commit.
-- **Commit message describes exactly one thing.** If you need "and" in the message, split the commit.
+- **Never commit failing tests.**
+- **Commit message describes exactly one thing.** If you need "and", split the commit.
 
-### Full Commit Workflow
+### Workflow
 
 ```bash
-python verify.py --quick              # After every file edit
-python -m pytest tests/ -v            # Before commit
-python verify.py                      # Full run — 22/22 must pass
+python -m pytest tests/ -v            # All tests pass
 git add -A
-git commit -m "v8.X.Y: description"
+git commit -m "v9.0.X: description"
 git push origin main
-curl https://idna-tutor-mvp-production.up.railway.app/health  # Confirm deploy
+# Wait for Railway deploy
+curl https://idna-tutor-mvp-production.up.railway.app/health  # Confirm
 ```
 
 ---
 
-## 8. SUB-AGENT ENFORCEMENT SYSTEM (MANDATORY)
+## 9. THE instruction_builder.py CONTRACT
 
-### Available Sub-Agents
+This is the most critical file. Here's how it works:
 
-1. **verifier** — Runs automatically on Stop. Checks verify.py + cross-file wiring.
-2. **wiring-checker** — Call BEFORE claiming architectural changes done.
-3. **pre-commit-checker** — Call before every git commit.
+### _sys() Function — THE Core
 
-### Mandatory Workflow for ANY Code Change
-
-```
-1. Run verify.py --quick (pre-flight)
-2. Declare allowed files (Section 4)
-3. Write plan (Section 5, Step 1)
-4. Make the code change (one step at a time)
-5. Run verify.py --quick (post-edit)
-6. Use wiring-checker subagent (for multi-file changes)
-7. If breaks found → FIX THEM
-8. Use pre-commit-checker subagent
-9. If blocked → FIX IT
-10. git add && git commit
-11. If verifier FAILED → FIX IT
-12. git push
-13. Confirm production with curl /health
+```python
+def _sys(extra="", session_context: dict = None, question_data: dict = None):
+    if session_context:        # ← CORRECT PATH: real student data
+        base = _format_didi_base(session_context, question_data)
+        base += _get_confusion_instruction(session_context)
+        base += _get_language_instruction(session_context)
+    else:                      # ← DANGER: hardcoded "hinglish" defaults
+        base = DIDI_BASE.format(medium_of_instruction="hinglish", ...)
 ```
 
-### Sub-Agent Rules
+**RULE: Every builder that calls `_sys()` MUST pass `session_context=ctx, question_data=q`.**
 
-- NEVER say "done" without verifier/wiring-checker confirmation
-- NEVER skip verification flags on any git command
-- NEVER modify sub-agent files in `.claude/agents/`
-- NEVER rationalize incomplete production deployment
+If you see `_sys(extra)` or `_sys(SOME_STRING)` without session_context — that's a bug.
+
+### _BUILDERS Dict
+
+Every `action_type` from `state_machine.py` must have an entry in `_BUILDERS`. If an action_type is missing, it hits `_build_fallback` which tells the LLM to say "Chalo aage badhte hain" — a generic Hindi fallback that ignores language preference.
+
+**Before adding any new action_type to state_machine.py, add its builder to `_BUILDERS` first.**
+
+Current registered builders:
+```
+teach_concept, read_question, give_hint, show_solution,
+pick_next_question, comfort_student, end_session, ask_repeat,
+acknowledge_language_switch, answer_meta_question, re_greet,
+evaluate_answer, probe_understanding, ask_topic,
+apologize_no_subject, acknowledge_homework, replay_heard
+```
+
+### Language Flow
+
+```
+Student says "speak in English"
+  → preprocessing.py detects language switch
+  → session.language_pref = "english" (saved to DB)
+  → session_ctx["language_pref"] = "english"
+  → build_prompt() → builder calls _sys(extra, session_context=ctx, ...)
+  → _sys() IF branch fires → _get_language_instruction() returns LANG_ENGLISH
+  → System prompt contains: "LANGUAGE SETTING: english / Zero Hindi words"
+  → gpt-5-mini follows instruction → responds in English
+```
+
+If ANY step breaks, the student gets Hindi when they asked for English.
 
 ---
 
-## 9. FSM REFERENCE (READ-ONLY)
+## 10. KNOWN ISSUES (P1 BACKLOG)
+
+### Post-P0 (Fix after live retest passes)
+
+| # | Issue | Impact | File(s) |
+|---|-------|--------|---------|
+| 1 | Non-streaming endpoint has 5 hardcoded Hindi messages (lines 361, 370, 379, 391, 464) | Low — voice uses streaming | `student.py` |
+| 2 | All content in seed_questions.py is Hinglish only — LLM must translate on-the-fly for English students | Medium — English quality suffers | `seed_questions.py` |
+| 3 | Enforcer can't detect romanized Hindi ("Hum padh rahe hain" passes through) | Low — system prompt is primary defense | `enforcer.py` |
+| 4 | MAX_RESPONSE_WORDS=40 clips 3-sentence teaching to 2 sentences | Low | `config.py` |
+| 5 | Dual pipeline tech debt — every change requires checking two code paths | High — slows all future work | `student.py` |
+| 6 | Dead code: `instruction_builder_v8.py` (278 lines), `voice/streaming.py` (95 lines) | Low — just noise | Delete safely |
+
+### Original P1 Bugs (from v8.0 era)
+
+| # | Bug | File(s) |
+|---|-----|---------|
+| 7 | Same-Q reload on page refresh | `student.py` |
+| 8 | HOMEWORK_HELP trap missing in classifier | `input_classifier.py` |
+| 9 | Devanagari बटा parser broken | `input_classifier.py` |
+| 10 | Empty TTS sentence wastes API | `tts.py` |
+| 11 | Parent split()[0] bug on single names | `student.py` |
+| 12 | Weakest-skill dead end | `handlers.py` |
+
+---
+
+## 11. PHASE GATES
+
+| Phase | Goal | Gate Criteria | Status |
+|-------|------|--------------|--------|
+| **P0** | Core tutoring loop works | Full session without crash/loop/language reset | **IN PROGRESS — live retest pending** |
+| **P1** | Schema evolution | Multi-board DB, content migration, API v1 | Blocked on P0 |
+| **P2** | Multi-board MVP | CBSE + Telangana + Maharashtra + ICSE | Blocked on P1 |
+| **P3** | Platform | Content factory, IDNA-Bench, 22 languages | Blocked on P2 |
+| **P4** | Infrastructure | On-device tablets, government partnerships | Blocked on P3 |
+
+**Do NOT work on Phase N+1 features until Phase N gate passes.**
+
+---
+
+## 12. v7.3 FSM REFERENCE
 
 ### 6 States
 
@@ -314,127 +388,87 @@ curl https://idna-tutor-mvp-production.up.railway.app/health  # Confirm deploy
 
 `ACK`, `IDK`, `REPEAT`, `ANSWER`, `LANGUAGE_SWITCH`, `CONCEPT_REQUEST`, `COMFORT`, `STOP`, `TROLL`, `GARBLED`
 
-### v8.0 Key Features
-
-1. **Language persistence**: preferred_language set by LANGUAGE_SWITCH, never resets
-2. **Reteach cap**: After 3 IDKs/REPEATs, forces transition to WAITING_ANSWER
-3. **No KeyError**: All 60 combinations defined in transition matrix
-4. **Content Bank injection**: teach_material_index maps to CB material (0=definition, 1=analogy, 2=vedic_trick)
-
-### Key Transitions (Do Not Modify)
+### Key Transitions
 
 ```
-GREETING → TEACHING
-TEACHING + ACK → WAITING_ANSWER (via NEXT_QUESTION)
-TEACHING + IDK → TEACHING (reteach, cap at 3, then force WAITING_ANSWER)
-TEACHING + REPEAT → TEACHING (reteach, same cap)
+GREETING + ACK → TEACHING (teach_concept)
+GREETING + other → GREETING (re_greet)
+TEACHING + ACK → WAITING_ANSWER (read_question)
+TEACHING + IDK → TEACHING (teach_concept with reteach, cap at 3)
 WAITING_ANSWER + ANSWER → evaluate → HINT or NEXT_QUESTION
-WAITING_ANSWER + IDK → HINT (hint 1 → hint 2 → full solution)
+WAITING_ANSWER + IDK → HINT (hint 1 → hint 2 → show_solution)
 NEXT_QUESTION → TEACHING (next topic) or SESSION_END
 ```
 
----
+### Key Features
 
-## 10. KEY FILES TO UNDERSTAND BEFORE EDITING
-
-| File | Read first if you're editing... |
-|------|-------------------------------|
-| `app/state/session.py` | SessionState, language persistence, reteach cap |
-| `app/fsm/transitions.py` | State × input combinations, get_transition() |
-| `app/fsm/handlers.py` | Per-state behavior, handle_state() |
-| `app/routers/student.py` | Request pipeline, v8.0 FSM integration |
-| `app/tutor/state_machine.py` | Legacy FSM (backward compat) |
-| `app/tutor/input_classifier.py` | How student input is categorized |
-| `app/content/ch1_square_and_cube.py` | Questions, hints, teaching content |
-| `verify.py` | Understanding what's checked |
-| `IDNA_v8_ARCHITECTURE.md` | THE spec — read for any architectural question |
+- **Language persistence:** session.language_pref set by preprocessing, never resets on transitions
+- **Reteach cap:** After 3 IDKs/REPEATs in TEACHING, forces transition to WAITING_ANSWER
+- **Confusion count:** Tracked in session.confusion_count, escalation protocol in system prompt
+- **Content Bank:** teach_material_index maps to CB material (0=definition, 1=analogy, 2=vedic_trick)
 
 ---
 
-## 11. P1 BACKLOG — CURRENT BUGS
+## 13. CONTENT RULES
 
-Fix in Phase 1, Week 4. Each must have a regression test.
-
-| # | Bug | File(s) Likely Involved | Constraint |
-|---|-----|------------------------|------------|
-| 1 | Same-Q reload: page refresh re-serves same question | `app/routers/student.py`, `app/content/` | Don't touch FSM |
-| 2 | HOMEWORK_HELP trap: classifier doesn't handle it | `app/tutor/input_classifier.py` | Add handling, don't modify existing 10 categories |
-| 3 | Devanagari बटा parser: Hindi fraction input broken | `app/tutor/input_classifier.py` or answer parsing | Test with actual Hindi strings |
-| 4 | Empty TTS sentence: blank calls waste API quota | `app/voice/tts.py` | Guard before API call |
-| 5 | Parent split()[0] bug: breaks on single names | `app/routers/student.py` or parent report code | Edge case fix only |
-| 6 | Weakest-skill dead end: adaptive flow stuck | `app/fsm/handlers.py` | Fallback only, don't restructure flow |
+- **Indian examples only.** Roti, cricket, Diwali, monsoon, laddoo, tiles — not Western.
+- **Three teaching layers per topic:** definition → analogy → vedic_trick.
+- **Respectful Hindi.** "Aap" form, "dekhiye", "sochiye". Never "tum" or casual.
+- **No false praise.** Never say "Bahut accha!" unless the answer is actually correct.
+- **Voice-optimized.** Max 3 sentences teaching, 2 sentences feedback. No bullets, no markdown.
+- **Say "times" not "×", "equals" not "=".** TTS reads symbols poorly.
 
 ---
 
-## 12. ANTI-PATTERNS — THINGS THAT BREAK THIS REPO
+## 14. ANTI-PATTERNS — INSTANT REJECTION
 
 If you catch yourself doing any of these, stop immediately:
 
-1. **"Improving" code style** in files you weren't asked to touch
-2. **Adding try/except that swallows errors silently** — log or raise, never pass
-3. **Changing FSM transitions** to "handle edge cases" — the 60-combo matrix is complete
-4. **Resetting `preferred_language`** anywhere in any transition
-5. **Adding a new TTS voice or fallback** — one Didi, always
-6. **Writing SQL DDL directly** instead of using Alembic
-7. **Claiming "done" without verify.py output** — show the logs
-8. **Editing multiple unrelated things in one commit** — atomic only
-9. **Creating `app/models/` directory** — shadows `app/models.py`, breaks imports
-10. **Refactoring "while you're in there"** — never bundle cleanup with fixes
-11. **Hardcoding fallback responses** — all 60 state × input combos have defined behavior
-12. **Saying "fixed" without proof** — the Stop hook will reject you
+1. **Calling `_sys()` without `session_context=ctx`** — bypasses all language/confusion/student context
+2. **Adding a new action_type to state_machine.py without a matching builder in `_BUILDERS`** — hits fallback
+3. **Editing `instruction_builder_v8.py`** — it's dead code, never imported
+4. **Editing `voice/streaming.py`** — it's dead code, never imported
+5. **"Improving" code style** in files you weren't asked to touch
+6. **Adding try/except that swallows errors silently** — log or raise, never pass
+7. **Resetting `session.language_pref`** anywhere in any transition
+8. **Adding a new TTS voice or fallback** — one Didi, always
+9. **Writing SQL DDL directly** instead of using Alembic
+10. **Claiming "done" without test output** — paste the actual results
+11. **Editing multiple unrelated things in one commit** — atomic only
+12. **Hardcoding Hindi strings** without checking language_pref first
+13. **Editing v8 FSM files** (`transitions.py`, `handlers.py`) for streaming behavior — they're side-effect-only
+14. **Creating `app/models/` directory** — shadows `app/models.py`, breaks imports
 
 ---
 
-## 13. VOICE PIPELINE — DO NOT BREAK
-
-```
-Student speaks
-  → Sarvam Saarika v2.5 STT (~300ms)
-  → Confidence check (threshold 0.4)
-  → Input Classifier (GPT-4o-mini, 10 categories)
-  → FSM (state + input → action via transitions.py)
-  → Instruction Builder v8 (language-aware LLM prompt)
-  → GPT-5-mini (~800-1200ms)
-  → clean_for_tts()
-  → Sarvam TTS (single call, max 2000 chars)
-  → Audio plays in browser
-```
-
-**Latency budget:** STT(300ms) + Classifier + LLM(1200ms) + TTS(500ms) ≈ 2s target.
-If your change adds latency, flag it.
-
-**Known issue — TTS silence bug:** If TTS stops returning audio after first call → connection reuse issue. Do not ignore.
-
----
-
-## 14. HOOKS CONFIGURATION
-
-| Hook | Trigger | Action | Failure |
-|------|---------|--------|---------|
-| PreToolUse | `git commit` | `verify.py --quick` | exit 2 = BLOCK commit |
-| PreToolUse | `git push` | `verify.py` (full) | exit 2 = BLOCK push |
-| PreToolUse | `rm -rf` | HARD BLOCK | Always blocked |
-| PostToolUse | Bash commands | Log to `.claude/bash-commands.log` | — |
-| Stop | "done" claim | Verifier sub-agent reviews for proof | Rejects without evidence |
-
----
-
-## 15. DEPLOYMENT NOTES
+## 15. DEPLOYMENT
 
 - Railway auto-deploys from `main` branch on GitHub
-- Health check: `GET /health` → `{"status":"ok","version":"8.1.0"}`
+- Health check: `GET /health` → `{"status":"ok","version":"..."}`
 - Environment variables are set in Railway dashboard — **never hardcode secrets**
 - If deploy fails, check Railway build logs first
 - TTS cache is in PostgreSQL — survives container restarts
-- **Always run `verify.py` before pushing to main**
+- **Always run full test suite before pushing to main**
 - **Always confirm production with `curl /health` after push**
 
 ---
 
-## 16. SUMMARY — THE THREE RULES
+## 16. REFERENCE DOCUMENTS
+
+| Document | Purpose | Location |
+|----------|---------|----------|
+| HANDOFF.md | Master reference — full architecture, root cause analysis, next steps | CEO's files |
+| FULL_CODEBASE_AUDIT.md | 15,049-line audit with dead code map | CEO's files |
+| IDNA_CTO_Architecture_Roadmap_v1 | Phase 0→4 roadmap, schema evolution plan | Claude Project |
+| IDNA_BENCH_v1_Specification | 7-layer, 31-benchmark evaluation framework | Claude Project |
+| didi_system_prompt_v8_1.md | Didi personality and rules spec | Claude Project |
+
+---
+
+## 17. THE THREE RULES
 
 If you remember nothing else:
 
-1. **Allowed files only.** Declare scope before editing. Ask permission for protected/frozen files.
-2. **No "done" without evidence.** Paste verify.py output (22/22), curl output, test logs.
+1. **Every `_sys()` call needs `session_context=ctx`.** No exceptions. Ever.
+2. **No "done" without 268+ tests passing.** Paste the actual pytest output.
 3. **One change per commit.** Atomic. Tested. Proven.
