@@ -1072,6 +1072,12 @@ async def process_message_stream(
     # Use old transition for Action object (backward compat with answer eval)
     new_state, action = transition(session.state, category, ctx)
 
+    # P0 FIX: Save state IMMEDIATELY after transition, not inside generator
+    # This ensures state persists even if generator doesn't fully execute
+    session.state = new_state
+    await run_in_threadpool(lambda: db.commit())
+    logger.info(f"P0 FIX (stream): State saved immediately: {session.state}")
+
     # v8.0: Track empathy state based on new transition
     if transition_result.next_state == TutorState.TEACHING:
         session.empathy_given = False
