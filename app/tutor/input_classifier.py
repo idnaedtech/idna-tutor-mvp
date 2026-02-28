@@ -1,8 +1,15 @@
 """
 IDNA EdTech v7.3.0 — Input Classifier (LLM-Based)
 
-ARCHITECTURAL CHANGE: Replaced pattern-based classification with GPT-4o-mini LLM calls.
+ARCHITECTURAL CHANGE: Replaced pattern-based classification with GPT-5-mini LLM calls.
 Fast-path for obvious single/two-word inputs saves latency and cost.
+
+P0 FIX (2026-02-28):
+  1. Classifier model: gpt-4o-mini → gpt-5-mini (better Hindi/Devanagari understanding)
+  2. FAST_ACK expanded: added "जी", "शुरू करते हैं", "start", "ready", "chalo", etc.
+  3. FAST_IDK expanded: added "samajh nahi aaya", "I don't get it", "huh", "what", etc.
+  4. Fast-path word limit: 3 → 5 (catches "जी शुरू करते हैं" = 4 words)
+  5. Both async classify() and sync classify_student_input() updated consistently.
 
 Categories (Student):
     ACK            — understood/agrees (yes, okay, samajh aaya, hmm, got it)
@@ -36,23 +43,53 @@ StudentCategory = Literal[
 ]
 ParentCategory = Literal["PROGRESS", "INSTRUCTION", "CHITCHAT", "GOODBYE"]
 
-# ─── Fast-Path Sets (for single/two-word obvious inputs) ────────────────────
+# ─── Fast-Path Sets ─────────────────────────────────────────────────────────
 # These bypass the LLM call for common responses, saving ~150ms latency
+# P0 FIX: Expanded with real student phrases from live test transcripts
 
 FAST_ACK = {
-    "haan", "ha", "yes", "ok", "okay", "hmm",
-    "हां", "हाँ", "ठीक है", "अच्छा",
-    "samajh gaya", "समझ गया",
+    # English - single words
+    "haan", "ha", "yes", "ok", "okay", "hmm", "yep", "yeah", "sure",
+    "ready", "start", "alright",
+    # English - short phrases
+    "let's start", "lets start", "please start", "yes please",
+    "yes please start", "i'm ready", "im ready", "lets go", "let's go",
+    "go ahead", "yes start", "start please",
+    # Hindi - Devanagari
+    "हां", "हाँ", "ठीक है", "अच्छा", "जी", "जी हां", "जी हाँ",
+    "समझ गया", "समझ गयी", "समझ आ गया", "समझ आ गयी",
+    "शुरू करो", "शुरू करें", "शुरू करते हैं", "शुरू कीजिए",
+    "चलो", "चलो शुरू करते हैं", "चलिए", "चलो शुरू करो",
+    "हां शुरू करो", "हां शुरू करते हैं",
+    "जी शुरू करते हैं", "जी शुरू करो", "जी हां शुरू करते हैं",
+    # Hindi - Romanized
+    "samajh gaya", "samajh gayi", "samajh aa gaya",
+    "theek hai", "thik hai", "accha", "acha",
+    "shuru karo", "shuru karein", "shuru karte hain", "shuru kijiye",
+    "chalo", "chaliye", "chalo shuru karte hain", "chalo shuru karo",
+    "ji", "ji haan", "ji ha",
+    "haan shuru karo", "haan shuru karte hain",
+    "ji shuru karte hain", "ji shuru karo",
 }
 
 FAST_IDK = {
-    "nahi", "no", "नहीं", "pata nahi", "नहीं पता",
-    "don't know", "idk", "नहीं समझा", "nahi samjha",
+    # English
+    "nahi", "no", "don't know", "idk", "don't get it",
+    "i don't understand", "not understanding", "don't understand",
+    "what", "huh", "what do you mean",
+    # Hindi - Devanagari
+    "नहीं", "नहीं पता", "नहीं समझा", "नहीं समझी",
+    "समझ नहीं आया", "समझ नहीं आयी", "समझ में नहीं आया",
+    "पता नहीं", "क्या",
+    # Hindi - Romanized
+    "nahi samjha", "nahi samjhi", "samajh nahi aaya", "samajh nahi aya",
+    "pata nahi", "nahi aaya", "nahi aya",
+    "samajh mein nahi aaya",
 }
 
 FAST_STOP = {
     "bye", "stop", "band karo", "बंद करो", "bas", "बस",
-    "khatam", "खतम",
+    "khatam", "खतम", "goodbye", "bye bye",
 }
 
 # P1 Fix: Homework-related phrases → map to CONCEPT_REQUEST (don't add new category)
@@ -61,22 +98,28 @@ FAST_HOMEWORK = {
     "assignment", "classwork", "class work",
 }
 
+# ─── Fast-path word limit ────────────────────────────────────────────────────
+# P0 FIX: Increased from 3 to 5 to catch phrases like "जी शुरू करते हैं" (4 words)
+FAST_PATH_MAX_WORDS = 5
+
 # ─── LLM Classifier System Prompt ────────────────────────────────────────────
 
 CLASSIFIER_SYSTEM = """You classify student input for an Indian tutoring system.
 Student: Class 8, learning {subject}. Current state: {current_state}. Topic: {current_topic}.
 
 Categories (pick EXACTLY ONE):
-- ACK: understood/agrees (yes, okay, samajh aaya, hmm, got it, theek hai, "ab samajh aaya")
-- IDK: doesn't understand (nahi samjha, I don't know, confused, "समझ में नहीं आया")
+- ACK: understood/agrees (yes, okay, samajh aaya, hmm, got it, theek hai, "ab samajh aaya", "जी", "शुरू करते हैं", "chalo", "ready", "let's start")
+- IDK: doesn't understand (nahi samjha, I don't know, confused, "समझ में नहीं आया", "huh", "what")
 - ANSWER: giving an answer (numbers, math expressions, factual responses, "49", "7 ka square")
 - CONCEPT_REQUEST: asks to explain something (what is this, explain, why is it called that, "kaise hota hai")
 - LANGUAGE_SWITCH: wants language change (speak in English, Hindi mein bolo, translate, "could you explain in English")
-- META_QUESTION: asks about session (which chapter, more examples, real life use, "aur examples do")
+- META_QUESTION: asks about session (which chapter, more examples, real life use, "aur examples do", "kya padh rahe hain", "कौन सा चैप्टर")
 - COMFORT: frustrated (I give up, too hard, boring, "bahut mushkil hai")
 - STOP: wants to end (bye, stop, band karo)
 - REPEAT: didn't hear (say again, phir se bolo, "sunai nahi diya")
 - UNCLEAR: cannot determine
+
+IMPORTANT: Hindi/Devanagari input is common. "जी शुरू करते हैं" = ACK. "समझ नहीं आया" = IDK. "कौन सा चैप्टर" = META_QUESTION. Classify these correctly.
 
 For LANGUAGE_SWITCH also return preferred_language: "english"|"hindi"|"hinglish"
 For META_QUESTION also return question_type: "examples"|"chapter_info"|"relevance"|"other"
@@ -89,6 +132,10 @@ VALID_CATEGORIES = {
     "ACK", "IDK", "ANSWER", "CONCEPT_REQUEST", "LANGUAGE_SWITCH",
     "META_QUESTION", "COMFORT", "STOP", "REPEAT", "UNCLEAR"
 }
+
+# ─── Classifier model ────────────────────────────────────────────────────────
+# P0 FIX: gpt-4o-mini → gpt-5-mini for better Hindi/Devanagari classification
+CLASSIFIER_MODEL = "gpt-5-mini"
 
 
 # ─── Main Classification Function ────────────────────────────────────────────
@@ -124,10 +171,11 @@ async def classify(
     if normalized == "[silence]":
         return {"category": "SILENCE", "confidence": 1.0, "extras": {}}
 
-    # ─── Fast Path: single/two-word obvious matches ───────────────────────────
+    # ─── Fast Path: obvious matches (up to 5 words) ──────────────────────────
+    # P0 FIX: Expanded from 3 to 5 words to catch Hindi phrases
     # Order matters: Check negative categories (IDK, STOP) before positive (ACK)
     words = normalized.split()
-    if len(words) <= 3:
+    if len(words) <= FAST_PATH_MAX_WORDS:
         # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
         if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):
             return {"category": "IDK", "confidence": 0.99, "extras": {}}
@@ -164,7 +212,7 @@ async def classify(
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=CLASSIFIER_MODEL,
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": text},
@@ -228,8 +276,9 @@ def classify_student_input(
     if normalized == "[silence]":
         return "SILENCE"
 
+    # P0 FIX: Same expanded fast-path as async classify()
     words = normalized.split()
-    if len(words) <= 3:
+    if len(words) <= FAST_PATH_MAX_WORDS:
         # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
         if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):
             return "IDK"
