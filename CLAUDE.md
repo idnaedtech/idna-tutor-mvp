@@ -1,10 +1,10 @@
 # CLAUDE.md — IDNA EdTech Operating Rules
 
 > **This file is read by Claude Code on every session start.**
-> **Last updated:** 2026-02-28
+> **Last updated:** 2026-03-01
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v9.0.10
+> **Current version:** v10.0.0
 > **Can be modified by CEO only.**
 
 ---
@@ -80,7 +80,7 @@ These rules are absolute. Violating any of them is a blocking error.
 2. **New board = data insert, zero code change.** The FSM is the skeleton, content/board/language are parameterized flesh.
 3. **bench_score gates everything.** No content serves students without a score above threshold (85 for boards, 98% for math truth, 75 for languages).
 4. **One Didi voice.** Sarvam Bulbul v3, speaker=simran, hi-IN, pace=0.90. No TTS fallback. No voice switching.
-5. **Never rewrite the system prompt from scratch.** Modify sections, don't replace the entire DIDI_BASE.
+5. **V10 persona is canonical.** The V10 DIDI_BASE (~40 lines) is the teacher persona. Don't revert to rule-based format.
 6. **Language persistence is sacred.** `session.language_pref` is set by preprocessing language switch detection and injected in EVERY LLM prompt. It must NEVER reset on state transitions.
 7. **Every `_sys()` call MUST pass `session_context=ctx, question_data=q`.** Calling `_sys()` without session_context bypasses ALL language enforcement, confusion escalation, and student context. This was the P0 root cause bug.
 8. **Phase gates are strict.** P0 → P1 → P2 → P3 → P4. No features from a later phase unless all prior phase gates have passed.
@@ -99,18 +99,19 @@ app/
 │   └── student.py              # 1,469 lines. Main router, both endpoints, session mgmt.
 │                                # THIS IS THE MAIN ORCHESTRATOR.
 ├── tutor/
-│   ├── instruction_builder.py  # 754 lines. v7.3 ACTIVE BRAIN — builds ALL LLM prompts
+│   ├── instruction_builder.py  # V10 ACTIVE BRAIN — builds ALL LLM prompts
 │   │                           # for streaming endpoint. MOST CRITICAL FILE.
-│   ├── instruction_builder_v9.py # 488 lines. v9 brain for non-streaming endpoint.
-│   ├── state_machine.py        # 384 lines. v7.3 FSM — produces Action objects. ACTIVE.
-│   ├── preprocessing.py        # 316 lines. Meta-question, language switch, confusion
-│   │                           # detectors. Runs BEFORE classifier. WORKING CORRECTLY.
-│   ├── input_classifier.py     # 305 lines. gpt-4.1-mini classifier. 10 categories.
-│   ├── enforcer.py             # 452 lines. Output safety — length, praise, repetition.
-│   ├── llm.py                  # 155 lines. OpenAI API wrapper (sync + streaming).
-│   ├── answer_checker.py       # 494 lines. Regex-based math answer checking.
-│   ├── answer_evaluator.py     # 183 lines. LLM-based answer evaluation.
-│   └── memory.py               # 261 lines. Question selection, skill tracking.
+│   │                           # V10: New DIDI_BASE persona, LANG_INSTRUCTIONS dict
+│   ├── strings.py              # V10: Centralized multilingual strings (4 languages)
+│   ├── instruction_builder_v9.py # v9 brain for non-streaming endpoint.
+│   ├── state_machine.py        # v7.3 FSM — produces Action objects. ACTIVE.
+│   ├── preprocessing.py        # Meta-question, language switch, confusion detectors.
+│   ├── input_classifier.py     # gpt-4.1-mini classifier. 10 categories.
+│   ├── enforcer.py             # Output safety — length, praise, repetition.
+│   ├── llm.py                  # OpenAI API wrapper (sync + streaming).
+│   ├── answer_checker.py       # Regex-based math answer checking.
+│   ├── answer_evaluator.py     # LLM-based answer evaluation.
+│   └── memory.py               # Question selection, skill tracking.
 ├── fsm/
 │   ├── transitions.py          # 447 lines. v8 FSM. SIDE EFFECTS ONLY (language, empathy).
 │   │                           # Does NOT control teaching flow for streaming endpoint.
@@ -144,11 +145,12 @@ tests/
 ├── test_preprocessing.py       # Meta-Q, language, confusion detectors
 ├── test_p0_language_persistence.py  # Language detection, TTS
 ├── test_p0_regression.py       # P0 regression — prompt trace tests
+├── test_v10_persona.py         # V10: Persona, strings.py, warm teacher identity
 ├── test_content_bank.py        # Content bank loader
 ├── test_v750_features.py       # Sentence splitter, enforcer
 ├── test_p1_fixes.py            # Question picking, memory
 └── test_ch1_square_cube.py     # Question bank validation
-    # Total: 268+ tests. ALL must pass before any commit.
+    # Total: 280 tests. ALL must pass before any commit.
 
 alembic/                        # Database migrations
 ```
@@ -182,8 +184,8 @@ Student speaks into browser mic
   → v8 get_transition() runs for SIDE EFFECTS ONLY (language store, empathy)
   → v7.3 instruction_builder.build_prompt(action, ctx, ...) → LLM messages
       └── _sys(extra, session_context=ctx, question_data=q) ← MUST have session_context
-      └── Language enforcement injected via _get_language_instruction()
-      └── Confusion escalation injected via _get_confusion_instruction()
+      └── V10: Language via LANG_INSTRUCTIONS dict (embedded in DIDI_BASE)
+      └── V10: Confusion handling embedded in teacher persona
       └── Chapter context injected via _get_chapter_context()
   → gpt-4.1 streaming (~800-1200ms)
   → enforcer.py checks (length, praise rules, language)
@@ -252,10 +254,10 @@ If you cannot do all 5, you don't understand the code well enough. Read more fir
 ### Prove It Works
 
 No change is "done" without:
-1. All 268+ tests passing (paste output)
+1. All 280 tests passing (paste output)
 2. For server changes: curl output showing correct behavior
 3. For production: `curl /health` showing correct version
-4. For instruction_builder changes: verify `LANGUAGE SETTING:` appears in build_prompt output
+4. For instruction_builder changes: verify `LANGUAGE:` appears in build_prompt output (V10 format)
 
 ---
 
@@ -286,42 +288,37 @@ curl https://idna-tutor-mvp-production.up.railway.app/health  # Confirm
 
 ---
 
-## 9. THE instruction_builder.py CONTRACT
+## 9. THE instruction_builder.py CONTRACT (V10)
 
-This is the most critical file. Here's how it works:
+This is the most critical file. V10 transformed it from rule-based to teacher persona.
 
-### _sys() Function — THE Core
+### V10 Architecture Change
+
+**Old (pre-V10):** 117-line rule-based DIDI_BASE with harsh labels ("ANSWER INCORRECT")
+**New (V10):** ~40-line teacher persona with warm identity ("let's think differently")
+
+Key V10 changes:
+- `DIDI_BASE` is now a warm teacher persona with `{language_instruction}` placeholder
+- `LANG_INSTRUCTIONS` dict replaces `LANG_ENGLISH`/`LANG_HINDI`/`LANG_HINGLISH` constants
+- `_get_confusion_instruction()` DELETED — confusion handling embedded in persona
+- `_build_fallback()` now tells LLM to respond naturally, no hardcoded Hindi
+- `_build_teach_concept()` says "Rephrase" not "Teach" — content bank as truth
+
+### _sys() Function — V10 Version
 
 ```python
 def _sys(extra="", session_context: dict = None, question_data: dict = None):
     if session_context:        # ← CORRECT PATH: real student data
         base = _format_didi_base(session_context, question_data)
-        base += _get_confusion_instruction(session_context)
-        base += _get_language_instruction(session_context)
+        # V10: Language instruction is INSIDE DIDI_BASE via {language_instruction}
+        # V10: Confusion handling is EMBEDDED in persona, no separate function
     else:                      # ← DANGER: hardcoded "hinglish" defaults
-        base = DIDI_BASE.format(medium_of_instruction="hinglish", ...)
+        base = DIDI_BASE.format(...)
 ```
 
 **RULE: Every builder that calls `_sys()` MUST pass `session_context=ctx, question_data=q`.**
 
-If you see `_sys(extra)` or `_sys(SOME_STRING)` without session_context — that's a bug.
-
-### _BUILDERS Dict
-
-Every `action_type` from `state_machine.py` must have an entry in `_BUILDERS`. If an action_type is missing, it hits `_build_fallback` which tells the LLM to say "Chalo aage badhte hain" — a generic Hindi fallback that ignores language preference.
-
-**Before adding any new action_type to state_machine.py, add its builder to `_BUILDERS` first.**
-
-Current registered builders:
-```
-teach_concept, read_question, give_hint, show_solution,
-pick_next_question, comfort_student, end_session, ask_repeat,
-acknowledge_language_switch, answer_meta_question, re_greet,
-evaluate_answer, probe_understanding, ask_topic,
-apologize_no_subject, acknowledge_homework, replay_heard
-```
-
-### Language Flow
+### Language Flow (V10)
 
 ```
 Student says "speak in English"
@@ -329,12 +326,22 @@ Student says "speak in English"
   → session.language_pref = "english" (saved to DB)
   → session_ctx["language_pref"] = "english"
   → build_prompt() → builder calls _sys(extra, session_context=ctx, ...)
-  → _sys() IF branch fires → _get_language_instruction() returns LANG_ENGLISH
-  → System prompt contains: "LANGUAGE SETTING: english / Zero Hindi words"
+  → _format_didi_base() → LANG_INSTRUCTIONS["english"]
+  → System prompt contains: "LANGUAGE: Respond ENTIRELY in English. No Hindi words."
   → gpt-4.1 follows instruction → responds in English
 ```
 
-If ANY step breaks, the student gets Hindi when they asked for English.
+### strings.py (V10)
+
+Centralized multilingual strings. Adding a new language = adding dict entries only.
+
+```python
+from app.tutor.strings import get_text
+greeting = get_text("warmup_greeting", "english", name="Priya")
+# Returns: "Hey Priya! How are you doing today? How was school?"
+```
+
+Supports: english, hindi, hinglish, telugu. Falls back to English for unknown.
 
 ### Correction Detection Flow (v9.0.10)
 
@@ -452,7 +459,7 @@ NEXT_QUESTION → TEACHING (next topic) or SESSION_END
 
 If you catch yourself doing any of these, stop immediately:
 
-1. **Calling `_sys()` without `session_context=ctx`** — bypasses all language/confusion/student context
+1. **Calling `_sys()` without `session_context=ctx`** — bypasses all language/student context
 2. **Adding a new action_type to state_machine.py without a matching builder in `_BUILDERS`** — hits fallback
 3. **Editing `instruction_builder_v8.py`** — it's dead code, never imported
 4. **Editing `voice/streaming.py`** — it's dead code, never imported
@@ -468,6 +475,9 @@ If you catch yourself doing any of these, stop immediately:
 14. **Creating `app/models/` directory** — shadows `app/models.py`, breaks imports
 15. **Letting LLM compute math from memory** — use verified data injection (`_VERIFIED_SQUARES` in `_build_teach_concept`)
 16. **Ignoring student corrections** — "that's wrong"/"galat" must trigger apology handler in `build_prompt()`
+17. **Importing deleted V10 functions** — `_get_confusion_instruction()`, `LANG_ENGLISH`, `DIDI_NO_PRAISE` are gone
+18. **Reverting to rule-based DIDI_BASE** — V10 uses ~40-line teacher persona, not 117-line rules
+19. **Using old language format in tests** — check for `"LANGUAGE:"` not `"LANGUAGE SETTING:"`
 
 ---
 
@@ -500,5 +510,5 @@ If you catch yourself doing any of these, stop immediately:
 If you remember nothing else:
 
 1. **Every `_sys()` call needs `session_context=ctx`.** No exceptions. Ever.
-2. **No "done" without 268+ tests passing.** Paste the actual pytest output.
+2. **No "done" without 280 tests passing.** Paste the actual pytest output.
 3. **One change per commit.** Atomic. Tested. Proven.
