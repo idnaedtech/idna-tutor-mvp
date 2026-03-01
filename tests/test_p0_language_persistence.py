@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.models import Session, Student
 from app.routers.student import get_tts_language, process_message
 from app.tutor.preprocessing import preprocess_student_message, detect_language_switch, detect_confusion
-from app.tutor.instruction_builder import _get_confusion_instruction
+from app.tutor.instruction_builder import _sys
 
 
 class TestLanguageSwitchDetection:
@@ -140,41 +140,40 @@ class TestConfusionDetection:
 
 
 class TestConfusionEscalation:
-    """Test confusion escalation logic."""
+    """Test confusion escalation is embedded in v10 persona."""
 
-    def test_count_0_no_escalation(self):
-        """Count 0 should return empty string."""
-        result = _get_confusion_instruction({"confusion_count": 0})
-        assert result == ""
+    def test_confusion_count_in_prompt(self):
+        """v10: Confusion count should appear in prompt."""
+        ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 3, "state": "TEACHING"}
+        prompt = _sys(session_context=ctx)
+        assert "3 times so far" in prompt
 
-    def test_count_1_2_mild_escalation(self):
-        """Count 1-2 should suggest different approach."""
-        result = _get_confusion_instruction({"confusion_count": 1})
-        assert "different" in result.lower() or "approach" in result.lower()
+    def test_prompt_mentions_break_for_confusion(self):
+        """v10: Persona should mention offering break at high confusion."""
+        ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING"}
+        prompt = _sys(session_context=ctx)
+        # New persona mentions break at 4+ confusion
+        assert "4 or more times" in prompt or "break" in prompt.lower()
 
-        result = _get_confusion_instruction({"confusion_count": 2})
-        assert "confused" in result.lower() or "explanation" in result.lower()
+    def test_prompt_has_patient_identity(self):
+        """v10: Persona should describe patient, warm teacher identity."""
+        ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING"}
+        prompt = _sys(session_context=ctx)
+        assert "patient" in prompt.lower() or "warm" in prompt.lower()
 
-    def test_count_3_significant_escalation(self):
-        """Count 3 should require significant escalation."""
-        result = _get_confusion_instruction({"confusion_count": 3, "language_pref": "english"})
-        assert "ESCALATION" in result or "simpler" in result.lower()
-
-    def test_count_4_offers_break_english(self):
-        """Count 4+ should offer a break (English)."""
-        result = _get_confusion_instruction({"confusion_count": 4, "language_pref": "english"})
-        assert "break" in result.lower() or "pause" in result.lower()
-        assert "MUST" in result or "frustrated" in result.lower()
-
-    def test_count_4_offers_break_hindi(self):
-        """Count 4+ should offer a break (Hindi)."""
-        result = _get_confusion_instruction({"confusion_count": 4, "language_pref": "hinglish"})
-        assert "break" in result.lower() or "ruko" in result.lower()
-
-    def test_count_5_still_offers_break(self):
-        """Count 5+ should still offer break."""
-        result = _get_confusion_instruction({"confusion_count": 5, "language_pref": "english"})
-        assert "break" in result.lower() or "pause" in result.lower()
+    def test_prompt_has_echo_back_instruction(self):
+        """v10: Persona should instruct to echo back student's words."""
+        ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING"}
+        prompt = _sys(session_context=ctx)
+        assert "echo back" in prompt.lower()
 
 
 class TestLanguagePersistenceE2E:
@@ -219,15 +218,16 @@ class TestLanguagePersistenceE2E:
         from app.tutor.instruction_builder import _get_language_instruction
 
         # First request: hinglish
+        # V10: "hinglish" returns "Hindi-English mix" instruction
         ctx1 = {"language_pref": "hinglish"}
         result1 = _get_language_instruction(ctx1)
-        assert "Hinglish" in result1 or "hinglish" in result1.lower()
+        assert "Hindi-English" in result1 or "hinglish" in result1.lower()
 
         # Second request: English (after switch)
         ctx2 = {"language_pref": "english"}
         result2 = _get_language_instruction(ctx2)
         assert "English" in result2 or "ENGLISH" in result2
-        assert "No Hindi" in result2 or "Zero Hindi" in result2
+        assert "No Hindi" in result2
 
 
 class TestFullPreprocessingFlow:

@@ -232,6 +232,18 @@ def start_session(
 
     # Generate greeting ONLY — teaching happens in TEACHING state after ACK
     # Bug D fix: GREETING must be max 2 sentences, no teaching content
+    # V10: Use strings.py for centralized language strings
+    from app.tutor.strings import get_text
+
+    # Normalize BCP-47 codes to label format
+    lang_raw = student.preferred_language or "hi-IN"
+    LANG_NORMALIZE = {
+        "hi-IN": "hinglish", "en-IN": "english",
+        "hindi": "hindi", "english": "english", "hinglish": "hinglish",
+        "telugu": "telugu",  # V10: Telugu support
+    }
+    lang = LANG_NORMALIZE.get(lang_raw, "hinglish")
+
     if first_question:
         # Get skill teaching content for topic announcement only
         from app.content.seed_questions import SKILL_TEACHING
@@ -241,44 +253,27 @@ def start_session(
         # GREETING: announce topic only, wait for ACK before teaching
         topic_name = lesson.get("title_hi") or lesson.get("name", "math")
         topic_name_en = lesson.get("name") or lesson.get("title_hi", "math")
+        topic_for_greeting = topic_name_en if lang == "english" else topic_name
 
-        # P0 FIX: Respect student language preference for greeting
-        # Normalize BCP-47 codes to label format
-        lang_raw = student.preferred_language or "hi-IN"
-        LANG_NORMALIZE = {
-            "hi-IN": "hinglish", "en-IN": "english",
-            "hindi": "hindi", "english": "english", "hinglish": "hinglish",
-        }
-        lang = LANG_NORMALIZE.get(lang_raw, "hinglish")
+        # V10: Warm greeting from centralized strings + topic announcement
+        greeting_base = get_text("warmup_greeting", lang, name=student.name)
+        greeting_text = f"{greeting_base} Today we'll look at {topic_for_greeting}. Ready to start?" if lang == "english" else \
+            f"{greeting_base} Aaj hum {topic_for_greeting} dekhenge. Shuru karein?"
 
-        if lang == "english":
-            greeting_text = (
-                f"Hello {student.name}! Today we'll learn {topic_name_en}. "
-                f"Ready to start?"
-            )
-        else:
-            greeting_text = (
-                f"Namaste {student.name}! Aaj hum {topic_name} seekhenge. "
-                f"Shuru karein?"
-            )
         # Stay in GREETING — FSM will transition to TEACHING on ACK
         session.state = "GREETING"
         # P0 FIX: Initialize language_pref from student preference (normalized)
-        session.language_pref = lang
+        session.language_pref = lang if lang in ("english", "hindi", "hinglish", "telugu") else "hinglish"
     else:
-        # P0 FIX: Language-aware session-end greeting
-        lang_raw = student.preferred_language or "hi-IN"
-        LANG_NORMALIZE = {
-            "hi-IN": "hinglish", "en-IN": "english",
-            "hindi": "hindi", "english": "english", "hinglish": "hinglish",
-        }
-        lang = LANG_NORMALIZE.get(lang_raw, "hinglish")
+        # V10: Session end greeting from centralized strings
+        # Note: session_end template has {correct} and {total} params, but we don't have them here
+        # Fall back to a simple completion message
         if lang == "english":
             greeting_text = f"Hello {student.name}! You've completed all questions in this chapter. Great work! New questions coming tomorrow."
         else:
             greeting_text = f"Namaste {student.name}! Aapne is chapter ke saare sawaal kar liye hain. Bahut accha! Kal naye sawaal milenge."
         session.state = "SESSION_END"  # No questions available
-        session.language_pref = lang
+        session.language_pref = lang if lang in ("english", "hindi", "hinglish", "telugu") else "hinglish"
 
     tts = get_tts()
     tts_result = tts.synthesize(greeting_text, student.preferred_language)

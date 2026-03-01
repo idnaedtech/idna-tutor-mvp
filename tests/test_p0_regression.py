@@ -25,9 +25,10 @@ class TestLanguageInjectionInPrompt:
             "state": "TEACHING", "chapter": "ch1_square_and_cube",
         }
         result = _sys(session_context=ctx)
-        assert "LANGUAGE SETTING: english" in result, \
-            "CRITICAL: _get_language_instruction() not injected into _sys() output!"
-        assert "Zero Hindi words" in result, \
+        # V10: Uses "LANGUAGE:" prefix with full instruction
+        assert "LANGUAGE:" in result and "English" in result, \
+            "CRITICAL: Language instruction not injected into _sys() output!"
+        assert "No Hindi" in result, \
             "CRITICAL: Strong language enforcement missing from prompt!"
 
     def test_hindi_language_instruction_in_sys_output(self):
@@ -38,7 +39,8 @@ class TestLanguageInjectionInPrompt:
             "state": "TEACHING", "chapter": "ch1_square_and_cube",
         }
         result = _sys(session_context=ctx)
-        assert "LANGUAGE SETTING: hindi" in result
+        # V10: Hindi uses Hindi-English mix instruction
+        assert "LANGUAGE:" in result and "Hindi" in result
 
     def test_hinglish_language_instruction_in_sys_output(self):
         from app.tutor.instruction_builder import _sys
@@ -48,7 +50,8 @@ class TestLanguageInjectionInPrompt:
             "state": "TEACHING", "chapter": "ch1_square_and_cube",
         }
         result = _sys(session_context=ctx)
-        assert "LANGUAGE SETTING: hinglish" in result
+        # V10: Hinglish uses natural mix instruction
+        assert "LANGUAGE:" in result and "Hindi-English" in result
 
 
 class TestAllActionsHaveBuilders:
@@ -82,14 +85,16 @@ class TestAllActionsHaveBuilders:
         from app.tutor.instruction_builder import _build_fallback
         from app.tutor.state_machine import Action
 
-        # English fallback
+        # V10: Fallback tells LLM to respond naturally to unexpected input
         action = Action("unknown_action", student_text="test")
         ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
                "confusion_count": 0, "student_name": "Test", "board_name": "NCERT",
                "class_level": 8, "state": "TEACHING"}
         result = _build_fallback(action, ctx, None, None, None)
         user_msg = result[1]["content"]
-        assert "Let's move on" in user_msg, "English fallback should be in English"
+        # V10: Natural fallback instead of hardcoded phrase
+        assert "unexpected" in user_msg or "naturally" in user_msg, \
+            "Fallback should guide LLM to respond naturally"
 
 
 class TestEndToEndPromptTrace:
@@ -114,13 +119,18 @@ class TestEndToEndPromptTrace:
         messages = build_prompt(action, ctx, None, None, None, [])
         system_prompt = messages[0]["content"]
 
-        assert "LANGUAGE SETTING: english" in system_prompt, \
+        # V10: Uses "LANGUAGE:" with full English instruction
+        assert "LANGUAGE:" in system_prompt and "English" in system_prompt, \
             "Language instruction not in final build_prompt output!"
-        assert "Zero Hindi words" in system_prompt, \
+        assert "No Hindi" in system_prompt, \
             "Strong enforcement missing from final prompt!"
 
     def test_confusion_count_4_produces_break_offer_in_prompt(self):
-        """E2E: build_prompt with confusion_count=4 produces break offer."""
+        """E2E: build_prompt with confusion_count=4 produces break offer.
+
+        V10: Confusion handling is embedded in DIDI_BASE persona, not a separate function.
+        The persona describes how to handle frustrated students and offer breaks.
+        """
         from app.tutor.instruction_builder import build_prompt
         from app.tutor.state_machine import Action
 
@@ -135,8 +145,9 @@ class TestEndToEndPromptTrace:
         messages = build_prompt(action, ctx, None, None, None, [])
         system_prompt = messages[0]["content"]
 
-        assert "OFFER A BREAK" in system_prompt or "break" in system_prompt.lower(), \
-            "Confusion escalation at count 4 should offer break!"
+        # V10: Confusion handling embedded in persona (describes break at 4+ times)
+        assert "4 or more times" in system_prompt or "break" in system_prompt.lower(), \
+            "Confusion escalation should be embedded in V10 persona!"
 
 
 class TestLanguageNormalization:

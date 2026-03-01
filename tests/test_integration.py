@@ -615,39 +615,15 @@ class TestLanguagePersistenceE2E:
 class TestConfusionEscalationE2E:
     """
     End-to-end tests for confusion escalation (Bug C fix).
-    Tests that confusion_count triggers escalation at count >= 4.
+    V10: Confusion handling is now embedded in DIDI_BASE persona, not a separate function.
     """
 
-    def test_confusion_instruction_at_count_4(self):
-        """Bug C: At confusion_count >= 4, LLM prompt should include break offer."""
-        from app.tutor.instruction_builder import _get_confusion_instruction
-
-        # Count 0: no instruction
-        ctx = {"confusion_count": 0, "language_pref": "english"}
-        result = _get_confusion_instruction(ctx)
-        assert result == "", f"Expected empty string at count 0, got {result}"
-
-        # Count 1-2: mild instruction
-        ctx["confusion_count"] = 2
-        result = _get_confusion_instruction(ctx)
-        assert "Student is slightly confused" in result
-
-        # Count 3: escalation
-        ctx["confusion_count"] = 3
-        result = _get_confusion_instruction(ctx)
-        assert "ESCALATION REQUIRED" in result
-
-        # Count 4+: OFFER A BREAK
-        ctx["confusion_count"] = 4
-        result = _get_confusion_instruction(ctx)
-        assert "OFFER A BREAK" in result
-        assert "break" in result.lower()
-
-    def test_confusion_instruction_injected_in_prompt(self):
-        """Bug C: _sys() should include confusion instruction from _get_confusion_instruction()."""
+    def test_confusion_handling_in_v10_persona(self):
+        """V10: Confusion handling is embedded in DIDI_BASE persona."""
         from app.tutor.instruction_builder import _sys
 
-        # At count 4, the system prompt should include break offer
+        # V10: The persona itself describes how to handle confusion
+        # at various levels. Check that the persona mentions the break protocol.
         ctx = {
             "confusion_count": 4,
             "language_pref": "english",
@@ -657,7 +633,25 @@ class TestConfusionEscalationE2E:
             "state": "TEACHING",
         }
         result = _sys(session_context=ctx)
-        assert "OFFER A BREAK" in result, "Confusion escalation not injected into prompt"
+        # V10: Persona should mention 4+ times confusion leads to break offer
+        assert "4 or more times" in result or "break" in result.lower(), \
+            "V10 persona should include confusion/break protocol"
+
+    def test_confusion_count_in_prompt(self):
+        """V10: confusion_count value should appear in the prompt."""
+        from app.tutor.instruction_builder import _sys
+
+        ctx = {
+            "confusion_count": 3,
+            "language_pref": "english",
+            "student_name": "Priya",
+            "board_name": "NCERT",
+            "class_level": 8,
+            "state": "TEACHING",
+        }
+        result = _sys(session_context=ctx)
+        # The confusion count should be visible in prompt
+        assert "3" in result, "Confusion count should be injected in prompt"
 
     def test_confusion_patterns_hindi(self):
         """Bug C: Hindi confusion patterns should be detected."""

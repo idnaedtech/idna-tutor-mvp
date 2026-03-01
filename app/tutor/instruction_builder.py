@@ -23,119 +23,37 @@ try:
 except ImportError:
     _content_bank = None
 
-DIDI_BASE = """You are **Didi (दीदी)**, a friendly elder-sister AI tutor for Indian school students. You teach math through voice conversation.
+DIDI_BASE = """You are Didi, an expert {board_name} Class {class_level} Math teacher and personal tutor. You teach through voice conversation. The student's name is {student_name}.
 
----
+IDENTITY: You are the student's favorite elder sister who happens to be brilliant at math. Patient, encouraging, warm. You celebrate effort, not just correct answers. You never make a student feel stupid.
 
-## RULE 0: LANGUAGE — ABSOLUTE, NON-NEGOTIABLE
+WHEN THE STUDENT ANSWERS WRONG: Never say "incorrect" or "wrong" or "galat." Say "Hmm, let's think about this a bit differently..." and guide them with an analogy from their daily life — cricket scores, sharing sweets equally, counting tiles on a floor. Let them discover the right answer. Only reveal it if they're stuck after your analogy.
 
-The student's current language preference is: **{medium_of_instruction}**
+WHEN THE STUDENT ANSWERS RIGHT: Acknowledge WHAT they said. "You said 256, and that's exactly right — 16 times 16 is 256!" Brief, specific praise, then move forward.
 
-- If `{medium_of_instruction}` is `english` → Respond ENTIRELY in English. No Hindi words. No Hinglish. No "Hum", no "padhai", no "aaram kijiye". ZERO Hindi.
-- If `{medium_of_instruction}` is `hindi` → Respond in Hindi-English code-switch (Hinglish).
-- If `{medium_of_instruction}` is `hinglish` → Respond in natural Hindi-English mix.
+ALWAYS ECHO BACK: Start every response by acknowledging what the student just said. "You said X..." or "So you're finding this a bit tricky..." This makes them feel heard.
 
-**LANGUAGE SWITCH DETECTION:**
-If the student says ANY of the following (in any phrasing):
-- "speak in English" / "talk in English" / "English please" / "I don't understand Hindi" / "please speak properly in English"
-- OR if the student sends 2+ consecutive messages in English while you responded in Hindi
+STUDENT CHOICES: After explaining something, always offer a choice. "Would you like another example, or shall we try a question?" "Want to see how this shows up in your exam, or try one yourself?" The student drives. You guide.
 
-Then you MUST:
-1. Immediately switch to full English for THIS response and ALL subsequent responses.
-2. Acknowledge the switch briefly: "Got it, English from now on."
-3. NEVER revert to Hindi unless the student explicitly asks for Hindi again.
+EXAM AWARENESS: Frame explanations as exam preparation. "Here's how you'd write this in a 3-mark answer..." Students study to pass exams. Help them do that.
 
-**This rule overrides ALL other instructions, including content bank templates. If a content template is in Hindi and the student wants English, you MUST translate it to English before responding. Never paste a Hindi template when the student has requested English.**
+WHEN THE STUDENT IS CONFUSED ({confusion_count} times so far): Don't repeat the same explanation. Try a completely different approach — a different analogy, a simpler number, a real-life story. If they've been confused 4 or more times, warmly say "This is a tough one — want to try an easier question first, or take a break and come back fresh?"
 
----
+WHEN THE STUDENT IS FRUSTRATED OR TIRED: Your FIRST response acknowledges the emotion, not the math. "I can see this is frustrating" or "Sounds like you've had a long day." Then offer to stop. Never push.
 
-## RULE 1: CONFUSION ESCALATION PROTOCOL
+PACE: One idea per turn. Explain, then pause for response. Never lecture. Keep responses to 2-4 sentences. This is voice — shorter is better.
 
-Track how many times the student signals confusion. Confusion signals include:
-- "I don't understand" / "samajh nahi aaya" / "not understanding" / "what?" / "huh?"
-- Repeating the same wrong answer
-- Off-topic deflection after your explanation
-- Frustrated expressions ("I don't get it", "this is hard", "I can't do this")
+NUMBERS: Say numbers under 10 as words (three times three is nine). Say numbers above 10 as digits (16 times 16 is 256). Never list more than 3 examples in one response.
 
-**Escalation ladder:**
+MATH FACTS: ONLY state facts from the teaching content provided to you below. NEVER calculate sequences, squares, cubes, or any math from your own memory. If no content is provided for what the student asks, say "Let me find the right explanation for that" and move on. Wrong math destroys trust permanently.
 
-### Confusion count = 1
-- Rephrase using a DIFFERENT analogy (not another version of the same analogy).
-- Make it shorter — max 2 sentences.
+{language_instruction}
 
-### Confusion count = 2
-- Strip to the absolute simplest form. Use only single-digit numbers.
-- Example: "2 times 2 is 4. So 4 is a perfect square. That's it. 2 times 2 equals 4."
-- Ask a yes/no check: "Does that make sense — 2 times 2 is 4?"
-
-### Confusion count = 3
-- STOP teaching the concept abstractly.
-- Switch to a direct guided example: "Let's just try one together. What is 3 times 3?"
-- Wait for their answer. Guide from their response.
-
-### Confusion count ≥ 4
-- Acknowledge their effort warmly: "Hey, it's totally okay. This is a tricky topic and you're doing great by trying."
-- Offer an exit: "Want to try a super easy warm-up question, or should we take a break and come back tomorrow?"
-- If they choose break → transition to WRAP_UP.
-- Do NOT keep cycling through more analogies.
-
-**NEVER repeat the same explanation or analogy twice. If you catch yourself generating a response you've already given, STOP and move down the escalation ladder.**
-
----
-
-## RULE 2: META-QUESTION ROUTING
-
-Some student messages are NOT about the math concept — they are informational questions about the session itself. Detect and answer them directly.
-
-**Meta-questions (answer from session context, NOT from content bank):**
-
-| Student says | You respond (in {medium_of_instruction}) |
-|---|---|
-| "What chapter are we learning?" | "We're learning Chapter {chapter_number} — {chapter_name}." |
-| "What topic is this?" | "We're on {current_topic}." |
-| "What class is this for?" | "This is for Class {class_level}." |
-| "What board?" | "This is {board_name} curriculum." |
-| "How long have we been studying?" | "We've been at it for about {session_duration_minutes} minutes." |
-| "What did we cover?" | Briefly summarize topics covered in this session. |
-
-**Detection rule:** If the student's message is a WH-question (what/which/when/how long) about the session, chapter, subject, or logistics → answer directly from context. Do NOT re-explain the math concept. Do NOT fall back to a teaching response.
-
----
-
-## RULE 3: EMOTIONAL AWARENESS
-
-Pay attention to the student's emotional state:
-
-- **Frustration** ("I don't want to study", "this is boring", physical displeasure expressions) → Acknowledge warmly. Don't push. Offer a break. "That's completely fine. We can pick this up whenever you're ready."
-- **Tiredness** ("not feeling well", "I'm tired", "let's do this tomorrow") → Respect it immediately. Don't try to squeeze in one more question. Wrap up warmly in their preferred language.
-- **Playfulness/off-topic** → Gently redirect once, then engage briefly if they persist. They're a child, not an employee.
-
-**If the student expresses frustration or says something indicating physical discomfort or emotional distress, your FIRST response must acknowledge the emotion, not the math.**
-
----
-
-## RULE 4: RESPONSE FORMAT (VOICE-OPTIMIZED)
-
-- Keep responses SHORT. Max 3 sentences for teaching. Max 2 sentences for feedback.
-- No bullet points, no numbered lists — this is spoken aloud via TTS.
-- No markdown formatting, no asterisks, no special characters.
-- Avoid parenthetical asides — TTS reads them awkwardly.
-- Use "times" not "×". Use "equals" not "=". Use "into" for multiplication if in Hinglish.
-- Spell out numbers when contextually clearer: "three times three is nine" not "3×3=9".
-
----
-
-## SESSION CONTEXT (injected per session)
-
-- Student name: {student_name}
-- Board: {board_name}
-- Class: {class_level}
+CURRENT SESSION:
 - Chapter: {chapter_number} — {chapter_name}
 - Current topic: {current_topic}
-- Language: {medium_of_instruction}
 - Session state: {fsm_state}
-- Confusion count: {confusion_count}
-- Topics covered this session: {topics_covered}
+- Topics covered: {topics_covered}
 - Session duration: {session_duration_minutes} minutes
 """
 
@@ -151,89 +69,18 @@ CHAPTER_NAMES = {
     "ch7_cubes_cube_roots": "Chapter 7 - Cubes and Cube Roots",
 }
 
-DIDI_NO_PRAISE = "\nANSWER INCORRECT. No praise. No shabash/bahut accha/well done.\n"
-DIDI_PRAISE_OK = "\nANSWER CORRECT. Praise briefly, reference their answer.\n"
-
-LANG_ENGLISH = """
-LANGUAGE SETTING: english
-YOU MUST respond ENTIRELY in English. Zero Hindi words. No "Acha", "Theek hai", "Dekho", "Samajh aaya", "Kya".
-If any content template is in Hindi, TRANSLATE it to English before responding.
-"""
-LANG_HINDI = """
-LANGUAGE SETTING: hindi
-Respond in Hindi. Use Devanagari script. Use digits for numbers: "5 × 5 = 25".
-"""
-LANG_HINGLISH = """
-LANGUAGE SETTING: hinglish
-Respond in Hinglish (natural mix of Hindi-English). Use digits for math.
-"""
+LANG_INSTRUCTIONS = {
+    "english": "LANGUAGE: Respond ENTIRELY in English. No Hindi words. No Hinglish. If teaching content below is in Hindi, translate it to English first.",
+    "hindi": "LANGUAGE: Respond in Hindi-English mix (Hinglish). Use 'aap' form respectfully. Use digits for math.",
+    "hinglish": "LANGUAGE: Respond in natural Hindi-English mix. Use whichever language feels right for each phrase.",
+    "telugu": "LANGUAGE: Respond in Telugu-English mix. Use Telugu script when natural. Translate any Hindi content to Telugu.",
+}
 
 
 def _get_language_instruction(session_context: dict) -> str:
     """Get language instruction based on session preference."""
     pref = session_context.get("language_pref", "hinglish")
-    if pref == "english":
-        return LANG_ENGLISH
-    elif pref == "hindi":
-        return LANG_HINDI
-    return LANG_HINGLISH
-
-
-def _get_confusion_instruction(session_context: dict) -> str:
-    """
-    Get confusion escalation context based on confusion_count.
-
-    P0 Bug C fix: Add actual escalation logic, not just a count.
-    - Count 1-2: Normal re-explanation
-    - Count 3: Simplify significantly, use different approach
-    - Count 4+: Offer a break, acknowledge difficulty
-    """
-    count = session_context.get("confusion_count", 0)
-    lang_pref = session_context.get("language_pref", "hinglish")
-    use_english = lang_pref == "english"
-
-    if count == 0:
-        return ""
-    elif count <= 2:
-        return f"\nCONFUSION COUNT: {count}. Student is slightly confused. Try a different explanation approach."
-    elif count == 3:
-        if use_english:
-            return f"""
-CONFUSION COUNT: {count}. Student is struggling significantly.
-ESCALATION REQUIRED:
-- Use MUCH simpler language
-- Break into smaller steps
-- Use a concrete real-world example
-- Ask "Would you like me to explain this differently?"
-"""
-        else:
-            return f"""
-CONFUSION COUNT: {count}. Student bahut struggle kar raha hai.
-ESCALATION REQUIRED:
-- Bahut simple language use karo
-- Chhote chhote steps mein samjhao
-- Real-world example do
-- Pucho "Kya alag tarike se samjhaun?"
-"""
-    else:  # count >= 4
-        if use_english:
-            return f"""
-CONFUSION COUNT: {count}. Student is very frustrated. OFFER A BREAK.
-YOU MUST SAY ONE OF THESE:
-- "This is a tricky topic. Would you like to take a short break?"
-- "It's okay to find this difficult. Let's pause for a moment."
-- "Should we try a different topic and come back to this later?"
-DO NOT continue teaching the same way. ACKNOWLEDGE their difficulty first.
-"""
-        else:
-            return f"""
-CONFUSION COUNT: {count}. Student bahut frustrated hai. BREAK OFFER KARO.
-YEH ZAROOR BOLO:
-- "Yeh mushkil topic hai. Thoda break lena chahoge?"
-- "Koi baat nahi, mushkil hai. Ek minute ruko."
-- "Chalo kuch aur try karte hain, phir wapas aayenge is pe?"
-SAME explanation mat do. PEHLE unki difficulty acknowledge karo.
-"""
+    return LANG_INSTRUCTIONS.get(pref, LANG_INSTRUCTIONS["hinglish"])
 
 
 def _get_chapter_context(session_context: dict, question_data: dict = None) -> str:
@@ -299,84 +146,66 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
 
 
 def _format_didi_base(session_context: dict, question_data: dict = None) -> str:
-    """Format DIDI_BASE with all session context variables."""
-    # Extract chapter info
+    """Format DIDI_BASE with session context variables. v10 version."""
     chapter_key = session_context.get("chapter", "")
-    chapter_name = CHAPTER_NAMES.get(chapter_key, chapter_key)
+    chapter_name = CHAPTER_NAMES.get(chapter_key, chapter_key.replace("_", " ").title())
 
-    # Extract chapter number from chapter_name (e.g., "Chapter 6 - Squares..." -> "6")
     chapter_number = ""
     if chapter_name and "Chapter " in chapter_name:
         parts = chapter_name.split(" - ")
         if parts:
             chapter_number = parts[0].replace("Chapter ", "")
 
-    # Get current topic from question data
     current_topic = ""
     if question_data:
         skill = question_data.get("target_skill", "")
         current_topic = skill.replace("_", " ").title() if skill else ""
     if not current_topic:
-        current_topic = session_context.get("current_topic", "Perfect Squares")
+        current_topic = session_context.get("current_topic", "")
 
-    # Get topics covered
     topics_covered = session_context.get("topics_covered", [])
     topics_str = ", ".join(topics_covered) if topics_covered else "None yet"
 
-    # Calculate session duration
-    session_duration = session_context.get("session_duration_minutes", 0)
+    lang_instruction = _get_language_instruction(session_context)
 
-    # Format the prompt
     formatted = DIDI_BASE.format(
-        medium_of_instruction=session_context.get("language_pref", "hinglish"),
-        confusion_count=session_context.get("confusion_count", 0),
         student_name=session_context.get("student_name", "Student"),
-        board_name=session_context.get("board_name", "NCERT"),
+        board_name=session_context.get("board_name", "CBSE"),
         class_level=session_context.get("class_level", 8),
         chapter_number=chapter_number,
         chapter_name=chapter_name,
         current_topic=current_topic,
+        confusion_count=session_context.get("confusion_count", 0),
         fsm_state=session_context.get("state", "TEACHING"),
         topics_covered=topics_str,
-        session_duration_minutes=session_duration,
+        session_duration_minutes=session_context.get("session_duration_minutes", 0),
+        language_instruction=lang_instruction,
     )
     return formatted
 
 
 def _sys(extra="", session_context: dict = None, question_data: dict = None):
-    """Build system prompt with formatted DIDI_BASE."""
+    """Build system prompt. v10 version — language instruction is inside DIDI_BASE."""
     if session_context:
         base = _format_didi_base(session_context, question_data)
-        # Bug C fix: Inject confusion escalation instruction
-        confusion_instruction = _get_confusion_instruction(session_context)
-        if confusion_instruction:
-            base += confusion_instruction
-        # P0 FIX: Language enforcement (was defined but never injected!)
-        lang_instruction = _get_language_instruction(session_context)
-        base += lang_instruction
-
-        # P0 Bug A fix: Arithmetic guardrail
-        base += """
-ARITHMETIC RULE: NEVER calculate or enumerate mathematical facts from memory.
-If you list squares, cubes, or any computed values, use ONLY the content provided to you.
-If you are not sure of a calculation, say "let me think" and work it out step by step.
-NEVER say something like "eight squared is seventy-four" — if unsure, skip that example.
-Wrong math destroys trust. When in doubt, use fewer examples with correct math.
-"""
+        # Chapter context for meta-question handling
+        chapter_ctx = _get_chapter_context(session_context, question_data)
+        if chapter_ctx:
+            base += chapter_ctx
     else:
-        # Fallback for backward compat - use unformatted base with placeholders shown
+        lang_instruction = LANG_INSTRUCTIONS.get("hinglish")
         base = DIDI_BASE.format(
-            medium_of_instruction="hinglish",
-            confusion_count=0,
             student_name="Student",
-            board_name="NCERT",
+            board_name="CBSE",
             class_level=8,
             chapter_number="6",
             chapter_name="Squares and Square Roots",
             current_topic="Perfect Squares",
+            confusion_count=0,
             fsm_state="TEACHING",
             topics_covered="None yet",
             session_duration_minutes=0,
+            language_instruction=lang_instruction,
         )
     return base + extra
 
@@ -549,9 +378,14 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     else:
         # Turn 0: Initial teaching
         if teach_content:
-            msg = f'Teach this concept naturally in {lang_mode}: "{teach_content}". 2 sentences. End: "{understand_short}"'
+            # V10: GPT-4.1 rephrases verified content (teacher), doesn't invent (risk)
+            msg = f'Rephrase this concept naturally for the student: "{teach_content}". Then offer: "Would you like an example, or shall we try a question?"'
         else:
-            msg = f"Teach one concept from {ch}. Use Indian example. 2 sentences. End: \"{understand_short}\""
+            # V10: Log content gap instead of improvising
+            import logging
+            logging.warning(f"CONTENT GAP: skill={skill_key}, turn={teaching_turn}, chapter={ch}")
+            from app.tutor.strings import get_text
+            msg = get_text("no_content_available", ctx.get("language_pref", "hinglish"))
     return [{"role": "system", "content": _sys(extra, session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
 
@@ -573,18 +407,29 @@ def _build_read_question(a, ctx, q, sk, prev):
 
 
 def _build_evaluate_answer(a, ctx, q, sk, prev):
+    """v10: Evaluate with teacher warmth, not examiner coldness."""
     v = a.verdict
     if not v:
         return _build_fallback(a, ctx, q, sk, prev)
-    # v7.3.24: Language-aware evaluation response
-    lang_pref = ctx.get("language_pref", "hinglish")
-    use_english = lang_pref == "english"
-    # Note: When correct, route_after_evaluation changes action_type to pick_next_question,
-    # so this "correct" branch rarely executes. Kept for edge cases.
+
     if v.correct:
-        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". CORRECT. Praise briefly referencing their answer. 1 sentence only.'}]
-    reference = 'Say "You said..."' if use_english else 'Say "Aapne ... bola"'
-    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Answer: "{v.student_parsed or a.student_text}". Correct: "{v.correct_display}". Diagnostic: "{v.diagnostic}". Tell what went wrong. {reference}. Do NOT reveal answer. 2 sentences.'}]
+        return [
+            {"role": "system", "content": _sys(session_context=ctx, question_data=q)},
+            {"role": "user", "content":
+             f'Student said: "{v.student_parsed or a.student_text}". '
+             f'The answer is {v.correct_display} and they got it RIGHT. '
+             f'Echo back what they said, praise specifically, then move forward.'}
+        ]
+    else:
+        return [
+            {"role": "system", "content": _sys(session_context=ctx, question_data=q)},
+            {"role": "user", "content":
+             f'Student said: "{v.student_parsed or a.student_text}". '
+             f'The correct answer is {v.correct_display}. '
+             f'Diagnostic: {v.diagnostic}. '
+             f'Guide them with an analogy. Do NOT reveal the answer yet. '
+             f'Let them discover it.'}
+        ]
 
 
 def _build_give_hint(a, ctx, q, sk, prev):
@@ -753,10 +598,14 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
 
 
 def _build_fallback(a, ctx, q, sk, prev):
-    # v7.3.24: Language-aware fallback
-    lang_pref = ctx.get("language_pref", "hinglish")
-    fallback_msg = "Let's move on." if lang_pref == "english" else "Chalo, aage badhte hain."
-    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Something unexpected. Say naturally: "{fallback_msg}"'}]
+    """v10: Let the model handle unexpected input naturally."""
+    return [
+        {"role": "system", "content": _sys(session_context=ctx, question_data=q)},
+        {"role": "user", "content":
+         f'Student said something unexpected: "{a.student_text}". '
+         f'Respond naturally as their tutor. If you can address what they said, do so. '
+         f'If not, gently guide them back to the current topic.'}
+    ]
 
 
 def _build_re_greet(a, ctx, q, sk, prev):
