@@ -1,9 +1,10 @@
 # IDNA EdTech Project Memory
 
 ## Current Version
-- **v10.0.1** deployed to Railway (commit 6c160af)
+- **v10.0.2** deployed to Railway (commit eca1093)
 - 300 tests passing (280 core + 20 P0 teaching flow tests)
 - Models: gpt-4.1 (brain), gpt-4.1-mini (classifier)
+- **All 5 P0 smoke tests passing on production**
 
 ## V10 Architecture (GPT-4.1 Role Change)
 
@@ -33,30 +34,41 @@ greeting = get_text("warmup_greeting", "english", name="Priya")
 - Supports: english, hindi, hinglish, telugu
 - Falls back to English for unknown languages
 
-## P0 Teaching Loop Fixes (v10.0.1)
+## P0 Teaching Loop Fixes (v10.0.1 + v10.0.2)
 
-Database forensics on 872 sessions revealed 5 bugs. All fixed in v10.0.1.
+Database forensics on 872 sessions revealed 5 bugs. Fixed in v10.0.1, with critical persistence fix in v10.0.2.
 
 ### Bug 1: CONCEPT_REQUEST Didn't Increment teaching_turn
-- **Root cause**: `state_machine.py` passed `teaching_turn=teaching_turn` (same value)
-- **Fix**: CONCEPT_REQUEST now increments teaching_turn, forces WAITING_ANSWER at turn 3
+- **Root cause**: `state_machine.py` line 214-219 passed `teaching_turn=teaching_turn` (same value)
+- **Evidence**: Sessions with confusion_count=6 but teaching_turn=0
+- **Fix (v10.0.1)**: CONCEPT_REQUEST now increments teaching_turn, forces WAITING_ANSWER at turn 3
 - **File**: `app/tutor/state_machine.py:214-232`
+- **CRITICAL (v10.0.2)**: teaching_turn wasn't persisting to DB — see lesson #15 below
 
 ### Bug 2: Nudge Hardcoded Hindi
-- **Fix**: Non-streaming endpoint now checks `session.language_pref`
+- **Root cause**: Non-streaming endpoint line 552 had hardcoded Hindi nudge
+- **Fix**: Now checks `session.language_pref` like streaming endpoint does
 - **File**: `app/routers/student.py:552`
 
 ### Bug 3: Devanagari Meta-Question Patterns Missing
+- **Root cause**: Sarvam STT outputs full Devanagari (`कौन सा चैप्टर`) but patterns had mixed script
 - **Fix**: Added 7 new Devanagari patterns for chapter/topic detection
 - **File**: `app/tutor/preprocessing.py:159-175`
 
 ### Bug 4: Emotional Distress Not Detected
-- **Fix**: Added `detect_emotional_distress()` + `student_emotional` flag
-- **Files**: `preprocessing.py`, `student.py`, `instruction_builder.py`
+- **Root cause**: No detection for "उदास", "sad", "tired" at session start
+- **Fix**: Added `detect_emotional_distress()` + `student_emotional` flag in session_ctx
+- **Files**: `preprocessing.py`, `student.py` (both endpoints), `instruction_builder.py`
+- **Note**: Only works on streaming endpoint (non-streaming uses v9 handler path)
 
 ### Bug 5: Response Length Exceeds Voice Limit
+- **Root cause**: Content bank has full solutions, LLM reproduces verbatim
 - **Fix**: Length guard — content >200 chars triggers summarization instruction
 - **File**: `app/tutor/instruction_builder.py:380-388`
+
+### Also Fixed: DIDI_NO_PRAISE/DIDI_PRAISE_OK Undefined
+- These V10-deleted constants were still referenced in `_build_give_hint` and `_build_pick_next_question`
+- Replaced with empty string `""` — persona handles praise/no-praise naturally
 
 ## Critical Lessons Learned
 
@@ -131,12 +143,23 @@ Database forensics on 872 sessions revealed 5 bugs. All fixed in v10.0.1.
 
 ### 13. CONCEPT_REQUEST Must Increment teaching_turn (v10.0.1)
 - Classifier returns CONCEPT_REQUEST for "I didn't understand, explain"
+- Previously teaching_turn stayed at 0 → Turn 0 content repeated forever
 - Fix: CONCEPT_REQUEST increments like IDK/REPEAT, forces WAITING_ANSWER at turn 3
+- Database evidence: sessions with confusion_count=6 but teaching_turn=0
 
 ### 14. Emotional Distress Detection (v10.0.1)
-- Patterns: उदास, sad, tired, bad day, mood kharab
+- Patterns: उदास, sad, tired, bad day, mood kharab, etc.
+- `detect_emotional_distress()` in preprocessing.py
 - `session_ctx["student_emotional"]` flag passed to build_prompt()
 - build_prompt() intercepts BEFORE regular builder → comfort response
+- Only works on streaming endpoint (dual-pipeline tech debt)
+
+### 15. Session Field Updates Need Immediate db.commit() (v10.0.2)
+- **Critical pattern**: Setting `session.X = value` does NOT persist until `db.commit()`
+- **Bug example**: teaching_turn was set at line 1303 but commit was at line 1284 (BEFORE the update)
+- **Fix**: Add `db.commit()` immediately after ANY session field update
+- **Affected fields**: teaching_turn, language_pref, confusion_count, state, etc.
+- **Both endpoints**: Non-streaming (sync `db.commit()`) and streaming (`await run_in_threadpool(lambda: db.commit())`)
 
 ## Key File Locations
 
@@ -195,3 +218,24 @@ Database forensics on 872 sessions revealed 5 bugs. All fixed in v10.0.1.
 2. Add language to `LANG_INSTRUCTIONS` dict in `instruction_builder.py`
 3. Add to `LANG_NORMALIZE` dict in `student.py` (greeting)
 4. Run `test_v10_persona.py` to verify coverage
+
+### Teaching Loop Infinite (v10.0.1)
+1. Check if category increments teaching_turn in state_machine.py
+2. CONCEPT_REQUEST, IDK, REPEAT should ALL increment teaching_turn
+3. At teaching_turn >= 3, must force transition to WAITING_ANSWER
+4. Database evidence: high confusion_count but teaching_turn=0 = bug
+
+### Emotional Distress Not Acknowledged
+1. Check `detect_emotional_distress()` patterns in preprocessing.py
+2. Check `preprocess_result.emotional_distress` is set
+3. Check `_student_emotional` flag is set in BOTH endpoints
+4. Check `session_ctx["student_emotional"]` is passed to build_prompt()
+5. Check build_prompt() intercepts BEFORE regular builder
+
+### 15. teaching_turn Not Persisting (v10.0.2 CRITICAL)
+- **Symptom**: FSM correctly increments teaching_turn but value resets to 0 on next request
+- **Root cause**: `db.commit()` at line 1284 happened BEFORE teaching_turn was set (lines 1299-1304)
+- **Fix**: Added `db.commit()` immediately after setting `session.teaching_turn` in BOTH endpoints
+- **Files**: `app/routers/student.py:761-763` (non-streaming), `:1302-1305` (streaming)
+- **Pattern**: ANY session field update must be followed by `db.commit()` to persist
+- **Verification**: Smoke test must show state transition to WAITING_ANSWER after 3 IDKs
