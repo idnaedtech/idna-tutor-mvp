@@ -4,7 +4,7 @@
 > **Last updated:** 2026-03-05
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v10.0.1
+> **Current version:** v10.0.2
 > **Can be modified by CEO only.**
 
 ---
@@ -508,6 +508,7 @@ If you catch yourself doing any of these, stop immediately:
 19. **Using old language format in tests** — check for `"LANGUAGE:"` not `"LANGUAGE SETTING:"`
 20. **Passing teaching_turn unchanged on CONCEPT_REQUEST in TEACHING** — MUST increment, same as IDK (P0 Bug #1)
 21. **Passing content bank material verbatim to LLM for voice** — if teach_content > 200 chars, add "summarize in 2 sentences" instruction
+22. **Setting session fields without db.commit()** — teaching_turn, language_pref, confusion_count MUST be followed by db.commit() or value is lost between requests (P0 Bug #1 root cause in v10.0.2)
 
 ---
 
