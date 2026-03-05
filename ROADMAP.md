@@ -11,12 +11,13 @@
 - [x] v10 DIDI_BASE prompt — teacher persona replacing 117-line rules ✅ 2026-03-02
 - [x] v10 Phase A — language injection, re_greet builder, greeting language ✅ 2026-03-02
 - [x] v10 Phase B — strings.py, simplified builders, GPT-4.1 role change ✅ 2026-03-02
-- [x] P0 Teaching loop fix (5 database-confirmed bugs) ✅ 2026-03-05
-  - [x] Bug 1: CONCEPT_REQUEST must increment teaching_turn in state_machine.py
-  - [x] Bug 2: Non-streaming nudge hardcoded Hindi (student.py line 552)
-  - [x] Bug 3: Devanagari meta-question patterns (preprocessing.py)
-  - [x] Bug 4: Emotional distress detection at session start
-  - [x] Bug 5: Response length guard for voice (instruction_builder.py)
+- [x] P0 Teaching loop fix (5 database-confirmed bugs) ✅ v10.0.2 2026-03-05
+  - [x] Bug 1: CONCEPT_REQUEST increments teaching_turn (state_machine.py + db.commit fix)
+  - [x] Bug 2: Non-streaming nudge respects language_pref (student.py:558)
+  - [x] Bug 3: Devanagari meta-question patterns (preprocessing.py:206-220)
+  - [x] Bug 4: Emotional distress detection (preprocessing.py + instruction_builder.py)
+  - [x] Bug 5: Response length guard for voice (instruction_builder.py:400)
+  - **All 5 smoke tests passing on production v10.0.2**
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
