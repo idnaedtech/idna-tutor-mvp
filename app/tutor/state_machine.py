@@ -212,9 +212,22 @@ def transition(
                 extra={"meta_type": "more_examples"},
             )
         if category == "CONCEPT_REQUEST":
+            # P0 FIX: CONCEPT_REQUEST during TEACHING must increment teaching_turn
+            # Database evidence: sessions with confusion_count=6 but teaching_turn=0
+            # because classifier returns CONCEPT_REQUEST for "I didn't understand, explain"
+            # Previously: teaching_turn stayed same → Turn 0 content repeated forever
+            new_turn = teaching_turn + 1
+            if new_turn >= 3:
+                # Same escalation as IDK: force transition to question
+                return "WAITING_ANSWER", Action(
+                    "read_question", reteach_count=new_turn,
+                    teaching_turn=new_turn,
+                    student_text=text,
+                    extra={"difficulty": "easy", "forced_transition": True},
+                )
             return "TEACHING", Action(
-                "teach_concept", reteach_count=reteach,
-                teaching_turn=teaching_turn,
+                "teach_concept", reteach_count=new_turn,
+                teaching_turn=new_turn,
                 student_text=text, extra={"approach": "answer_question"},
             )
         if category == "ANSWER":
@@ -222,9 +235,11 @@ def transition(
             return "EVALUATING", Action(
                 "evaluate_answer", question_id=q_id, student_text=text,
             )
+        # P0 FIX: Even unrecognized categories should increment to prevent infinite loops
+        new_turn = teaching_turn + 1 if teaching_turn > 0 else teaching_turn
         return "TEACHING", Action(
             "teach_concept", student_text=text,
-            teaching_turn=teaching_turn,
+            teaching_turn=new_turn,
         )
 
     # ── WAITING_ANSWER ────────────────────────────────────────────────────

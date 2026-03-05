@@ -107,6 +107,20 @@ def _get_chapter_context(session_context: dict, question_data: dict = None) -> s
 
 
 def build_prompt(action, session_context, question_data=None, skill_data=None, previous_didi_response=None, conversation_history=None):
+    # P0 FIX: If student is emotionally distressed, override to comfort first
+    if session_context and session_context.get("student_emotional"):
+        student_text = getattr(action, 'student_text', None) or session_context.get('student_text', '')
+        lang_pref = session_context.get("language_pref", "hinglish")
+        use_english = lang_pref == "english"
+        if use_english:
+            emotion_msg = f'Student said: "{student_text}". They sound sad or tired. Your FIRST priority is acknowledging their emotion — NOT teaching math. Say something warm like "I can hear you\'re not having a great day" and then gently ask if they want to continue or take a break. 2 sentences max.'
+        else:
+            emotion_msg = f'Student ne kaha: "{student_text}". Woh udaas ya thaka hua lag raha hai. PEHLE emotion acknowledge karo — math BAAD mein. Warmly bolo "Lagta hai aaj din thoda tough raha" aur pucho ki continue karna hai ya break lena hai. 2 sentences max.'
+        return [
+            {"role": "system", "content": _sys(session_context=session_context, question_data=question_data)},
+            {"role": "user", "content": emotion_msg}
+        ]
+
     # P0 Bug A: If student is correcting Didi, override action to acknowledge
     if session_context and session_context.get("student_is_correcting"):
         # Force acknowledgment regardless of what FSM decided
@@ -367,7 +381,11 @@ def _build_teach_concept(a, ctx, q, sk, prev):
         # v7.4.2: Reteach with progressive examples - ALWAYS end with samajh aaya?
         # Do NOT transition to question until student gives ACK
         if teaching_turn == 1:
-            msg = f'{translate_instruction}Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
+            # P0 FIX: Length guard for reteach
+            if len(teach_content) > 200:
+                msg = f'{translate_instruction}Student didn\'t understand. Take the SIMPLEST part of this: "{teach_content}" and explain ONLY that part in 2 sentences. MUST end: "{understand_check}"'
+            else:
+                msg = f'{translate_instruction}Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
         elif teaching_turn == 2:
             msg = f'{translate_instruction}Student still confused. Try this simpler approach: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
         elif teaching_turn >= 3:
@@ -379,7 +397,12 @@ def _build_teach_concept(a, ctx, q, sk, prev):
         # Turn 0: Initial teaching
         if teach_content:
             # V10: GPT-4.1 rephrases verified content (teacher), doesn't invent (risk)
-            msg = f'Rephrase this concept naturally for the student: "{teach_content}". Then offer: "Would you like an example, or shall we try a question?"'
+            # P0 FIX: Enforce voice-friendly length. Content bank has full solutions
+            # but TTS should never read more than 3 sentences.
+            if len(teach_content) > 200:
+                msg = f'The concept is: "{teach_content}". IMPORTANT: Do NOT read this word-for-word. Summarize the KEY IDEA in 2 sentences maximum using a simple example. Then offer: "Would you like me to explain more, or shall we try a question?"'
+            else:
+                msg = f'Rephrase this concept naturally for the student: "{teach_content}". Then offer: "Would you like an example, or shall we try a question?"'
         else:
             # V10: Log content gap instead of improvising
             import logging
@@ -467,7 +490,8 @@ def _build_give_hint(a, ctx, q, sk, prev):
 
     # v7.3.24: Use appropriate language instruction
     lang_instruction = "Say naturally in English." if use_english else "Say naturally in Hinglish."
-    return [{"role": "system", "content": _sys(DIDI_NO_PRAISE, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
+    # V10: DIDI_NO_PRAISE deleted — persona handles hint tone naturally
+    return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
 
 
 def _build_show_solution(a, ctx, q, sk, prev):
@@ -503,7 +527,8 @@ def _build_pick_next_question(a, ctx, q, sk, prev):
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'After solution, say briefly: "{transition}"'}]
     if q:
         # Include praise for correct answer + the next question
-        return [{"role": "system", "content": _sys(DIDI_PRAISE_OK, session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}". {q_lang}'}]
+        # V10: DIDI_PRAISE_OK deleted — persona handles praise naturally
+        return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}". {q_lang}'}]
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'No more questions available. Say: "{done_msg}"'}]
 
 

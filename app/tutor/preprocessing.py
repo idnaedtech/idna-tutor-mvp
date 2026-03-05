@@ -26,6 +26,7 @@ class PreprocessResult:
     new_language: Optional[str] = None  # The new language if switched
     confusion_detected: bool = False    # If True, increment confusion_count
     meta_question_type: Optional[str] = None  # "chapter", "topic", "subject", etc.
+    emotional_distress: bool = False    # P0 FIX: If True, student is sad/tired/upset
 
 
 # ─── Language Switch Detector ─────────────────────────────────────────────────
@@ -153,6 +154,45 @@ def detect_confusion(text: str) -> bool:
     return False
 
 
+# ─── Emotional Distress Detector ─────────────────────────────────────────────
+
+EMOTIONAL_DISTRESS_PATTERNS = [
+    # Hindi - Devanagari
+    r"उदास",                    # udaas (sad)
+    r"दुखी",                    # dukhi (sorrowful)
+    r"रोना\s+आ\s+रहा",         # rona aa raha (feel like crying)
+    r"तबीयत\s+ठीक\s+नहीं",     # tabiyat theek nahi (not feeling well)
+    r"मन\s+नहीं\s+है",         # man nahi hai (don't feel like it)
+    r"बहुत\s+थक",              # bahut thak (very tired)
+    r"बोर\s+हो",               # bor ho (bored)
+    # Hindi - Romanized
+    r"udaas",
+    r"dukhi",
+    r"tabiyat\s+theek\s+nahi",
+    r"man\s+nahi",
+    r"bahut\s+thak",
+    r"mood\s+kharab",
+    # English
+    r"(i'?m\s+)?(very\s+)?sad",
+    r"not\s+feeling\s+well",
+    r"don'?t\s+feel\s+like\s+(studying|learning)",
+    r"(i'?m\s+)?(very\s+)?tired",
+    r"had\s+a\s+bad\s+day",
+    r"upset",
+]
+
+_EMOTIONAL_RE = re.compile("|".join(EMOTIONAL_DISTRESS_PATTERNS), re.IGNORECASE)
+
+
+def detect_emotional_distress(text: str) -> bool:
+    """Detect if student is expressing sadness, tiredness, or emotional distress."""
+    text_lower = text.lower().strip()
+    if _EMOTIONAL_RE.search(text_lower):
+        logger.info(f"Emotional distress detected (text: '{text[:50]}')")
+        return True
+    return False
+
+
 # ─── Meta-Question Detector ───────────────────────────────────────────────────
 
 META_QUESTION_PATTERNS = {
@@ -163,6 +203,11 @@ META_QUESTION_PATTERNS = {
         r"kaun\s+sa\s+chapter",
         r"कौनसा\s+chapter",
         r"kis\s+chapter",
+        # P0 FIX: Devanagari patterns from Sarvam STT output
+        r"कौन\s*सा\s*चैप्टर",        # kaun sa chapter (full Devanagari)
+        r"कौनसा\s*चैप्टर",           # kaunsa chapter (full Devanagari)
+        r"कोनसा\s*चैप्टर",           # konsa chapter (colloquial Devanagari)
+        r"चैप्टर\s*(क्या|कौन)",       # chapter kya/kaun (reversed order)
     ],
     "topic": [
         r"(what|which)\s+topic",
@@ -172,6 +217,10 @@ META_QUESTION_PATTERNS = {
         r"kya\s+padh\s+rahe",
         r"क्या\s+पढ़\s+रहे",
         r"current\s+topic",
+        # P0 FIX: Additional Devanagari patterns
+        r"क्या\s+पढ़\s+रहे\s+हैं",    # kya padh rahe hain (full phrase)
+        r"कौन\s*सा\s+topic",          # kaun sa topic (Devanagari + English)
+        r"कौनसा\s+topic",             # kaunsa topic
     ],
     "subject": [
         r"(what|which)\s+subject",
@@ -312,5 +361,9 @@ def preprocess_student_message(
     # 3. Check for confusion
     if detect_confusion(text):
         result.confusion_detected = True
+
+    # 4. P0 FIX: Check for emotional distress
+    if detect_emotional_distress(text):
+        result.emotional_distress = True
 
     return result

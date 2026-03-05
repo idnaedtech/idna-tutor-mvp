@@ -427,6 +427,12 @@ async def process_message(
         session.confusion_count = (session.confusion_count or 0) + 1
         logger.info(f"v8.1.0: Confusion detected, count now {session.confusion_count}")
 
+    # P0 FIX: Emotional distress detection — flag for LLM to acknowledge emotion first
+    _student_emotional = False
+    if preprocess_result.emotional_distress:
+        _student_emotional = True
+        logger.info(f"P0 FIX: Emotional distress detected, flagging for LLM")
+
     # === LANGUAGE PRE-SCAN (runs on every message) ===
     # Detects language switch requests BEFORE classification.
     # Uses intent patterns, not bare keywords, to avoid false positives.
@@ -549,7 +555,12 @@ async def process_message(
 
     # Handle SILENCE without LLM — just give a gentle nudge
     if category == "SILENCE":
-        nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
+        # P0 FIX: Nudge must respect language preference (was hardcoded Hindi)
+        pref = session.language_pref or "hinglish"
+        if pref == "english":
+            nudge = "Are you there? Feel free to ask any question."
+        else:
+            nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
         return _quick_response(
             db, session, nudge,
             student_text="[silence]",
@@ -782,6 +793,8 @@ async def process_message(
         # P0 Bug A: Flag for correction detection
         "student_is_correcting": _is_correction,
         "student_text": student_text,
+        # P0 FIX: Flag for emotional distress detection
+        "student_emotional": _student_emotional,
     }
 
     # v7.3.0: Record student input to conversation history
@@ -1082,6 +1095,12 @@ async def process_message_stream(
     if preprocess_result.confusion_detected:
         session.confusion_count = (session.confusion_count or 0) + 1
         logger.info(f"v8.1.0 (stream): Confusion detected, count now {session.confusion_count}")
+
+    # P0 FIX: Emotional distress detection — flag for LLM to acknowledge emotion first
+    _student_emotional = False
+    if preprocess_result.emotional_distress:
+        _student_emotional = True
+        logger.info(f"P0 FIX (stream): Emotional distress detected, flagging for LLM")
 
     # === LANGUAGE PRE-SCAN (runs on every message) ===
     # Detects language switch requests BEFORE classification.
@@ -1423,6 +1442,8 @@ async def process_message_stream(
         # P0 Bug A: Flag for correction detection
         "student_is_correcting": _is_correction,
         "student_text": student_text,
+        # P0 FIX: Flag for emotional distress detection
+        "student_emotional": _student_emotional,
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
 
