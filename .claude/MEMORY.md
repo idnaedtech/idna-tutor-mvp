@@ -1,8 +1,8 @@
 # IDNA EdTech Project Memory
 
 ## Current Version
-- **v10.0.0** deployed to Railway (commit dde6217)
-- 280 tests passing (267 core + 13 V10 persona tests)
+- **v10.0.1** deployed to Railway (commit 6c160af)
+- 300 tests passing (280 core + 20 P0 teaching flow tests)
 - Models: gpt-4.1 (brain), gpt-4.1-mini (classifier)
 
 ## V10 Architecture (GPT-4.1 Role Change)
@@ -32,6 +32,31 @@ greeting = get_text("warmup_greeting", "english", name="Priya")
 ```
 - Supports: english, hindi, hinglish, telugu
 - Falls back to English for unknown languages
+
+## P0 Teaching Loop Fixes (v10.0.1)
+
+Database forensics on 872 sessions revealed 5 bugs. All fixed in v10.0.1.
+
+### Bug 1: CONCEPT_REQUEST Didn't Increment teaching_turn
+- **Root cause**: `state_machine.py` passed `teaching_turn=teaching_turn` (same value)
+- **Fix**: CONCEPT_REQUEST now increments teaching_turn, forces WAITING_ANSWER at turn 3
+- **File**: `app/tutor/state_machine.py:214-232`
+
+### Bug 2: Nudge Hardcoded Hindi
+- **Fix**: Non-streaming endpoint now checks `session.language_pref`
+- **File**: `app/routers/student.py:552`
+
+### Bug 3: Devanagari Meta-Question Patterns Missing
+- **Fix**: Added 7 new Devanagari patterns for chapter/topic detection
+- **File**: `app/tutor/preprocessing.py:159-175`
+
+### Bug 4: Emotional Distress Not Detected
+- **Fix**: Added `detect_emotional_distress()` + `student_emotional` flag
+- **Files**: `preprocessing.py`, `student.py`, `instruction_builder.py`
+
+### Bug 5: Response Length Exceeds Voice Limit
+- **Fix**: Length guard — content >200 chars triggers summarization instruction
+- **File**: `app/tutor/instruction_builder.py:380-388`
 
 ## Critical Lessons Learned
 
@@ -104,6 +129,15 @@ greeting = get_text("warmup_greeting", "english", name="Priya")
 - LLM rephrases verified content, doesn't invent new math facts
 - Verified squares/cubes still injected via `_VERIFIED_SQUARES` dict
 
+### 13. CONCEPT_REQUEST Must Increment teaching_turn (v10.0.1)
+- Classifier returns CONCEPT_REQUEST for "I didn't understand, explain"
+- Fix: CONCEPT_REQUEST increments like IDK/REPEAT, forces WAITING_ANSWER at turn 3
+
+### 14. Emotional Distress Detection (v10.0.1)
+- Patterns: उदास, sad, tired, bad day, mood kharab
+- `session_ctx["student_emotional"]` flag passed to build_prompt()
+- build_prompt() intercepts BEFORE regular builder → comfort response
+
 ## Key File Locations
 
 | Purpose | File |
@@ -118,6 +152,8 @@ greeting = get_text("warmup_greeting", "english", name="Priya")
 | v7.3 state machine | `app/tutor/state_machine.py` |
 | Verified squares data | `app/tutor/instruction_builder.py:271-277` (_build_teach_concept) |
 | V10 persona tests | `tests/test_v10_persona.py` |
+| P0 teaching flow tests | `tests/test_p0_teaching_flow.py` |
+| Emotional distress detector | `app/tutor/preprocessing.py:156-187` |
 
 ## Bug Fix Patterns
 

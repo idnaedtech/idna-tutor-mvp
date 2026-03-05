@@ -1,15 +1,25 @@
 # CLAUDE.md — IDNA EdTech Operating Rules
 
 > **This file is read by Claude Code on every session start.**
-> **Last updated:** 2026-03-01
+> **Last updated:** 2026-03-05
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v10.0.0
+> **Current version:** v10.0.1
 > **Can be modified by CEO only.**
 
 ---
 
-## 0. PRIME DIRECTIVE
+## 0. SESSION START PROTOCOL (DO THIS FIRST)
+
+1. **Read `ROADMAP.md`** — know what's in progress, what's blocked, what's next
+2. **Read this file** — know the rules, architecture, and red lines
+3. **Do NOT start work that isn't on the roadmap** without asking CEO first
+4. **When completing a task**, update ROADMAP.md: `[ ]` → `[x]` with date
+5. **When starting a task**, update ROADMAP.md: `[ ]` → `[-]` with date
+
+---
+
+## 0.1 PRIME DIRECTIVE
 
 You are working on a production voice tutoring platform used by real Indian students.
 **Every broken deploy = a student who can't learn.**
@@ -373,29 +383,38 @@ Prevents hallucinations like "8²=74". LLMs cannot reliably compute arithmetic.
 
 ---
 
-## 10. KNOWN ISSUES (P1 BACKLOG)
+## 10. ACTIVE BUGS (P0 — DATABASE CONFIRMED, 2026-03-05)
+
+These 5 bugs were confirmed by analyzing 872 sessions in the production database.
+Fix these BEFORE any other work. See ROADMAP.md for current status.
+
+| # | Bug | Root Cause | File(s) |
+|---|-----|-----------|---------|
+| 1 | **Same explanation repeats 6x** | CONCEPT_REQUEST in TEACHING doesn't increment teaching_turn. Only IDK does. Sessions e4e3d030 (cc=6,tt=0) and 1560f98f (cc=7,tt=0) prove this. | `state_machine.py` line 214-219 |
+| 2 | **Nudge always Hindi** | Non-streaming SILENCE handler (line 552) hardcodes Hindi. Streaming endpoint (line 1205) checks language_pref correctly. | `student.py` line 552 |
+| 3 | **Devanagari meta-question fails** | "कौन सा चैप्टर" (full Devanagari) doesn't match regex. Only `कौनसा chapter` (mixed script) matches. Sarvam STT outputs full Devanagari. | `preprocessing.py` line 159-166 |
+| 4 | **Emotional distress ignored at session start** | "मैं बहुत उदास हूं" gets classified as ACK. No COMFORT fast-path. GREETING sends all non-COMFORT to TEACHING. | `input_classifier.py`, `preprocessing.py` |
+| 5 | **Response too long for voice** | Content bank definition for prime factorization is full worked solution. LLM reproduces verbatim. No length guard in _build_teach_concept. | `instruction_builder.py` line 380 |
 
 ### Post-P0 (Fix after live retest passes)
 
 | # | Issue | Impact | File(s) |
 |---|-------|--------|---------|
-| 1 | Non-streaming endpoint has 5 hardcoded Hindi messages (lines 361, 370, 379, 391, 464) | Low — voice uses streaming | `student.py` |
-| 2 | All content in seed_questions.py is Hinglish only — LLM must translate on-the-fly for English students | Medium — English quality suffers | `seed_questions.py` |
-| 3 | Enforcer can't detect romanized Hindi ("Hum padh rahe hain" passes through) | Low — system prompt is primary defense | `enforcer.py` |
-| 4 | MAX_RESPONSE_WORDS=40 clips 3-sentence teaching to 2 sentences | Low | `config.py` |
-| 5 | Dual pipeline tech debt — every change requires checking two code paths | High — slows all future work | `student.py` |
-| 6 | Dead code: `instruction_builder_v8.py` (278 lines), `voice/streaming.py` (95 lines) | Low — just noise | Delete safely |
+| 6 | Non-streaming endpoint has 5 hardcoded Hindi messages | Low — voice uses streaming | `student.py` |
+| 7 | All content in seed_questions.py is Hinglish only | Medium — English quality suffers | `seed_questions.py` |
+| 8 | Dual pipeline tech debt — every change requires checking two code paths | High — slows all future work | `student.py` |
+| 9 | Dead code: `instruction_builder_v8.py`, `voice/streaming.py` | Low — just noise | Delete safely |
 
 ### Original P1 Bugs (from v8.0 era)
 
 | # | Bug | File(s) |
 |---|-----|---------|
-| 7 | Same-Q reload on page refresh | `student.py` |
-| 8 | HOMEWORK_HELP trap missing in classifier | `input_classifier.py` |
-| 9 | Devanagari बटा parser broken | `input_classifier.py` |
-| 10 | Empty TTS sentence wastes API | `tts.py` |
-| 11 | Parent split()[0] bug on single names | `student.py` |
-| 12 | Weakest-skill dead end | `handlers.py` |
+| 10 | Same-Q reload on page refresh | `student.py` |
+| 11 | HOMEWORK_HELP trap missing in classifier | `input_classifier.py` |
+| 12 | Devanagari बटा parser broken | `input_classifier.py` |
+| 13 | Empty TTS sentence wastes API | `tts.py` |
+| 14 | Parent split()[0] bug on single names | `student.py` |
+| 15 | Weakest-skill dead end | `handlers.py` |
 
 ---
 
@@ -430,6 +449,7 @@ GREETING + ACK → TEACHING (teach_concept)
 GREETING + other → GREETING (re_greet)
 TEACHING + ACK → WAITING_ANSWER (read_question)
 TEACHING + IDK → TEACHING (teach_concept with reteach, cap at 3)
+TEACHING + CONCEPT_REQUEST → TEACHING (teach_concept, MUST increment teaching_turn)
 WAITING_ANSWER + ANSWER → evaluate → HINT or NEXT_QUESTION
 WAITING_ANSWER + IDK → HINT (hint 1 → hint 2 → show_solution)
 NEXT_QUESTION → TEACHING (next topic) or SESSION_END
@@ -438,9 +458,17 @@ NEXT_QUESTION → TEACHING (next topic) or SESSION_END
 ### Key Features
 
 - **Language persistence:** session.language_pref set by preprocessing, never resets on transitions
-- **Reteach cap:** After 3 IDKs/REPEATs in TEACHING, forces transition to WAITING_ANSWER
+- **Reteach cap:** After 3 IDKs/REPEATs/CONCEPT_REQUESTs in TEACHING, forces transition to WAITING_ANSWER
 - **Confusion count:** Tracked in session.confusion_count, escalation protocol in system prompt
 - **Content Bank:** teach_material_index maps to CB material (0=definition, 1=analogy, 2=vedic_trick)
+
+### CRITICAL BUG (database-confirmed, 2026-03-05)
+
+**CONCEPT_REQUEST during TEACHING must increment teaching_turn.** Database evidence:
+session e4e3d030 had confusion_count=6 but teaching_turn=0. The classifier returns
+CONCEPT_REQUEST for phrases like "I didn't understand, can you explain in English?"
+because "explain" outweighs "didn't understand" in LLM classification. Without the
+increment, teaching_turn stays 0 forever and Turn 0 content repeats verbatim.
 
 ---
 
@@ -470,7 +498,7 @@ If you catch yourself doing any of these, stop immediately:
 9. **Writing SQL DDL directly** instead of using Alembic
 10. **Claiming "done" without test output** — paste the actual results
 11. **Editing multiple unrelated things in one commit** — atomic only
-12. **Hardcoding Hindi strings** without checking language_pref first
+12. **Hardcoding Hindi strings** without checking language_pref first — this includes nudge/silence messages
 13. **Editing v8 FSM files** (`transitions.py`, `handlers.py`) for streaming behavior — they're side-effect-only
 14. **Creating `app/models/` directory** — shadows `app/models.py`, breaks imports
 15. **Letting LLM compute math from memory** — use verified data injection (`_VERIFIED_SQUARES` in `_build_teach_concept`)
@@ -478,6 +506,8 @@ If you catch yourself doing any of these, stop immediately:
 17. **Importing deleted V10 functions** — `_get_confusion_instruction()`, `LANG_ENGLISH`, `DIDI_NO_PRAISE` are gone
 18. **Reverting to rule-based DIDI_BASE** — V10 uses ~40-line teacher persona, not 117-line rules
 19. **Using old language format in tests** — check for `"LANGUAGE:"` not `"LANGUAGE SETTING:"`
+20. **Passing teaching_turn unchanged on CONCEPT_REQUEST in TEACHING** — MUST increment, same as IDK (P0 Bug #1)
+21. **Passing content bank material verbatim to LLM for voice** — if teach_content > 200 chars, add "summarize in 2 sentences" instruction
 
 ---
 
@@ -505,10 +535,11 @@ If you catch yourself doing any of these, stop immediately:
 
 ---
 
-## 17. THE THREE RULES
+## 17. THE FOUR RULES
 
 If you remember nothing else:
 
-1. **Every `_sys()` call needs `session_context=ctx`.** No exceptions. Ever.
-2. **No "done" without 280 tests passing.** Paste the actual pytest output.
-3. **One change per commit.** Atomic. Tested. Proven.
+1. **Read ROADMAP.md first.** Know what you're supposed to be working on.
+2. **Every `_sys()` call needs `session_context=ctx`.** No exceptions. Ever.
+3. **No "done" without all tests passing.** Paste the actual pytest output.
+4. **One change per commit.** Atomic. Tested. Proven.
