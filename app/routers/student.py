@@ -759,6 +759,8 @@ async def process_message(
         session.explanations_given = []
     elif action.teaching_turn > 0:
         session.teaching_turn = action.teaching_turn
+        db.commit()  # P0 FIX: Persist teaching_turn
+        logger.info(f"v8.0: Teaching turn set to {action.teaching_turn} and COMMITTED")
 
     # v8.1.0: Calculate session duration (handle both naive and aware datetimes)
     from datetime import datetime, timezone
@@ -1301,7 +1303,8 @@ async def process_message_stream(
         session.explanations_given = []
     elif action.teaching_turn > 0:
         session.teaching_turn = action.teaching_turn
-        logger.info(f"v8.0: Teaching turn set to {action.teaching_turn}")
+        await run_in_threadpool(lambda: db.commit())  # P0 FIX: Persist teaching_turn
+        logger.info(f"v8.0: Teaching turn set to {action.teaching_turn} and COMMITTED")
 
     # ── Answer check (if ANSWER) ──
     verdict = None
