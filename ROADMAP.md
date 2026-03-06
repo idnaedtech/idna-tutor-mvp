@@ -2,7 +2,7 @@
 
 > **Read by Claude Code at every session start (via CLAUDE.md protocol).**
 > **Updated by:** Claude Code (task status) + CEO (priorities/scope)
-> **Last updated:** 2026-03-05
+> **Last updated:** 2026-03-06
 
 ---
 
@@ -17,7 +17,12 @@
   - [x] Bug 3: Devanagari meta-question patterns (preprocessing.py:206-220)
   - [x] Bug 4: Emotional distress detection (preprocessing.py + instruction_builder.py)
   - [x] Bug 5: Response length guard for voice (instruction_builder.py:400)
-  - **All 5 smoke tests passing on production v10.0.2**
+- [x] P0 Smoke test fixes (4 remaining issues) ✅ v10.0.3 2026-03-06
+  - [x] Fix A: Garbled Bhojpuri/Maithili → LANG_INSTRUCTIONS prohibits regional dialects
+  - [x] Fix B: Meta-question routing → 8 new patterns for chapter/topic detection
+  - [x] Fix C: Confusion escalation → turn 3 asks guided question, turn 4+ offers break
+  - [x] Fix D: TTS truncation + display → max 500 chars, line breaks between sentences
+  - **Production v10.0.3 deployed**
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
