@@ -1,10 +1,10 @@
 # CLAUDE.md — IDNA EdTech Operating Rules
 
 > **This file is read by Claude Code on every session start.**
-> **Last updated:** 2026-03-05
+> **Last updated:** 2026-03-06
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v10.0.2
+> **Current version:** v10.0.3
 > **Can be modified by CEO only.**
 
 ---
@@ -115,7 +115,7 @@ app/
 │   ├── strings.py              # V10: Centralized multilingual strings (4 languages)
 │   ├── instruction_builder_v9.py # v9 brain for non-streaming endpoint.
 │   ├── state_machine.py        # v7.3 FSM — produces Action objects. ACTIVE.
-│   ├── preprocessing.py        # Meta-question, language switch, confusion detectors.
+│   ├── preprocessing.py        # Meta-question, language switch, confusion, language auto-detection.
 │   ├── input_classifier.py     # gpt-4.1-mini classifier. 10 categories.
 │   ├── enforcer.py             # Output safety — length, praise, repetition.
 │   ├── llm.py                  # OpenAI API wrapper (sync + streaming).
@@ -160,7 +160,7 @@ tests/
 ├── test_v750_features.py       # Sentence splitter, enforcer
 ├── test_p1_fixes.py            # Question picking, memory
 └── test_ch1_square_cube.py     # Question bank validation
-    # Total: 280 tests. ALL must pass before any commit.
+    # Total: 323 tests. ALL must pass before any commit.
 
 alembic/                        # Database migrations
 ```
@@ -189,6 +189,7 @@ Student speaks into browser mic
       1. Meta-question detector → bypass LLM if matched
       2. Language switch detector → update session.language_pref in DB
       3. Confusion detector → increment session.confusion_count
+      4. Language auto-detection → auto-switch after 2 consecutive English messages
   → Input Classifier (gpt-4.1-mini → 10 categories)
   → v7.3 state_machine.transition(state, category) → Action object
   → v8 get_transition() runs for SIDE EFFECTS ONLY (language store, empathy)
@@ -340,6 +341,23 @@ Student says "speak in English"
   → System prompt contains: "LANGUAGE: Respond ENTIRELY in English. No Hindi words."
   → gpt-4.1 follows instruction → responds in English
 ```
+### Language Auto-Detection Flow (v10.0.3)
+
+```
+Student speaks English but session is Hinglish (no explicit "speak in English"):
+  → preprocessing.py detect_input_language(text) → 'english'
+  → check_language_auto_switch('english', 'hinglish', consecutive_count)
+  → First English message: count=1, no switch yet
+  → Second English message: count=2, AUTO-SWITCH to English
+  → session.language_pref = 'english' + db.commit()
+
+Special case — GREETING state:
+  → Student's first response is English → immediate switch (no 2-message wait)
+  → session.consecutive_english_count tracks consecutive English messages
+  → Counter resets when student sends Hindi/Hinglish
+```
+
+This is ADDITIVE — works alongside explicit "speak in English" detector.
 
 ### strings.py (V10)
 
@@ -383,10 +401,10 @@ Prevents hallucinations like "8²=74". LLMs cannot reliably compute arithmetic.
 
 ---
 
-## 10. ACTIVE BUGS (P0 — DATABASE CONFIRMED, 2026-03-05)
+## 10. P0 BUGS (ALL FIXED, v10.0.1–v10.0.3, 2026-03-06)
 
 These 5 bugs were confirmed by analyzing 872 sessions in the production database.
-Fix these BEFORE any other work. See ROADMAP.md for current status.
+All fixed in v10.0.1–v10.0.3. Language auto-detection added in v10.0.3. See ROADMAP.md.
 
 | # | Bug | Root Cause | File(s) |
 |---|-----|-----------|---------|
@@ -422,7 +440,7 @@ Fix these BEFORE any other work. See ROADMAP.md for current status.
 
 | Phase | Goal | Gate Criteria | Status |
 |-------|------|--------------|--------|
-| **P0** | Core tutoring loop works | Full session without crash/loop/language reset | **IN PROGRESS — live retest pending** |
+| **P0** | Core tutoring loop works | Full session without crash/loop/language reset | **CODE COMPLETE — live retest pending** |
 | **P1** | Schema evolution | Multi-board DB, content migration, API v1 | Blocked on P0 |
 | **P2** | Multi-board MVP | CBSE + Telangana + Maharashtra + ICSE | Blocked on P1 |
 | **P3** | Platform | Content factory, IDNA-Bench, 22 languages | Blocked on P2 |
@@ -509,6 +527,7 @@ If you catch yourself doing any of these, stop immediately:
 20. **Passing teaching_turn unchanged on CONCEPT_REQUEST in TEACHING** — MUST increment, same as IDK (P0 Bug #1)
 21. **Passing content bank material verbatim to LLM for voice** — if teach_content > 200 chars, add "summarize in 2 sentences" instruction
 22. **Setting session fields without db.commit()** — teaching_turn, language_pref, confusion_count MUST be followed by db.commit() or value is lost between requests (P0 Bug #1 root cause in v10.0.2)
+23. **Ignoring student's input language** — if student speaks English 2x consecutively, language_pref must auto-switch via `check_language_auto_switch()`. Don't rely solely on explicit "speak in English" commands.
 
 ---
 
