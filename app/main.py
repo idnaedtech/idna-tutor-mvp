@@ -130,6 +130,8 @@ def _run_migrations():
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS confusion_count INTEGER DEFAULT 0",
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS board_name VARCHAR(20) DEFAULT 'NCERT'",
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS topics_covered JSONB",
+        # P0: Language auto-detection
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consecutive_english_count INTEGER DEFAULT 0",
     ]
 
     with engine.connect() as conn:

@@ -48,7 +48,7 @@ from app.tutor.answer_checker import check_math_answer, Verdict
 from app.tutor.answer_evaluator import evaluate_answer
 from app.tutor.instruction_builder import build_prompt, CHAPTER_NAMES
 from app.tutor import instruction_builder_v9 as ib_v9
-from app.tutor.preprocessing import preprocess_student_message
+from app.tutor.preprocessing import preprocess_student_message, detect_input_language, check_language_auto_switch
 from content_bank.loader import get_content_bank
 from app.tutor.enforcer import enforce, light_enforce, get_safe_fallback
 from app.tutor.llm import get_llm
@@ -459,6 +459,33 @@ async def process_message(
     if preprocess_result.emotional_distress:
         _student_emotional = True
         logger.info(f"P0 FIX: Emotional distress detected, flagging for LLM")
+
+    # === LANGUAGE AUTO-DETECTION (P0 fix) ===
+    # Detects student's input language and auto-switches if they consistently speak English.
+    # Works ALONGSIDE the explicit switch detector (preprocessing) and language pre-scan.
+    _detected_lang = detect_input_language(student_text)
+    _consecutive_english = getattr(session, 'consecutive_english_count', 0) or 0
+
+    # Special case: first student message in GREETING sets language immediately
+    if session.state == 'GREETING' and _detected_lang == 'english' and session.language_pref != 'english':
+        session.language_pref = 'english'
+        session.consecutive_english_count = 1
+        db.commit()
+        logger.info(f"LANGUAGE AUTO-DETECT: first message in GREETING is English, switched immediately")
+    else:
+        _should_switch, _new_lang, _updated_count = check_language_auto_switch(
+            detected_language=_detected_lang,
+            current_session_language=session.language_pref or 'hinglish',
+            consecutive_english_count=_consecutive_english,
+        )
+        session.consecutive_english_count = _updated_count
+        if _should_switch:
+            session.language_pref = _new_lang
+            db.commit()
+            logger.info(f"LANGUAGE AUTO-DETECT: switched to {_new_lang} (consecutive={_updated_count})")
+        elif _updated_count != _consecutive_english:
+            db.commit()  # Persist counter change
+    # === END LANGUAGE AUTO-DETECTION ===
 
     # === LANGUAGE PRE-SCAN (runs on every message) ===
     # Detects language switch requests BEFORE classification.
@@ -1133,6 +1160,31 @@ async def process_message_stream(
     if preprocess_result.emotional_distress:
         _student_emotional = True
         logger.info(f"P0 FIX (stream): Emotional distress detected, flagging for LLM")
+
+    # === LANGUAGE AUTO-DETECTION (P0 fix) ===
+    _detected_lang = detect_input_language(student_text)
+    _consecutive_english = getattr(session, 'consecutive_english_count', 0) or 0
+
+    # Special case: first student message in GREETING sets language immediately
+    if session.state == 'GREETING' and _detected_lang == 'english' and session.language_pref != 'english':
+        session.language_pref = 'english'
+        session.consecutive_english_count = 1
+        await run_in_threadpool(lambda: db.commit())
+        logger.info(f"LANGUAGE AUTO-DETECT (stream): first message in GREETING is English, switched immediately")
+    else:
+        _should_switch, _new_lang, _updated_count = check_language_auto_switch(
+            detected_language=_detected_lang,
+            current_session_language=session.language_pref or 'hinglish',
+            consecutive_english_count=_consecutive_english,
+        )
+        session.consecutive_english_count = _updated_count
+        if _should_switch:
+            session.language_pref = _new_lang
+            await run_in_threadpool(lambda: db.commit())
+            logger.info(f"LANGUAGE AUTO-DETECT (stream): switched to {_new_lang} (consecutive={_updated_count})")
+        elif _updated_count != _consecutive_english:
+            await run_in_threadpool(lambda: db.commit())  # Persist counter change
+    # === END LANGUAGE AUTO-DETECTION ===
 
     # === LANGUAGE PRE-SCAN (runs on every message) ===
     # Detects language switch requests BEFORE classification.

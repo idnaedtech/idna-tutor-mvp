@@ -17,6 +17,8 @@ from app.tutor.preprocessing import (
     build_meta_response,
     preprocess_student_message,
     PreprocessResult,
+    detect_input_language,
+    check_language_auto_switch,
 )
 
 
@@ -346,3 +348,140 @@ class TestConfusionCountReset:
             language_pref="hinglish",
         )
         assert result.confusion_detected is True
+
+
+# ─── Language Auto-Detection Tests ───────────────────────────────────────────
+
+
+class TestDetectInputLanguage:
+    """Test automatic language detection from student input."""
+
+    def test_pure_english(self):
+        assert detect_input_language("I didn't understand, please explain again") == 'english'
+
+    def test_english_question(self):
+        assert detect_input_language("What is the answer?") == 'english'
+
+    def test_english_request(self):
+        assert detect_input_language("Can you explain this differently?") == 'english'
+
+    def test_english_with_example(self):
+        assert detect_input_language("Not really. Give me some other example.") == 'english'
+
+    def test_english_short(self):
+        assert detect_input_language("Yes, let's start") == 'english'
+
+    def test_hindi_devanagari(self):
+        assert detect_input_language("हां, शुरू करते हैं") == 'hindi'
+
+    def test_hindi_chapter_question(self):
+        assert detect_input_language("कौन सा चैप्टर पढ़ रहे हैं") == 'hindi'
+
+    def test_hindi_confusion(self):
+        assert detect_input_language("मुझे समझ नहीं आया") == 'hindi'
+
+    def test_hinglish_romanized(self):
+        assert detect_input_language("Haan shuru karte hain") == 'hinglish'
+
+    def test_hinglish_mixed(self):
+        assert detect_input_language("Mujhe samajh nahi aaya yeh concept") == 'hinglish'
+
+    def test_empty_string(self):
+        assert detect_input_language("") == 'hinglish'
+
+    def test_numbers_only(self):
+        assert detect_input_language("49") == 'hinglish'
+
+    def test_english_with_one_hindi_word(self):
+        """Mostly English with one Hindi word should still be English."""
+        assert detect_input_language("Yes didi I understand the concept now") == 'english'
+
+
+class TestCheckLanguageAutoSwitch:
+    """Test auto-switch logic based on consecutive English messages."""
+
+    def test_first_english_message_no_switch(self):
+        """First English message — don't switch yet, just count."""
+        switch, lang, count = check_language_auto_switch('english', 'hinglish', 0)
+        assert switch is False
+        assert lang == 'hinglish'
+        assert count == 1
+
+    def test_second_english_message_switches(self):
+        """Second consecutive English message — NOW switch."""
+        switch, lang, count = check_language_auto_switch('english', 'hinglish', 1)
+        assert switch is True
+        assert lang == 'english'
+        assert count == 2
+
+    def test_no_switch_when_matching(self):
+        """No switch needed when languages already match."""
+        switch, lang, count = check_language_auto_switch('english', 'english', 0)
+        assert switch is False
+        assert lang == 'english'
+        assert count == 0
+
+    def test_counter_resets_on_hindi(self):
+        """Counter resets when student sends Hindi after English."""
+        switch, lang, count = check_language_auto_switch('english', 'hinglish', 0)
+        assert count == 1
+
+        switch, lang, count = check_language_auto_switch('hindi', 'hinglish', 1)
+        assert count == 0
+
+    def test_hinglish_session_english_input(self):
+        """English input during Hindi session increments counter."""
+        switch, lang, count = check_language_auto_switch('english', 'hindi', 0)
+        assert switch is False
+        assert count == 1
+
+    def test_hindi_input_english_session_no_switch(self):
+        """Hindi input during English session doesn't auto-switch."""
+        switch, lang, count = check_language_auto_switch('hindi', 'english', 0)
+        assert switch is False
+        assert lang == 'english'
+        assert count == 0
+
+    def test_three_consecutive_english(self):
+        """Third consecutive English still triggers switch."""
+        switch, lang, count = check_language_auto_switch('english', 'hinglish', 2)
+        assert switch is True
+        assert lang == 'english'
+        assert count == 3
+
+
+class TestLanguageAutoDetectionIntegration:
+    """Test the full flow: detect language → check auto-switch."""
+
+    def test_two_english_messages_trigger_switch(self):
+        """Simulate: student sends 2 English messages → should auto-switch."""
+        lang1 = detect_input_language("I didn't understand, please explain again")
+        assert lang1 == 'english'
+        switch1, _, count1 = check_language_auto_switch(lang1, 'hinglish', 0)
+        assert switch1 is False
+        assert count1 == 1
+
+        lang2 = detect_input_language("Can you explain this differently?")
+        assert lang2 == 'english'
+        switch2, new_lang, count2 = check_language_auto_switch(lang2, 'hinglish', count1)
+        assert switch2 is True
+        assert new_lang == 'english'
+        assert count2 == 2
+
+    def test_english_then_hinglish_resets(self):
+        """Simulate: English then Hinglish → counter resets, no switch."""
+        lang1 = detect_input_language("What is the answer?")
+        assert lang1 == 'english'
+        _, _, count1 = check_language_auto_switch(lang1, 'hinglish', 0)
+        assert count1 == 1
+
+        lang2 = detect_input_language("Haan batao aage kya hai")
+        assert lang2 == 'hinglish'
+        switch2, _, count2 = check_language_auto_switch(lang2, 'hinglish', count1)
+        assert switch2 is False
+        assert count2 == 0
+
+    def test_first_message_english_in_greeting(self):
+        """First student message in English during GREETING should be detected."""
+        lang = detect_input_language("Yes, let's start")
+        assert lang == 'english'

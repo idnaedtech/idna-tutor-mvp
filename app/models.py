@@ -102,6 +102,9 @@ class Session(Base):
     # v7.3.28: Empathy one-turn-max flag (Fix 3)
     empathy_given: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # P0: Language auto-detection — tracks consecutive English messages
+    consecutive_english_count: Mapped[int] = mapped_column(Integer, default=0)
+
     # v8.1.0: Confusion escalation counter (P0 Bug 2 fix)
     # Increments when student expresses confusion. Resets on correct answer or new topic.
     confusion_count: Mapped[int] = mapped_column(Integer, default=0)

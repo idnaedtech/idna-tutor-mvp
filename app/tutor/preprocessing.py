@@ -317,6 +317,88 @@ def build_meta_response(
     return f"Hum {chapter_name} padh rahe hain."
 
 
+# ─── Language Auto-Detection ─────────────────────────────────────────────────
+
+# Common Hindi words in Roman script (for detecting Hinglish vs pure English)
+_HINDI_ROMAN_WORDS = {
+    'haan', 'nahi', 'kya', 'kaise', 'kyun', 'samajh', 'padh',
+    'bolo', 'batao', 'acha', 'theek', 'chalo', 'karein',
+    'seekh', 'shuru', 'aage', 'peeche', 'mujhe', 'humko',
+    'aap', 'tum', 'yeh', 'woh', 'hai', 'hain', 'tha',
+    'mein', 'ka', 'ki', 'ke', 'ko', 'se', 'par', 'ne',
+    'aur', 'lekin', 'toh', 'bhi', 'abhi', 'phir',
+    'ji', 'didi', 'namaste',
+}
+
+
+def detect_input_language(text: str) -> str:
+    """Detect whether student input is primarily English, Hindi, or Hinglish.
+
+    Returns: 'english', 'hindi', or 'hinglish'
+    """
+    text = text.strip()
+    if not text:
+        return 'hinglish'
+
+    devanagari_chars = len(re.findall(r'[\u0900-\u097F]', text))
+    total_alpha = len(re.findall(r'[a-zA-Z\u0900-\u097F]', text))
+
+    if total_alpha == 0:
+        return 'hinglish'  # just numbers or punctuation
+
+    devanagari_ratio = devanagari_chars / total_alpha
+
+    # Mostly Devanagari → Hindi
+    if devanagari_ratio > 0.5:
+        return 'hindi'
+
+    # No Devanagari at all → check for common Hindi words in Roman script
+    if devanagari_ratio == 0:
+        words = set(text.lower().split())
+        hindi_word_count = len(words.intersection(_HINDI_ROMAN_WORDS))
+
+        if hindi_word_count == 0:
+            return 'english'
+
+        hindi_word_ratio = hindi_word_count / len(words) if words else 0
+        if hindi_word_ratio < 0.3:
+            return 'english'  # Mostly English with occasional Hindi
+        return 'hinglish'
+
+    # Mix of Devanagari and Latin → Hinglish
+    return 'hinglish'
+
+
+def check_language_auto_switch(
+    detected_language: str,
+    current_session_language: str,
+    consecutive_english_count: int,
+) -> tuple:
+    """Check if we should auto-switch language based on student input.
+
+    Returns: (should_switch, new_language, updated_count)
+
+    Rules:
+    - 2+ consecutive English messages while session is hindi/hinglish → auto-switch
+    - Hindi/Hinglish message → reset English counter
+    - Already matching → no action
+    """
+    # Student speaking in the same language as session → no action
+    if detected_language == current_session_language:
+        return False, current_session_language, 0
+
+    # Student speaking English but session is Hindi/Hinglish
+    if detected_language == 'english' and current_session_language in ('hindi', 'hinglish'):
+        new_count = consecutive_english_count + 1
+        if new_count >= 2:
+            return True, 'english', new_count
+        else:
+            return False, current_session_language, new_count
+
+    # Any other case (e.g. Hindi while session is English) → reset counter
+    return False, current_session_language, 0
+
+
 # ─── Main Preprocessing Function ──────────────────────────────────────────────
 
 def preprocess_student_message(
