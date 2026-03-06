@@ -47,7 +47,7 @@ from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer, Verdict
 from app.tutor.answer_evaluator import evaluate_answer
 from app.tutor.instruction_builder import build_prompt, CHAPTER_NAMES
-from app.tutor import instruction_builder_v9 as ib_v9
+# instruction_builder_v9 removed — both endpoints now use build_prompt() from instruction_builder.py
 from app.tutor.preprocessing import preprocess_student_message, detect_input_language, check_language_auto_switch
 from content_bank.loader import get_content_bank
 from app.tutor.enforcer import enforce, light_enforce, get_safe_fallback
@@ -859,7 +859,7 @@ async def process_message(
     session.conversation_history.append({"role": "user", "content": student_text})
     flag_modified(session, "conversation_history")
 
-    # ── v9.0: Use LLM-powered handlers via instruction_builder_v9 ────────
+    # ── v9.0: Use handle_state for session updates ────────
     # Create SessionState adapter from DB session for handle_state
     from app.state.session import SessionState as SS, TutorState as TS
     session_state = SS(
@@ -893,28 +893,10 @@ async def process_message(
 
     # Check if handler wants LLM to generate response
     if handler_response is None and "_llm_instruction" in handler_updates:
-        inst = handler_updates["_llm_instruction"]
-        # v9.0.10: Add correction detection to instruction for ib_v9
-        inst["student_is_correcting"] = _is_correction
-        inst["student_text"] = student_text
-        # Use instruction_builder_v9 to build LLM prompt
-        prompt = ib_v9.build(
-            action=inst.get("action", "teach"),
-            session=session_state,
-            instruction=inst,
-            already_tried=session.explanations_given or [],
-        )
-        messages = [
-            {"role": "system", "content": prompt["system"]},
-            {"role": "user", "content": prompt["user"]},
-        ]
-        logger.info(f"v9.0: Using LLM instruction action={inst.get('action')}")
-
         # Apply session updates from handler (except internal keys)
         for key, val in handler_updates.items():
             if key.startswith("_"):
                 continue
-            # Map SessionState fields to DB Session fields
             field_map = {
                 "preferred_language": "language_pref",
                 "reteach_count": "current_reteach_count",
@@ -927,9 +909,10 @@ async def process_message(
 
         # Update state from handler
         new_state = handler_state.value if hasattr(handler_state, 'value') else str(handler_state)
-    else:
-        # Fallback: use old build_prompt
-        messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response, session.conversation_history)
+
+    # Use build_prompt() from instruction_builder.py (V10 active brain)
+    # Same as streaming endpoint — all P0 fixes, language auto-detection, dialect prohibition
+    messages = build_prompt(action, session_ctx, question_data, skill_data, prev_response, session.conversation_history)
 
     # ── Step 7: LLM generate ─────────────────────────────────────────────
     llm = get_llm()
