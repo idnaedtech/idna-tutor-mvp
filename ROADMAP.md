@@ -23,13 +23,20 @@
   - [x] Fix C: Confusion escalation → turn 3 asks guided question, turn 4+ offers break
   - [x] Fix D: TTS truncation + display → max 500 chars, line breaks between sentences
   - **Production v10.0.3 deployed**
+- [x] P0 Language auto-detection — switch to English when student speaks English ✅ 2026-03-06
+  - [x] detect_input_language() in preprocessing.py (Devanagari ratio + Hindi Roman words)
+  - [x] check_language_auto_switch() — 2 consecutive English messages triggers switch
+  - [x] GREETING special case — first English message switches immediately
+  - [x] Integrated in BOTH streaming + non-streaming endpoints
+  - [x] consecutive_english_count column + migration
+  - [x] 23 new tests (323 total), verify.py 22/22
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
 ### P0 Exit Criteria
 - Student says "I don't understand" 3x → gets 3 DIFFERENT explanations
 - Student says "कौन सा चैप्टर" → gets direct chapter answer
-- Language stays English for ALL turns after switch (including nudges)
+- Language stays English for ALL turns after switch (including nudges, including auto-detection)
 - Student says "मैं उदास हूं" → Didi acknowledges emotion FIRST
 - No response exceeds 3 sentences via TTS
 
