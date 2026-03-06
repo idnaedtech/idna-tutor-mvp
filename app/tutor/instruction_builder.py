@@ -71,8 +71,12 @@ CHAPTER_NAMES = {
 
 LANG_INSTRUCTIONS = {
     "english": "LANGUAGE: Respond ENTIRELY in English. No Hindi words. No Hinglish. If teaching content below is in Hindi, translate it to English first.",
-    "hindi": "LANGUAGE: Respond in Hindi-English mix (Hinglish). Use 'aap' form respectfully. Use digits for math.",
-    "hinglish": "LANGUAGE: Respond in natural Hindi-English mix. Use whichever language feels right for each phrase.",
+    "hindi": """LANGUAGE: Respond in STANDARD Hindi (Modern Standard Hindi / Khari Boli) mixed with English for technical terms.
+Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
+Use Devanagari script mixed with English. Use 'aap' form respectfully. Use digits for math: "5 times 5 equals 25".""",
+    "hinglish": """LANGUAGE: Respond in Hinglish — natural mix of STANDARD Hindi (Khari Boli) and English.
+Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
+Use Roman script with Hindi words. Use digits for math. Use 'aap' form respectfully.""",
     "telugu": "LANGUAGE: Respond in Telugu-English mix. Use Telugu script when natural. Translate any Hindi content to Telugu.",
 }
 
@@ -388,9 +392,18 @@ def _build_teach_concept(a, ctx, q, sk, prev):
                 msg = f'{translate_instruction}Student didn\'t understand. Use this DIFFERENT example: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
         elif teaching_turn == 2:
             msg = f'{translate_instruction}Student still confused. Try this simpler approach: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
-        elif teaching_turn >= 3:
-            # Exhausted content bank, now can transition
-            msg = f'Say: "{transition_phrase}" Then read the question.'
+        elif teaching_turn >= 4:
+            # P0 FIX: OFFER BREAK - Student has been struggling too long
+            if use_english:
+                msg = 'The student has been struggling with this topic for a while now. Do NOT explain again. Say EXACTLY: "This is a tough topic, and you are doing great by trying. Would you like to take a short break, or try a different easier topic?" 2 sentences max.'
+            else:
+                msg = 'Student bahut der se is topic pe stuck hai. Phir se explain MAT karo. EXACTLY yeh bolo: "Yeh mushkil topic hai, aur aap try kar rahe ho yeh bahut acchi baat hai. Break lena chahoge ya koi aasan topic try karein?" 2 sentences max.'
+        elif teaching_turn == 3:
+            # P0 FIX: STRATEGY SHIFT - Stop explaining, start asking guided question
+            if use_english:
+                msg = 'STOP EXPLAINING. The student has heard 3 explanations and still does not understand. Do NOT give another explanation or example. Instead, ask ONE simple guided question: "Let me ask you something simple - what is 2 times 2?" Wait for their answer. 1 sentence only.'
+            else:
+                msg = 'EXPLAINING BAND KARO. Student ne 3 baar sun liya, samajh nahi aaya. Aur explanation MAT do. Ek simple sawaal pucho: "Chalo ek simple sawaal - 2 into 2 kitna hota hai?" Jawab ka intezaar karo. 1 sentence only.'
         else:
             msg = f"{translate_instruction}Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"{understand_check}\""
     else:

@@ -208,10 +208,15 @@ META_QUESTION_PATTERNS = {
         r"कौनसा\s*चैप्टर",           # kaunsa chapter (full Devanagari)
         r"कोनसा\s*चैप्टर",           # konsa chapter (colloquial Devanagari)
         r"चैप्टर\s*(क्या|कौन)",       # chapter kya/kaun (reversed order)
+        # P0 Smoke Test Fix: Additional romanized Hindi patterns
+        r"konsa\s+chapter",           # konsa chapter (colloquial romanized)
+        r"kaun\s*sa\s+chapter\s+padh",  # kaun sa chapter padh rahe hain
+        r"कौन\s*सा\s+chapter",       # mixed Devanagari + English
+        r"chapter\s+(kya|kaun|कौन|क्या)",  # chapter kya/kaun hai
     ],
     "topic": [
         r"(what|which)\s+topic",
-        r"what\s+are\s+we\s+(learning|studying|doing)",
+        r"what\s+are\s+we\s+(learning|studying|doing|reading)",
         r"what\s+(is|are)\s+we\s+on",
         r"what'?s\s+the\s+topic",
         r"kya\s+padh\s+rahe",
@@ -221,6 +226,10 @@ META_QUESTION_PATTERNS = {
         r"क्या\s+पढ़\s+रहे\s+हैं",    # kya padh rahe hain (full phrase)
         r"कौन\s*सा\s+topic",          # kaun sa topic (Devanagari + English)
         r"कौनसा\s+topic",             # kaunsa topic
+        # P0 Smoke Test Fix: Additional patterns
+        r"what\s+(are\s+)?we\s+(reading|studying)",  # what are we reading/studying
+        r"kya\s+padh\s+rahe\s+hain",  # kya padh rahe hain (romanized)
+        r"konsa\s+topic",              # konsa topic (colloquial)
     ],
     "subject": [
         r"(what|which)\s+subject",

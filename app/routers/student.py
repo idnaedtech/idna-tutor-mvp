@@ -106,12 +106,39 @@ def prepare_for_tts(text: str, session) -> str:
     v7.3.20: Prepare text for TTS with language-specific cleaning.
     1. Always apply clean_for_tts (math symbols → words)
     2. If language_pref is 'english', also convert digits to English words
+    3. P0 FIX: Truncate to MAX_TTS_CHARS (500) at sentence boundary for Sarvam Bulbul
     """
     cleaned = clean_for_tts(text)
     pref = getattr(session, 'language_pref', None) or 'hinglish'
     if pref == 'english':
         cleaned = digits_to_english_words(cleaned)
+    
+    # P0 FIX: TTS truncation - Sarvam Bulbul handles max ~500 chars well
+    MAX_TTS_CHARS = 500
+    if len(cleaned) > MAX_TTS_CHARS:
+        truncated = cleaned[:MAX_TTS_CHARS]
+        # Find last complete sentence (period, Hindi danda, question mark, exclamation)
+        last_period = max(
+            truncated.rfind('. '),
+            truncated.rfind('। '),
+            truncated.rfind('? '),
+            truncated.rfind('! '),
+        )
+        if last_period > MAX_TTS_CHARS // 2:  # Only truncate if we keep more than half
+            cleaned = truncated[:last_period + 1].strip()
     return cleaned
+
+
+def format_for_display(text: str) -> str:
+    """
+    P0 FIX: Format response text for readable display in chat.
+    Adds line breaks between sentences for voice-friendly reading.
+    """
+    # Replace sentence endings with line breaks for readability
+    display = text.replace(". ", "." + chr(10)).replace("। ", "।" + chr(10))
+    display = display.replace("? ", "?" + chr(10)).replace("! ", "!" + chr(10))
+    return display
+
 
 # Module-level singleton for OpenAI client (Fix 3: avoid creating per request)
 _openai_client: AsyncOpenAI = None
@@ -964,8 +991,11 @@ async def process_message(
         f"{state_before}→{new_state} [{category}]"
     )
 
+    # P0 FIX: Format text for readable display (line breaks between sentences)
+    display_text = format_for_display(didi_text)
+    
     return MessageResponse(
-        didi_text=didi_text,
+        didi_text=display_text,
         didi_audio_b64=audio_b64,
         state=new_state,
         student_transcript=student_text,
@@ -1518,7 +1548,9 @@ async def process_message_stream(
             full_text = enforce_result.text
 
             # Send full text and metadata
-            yield f"data: {json.dumps({'type': 'text', 'content': full_text})}\n\n"
+            # P0 FIX: Format text for readable display (line breaks between sentences)
+            display_text = format_for_display(full_text)
+            yield f"data: {json.dumps({'type': 'text', 'content': display_text})}\n\n"
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"

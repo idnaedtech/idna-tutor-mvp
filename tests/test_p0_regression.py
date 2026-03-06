@@ -50,8 +50,8 @@ class TestLanguageInjectionInPrompt:
             "state": "TEACHING", "chapter": "ch1_square_and_cube",
         }
         result = _sys(session_context=ctx)
-        # V10: Hinglish uses natural mix instruction
-        assert "LANGUAGE:" in result and "Hindi-English" in result
+        # V10: Hinglish uses STANDARD Hindi instruction (P0 smoke test fix)
+        assert "LANGUAGE:" in result and "STANDARD Hindi" in result
 
 
 class TestAllActionsHaveBuilders:
