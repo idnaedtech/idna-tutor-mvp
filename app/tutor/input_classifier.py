@@ -94,6 +94,9 @@ FAST_IDK = {
     "nahi", "no", "don't know", "idk", "don't get it",
     "i don't understand", "don't understand", "didn't understand",
     "what", "huh", "what do you mean",
+    # v10.2.0 Fix 5: No-apostrophe variants (belt-and-suspenders)
+    "i didnt understand", "didnt understand", "dont understand",
+    "dont know", "i dont get it", "dont get it", "cant understand",
     # Hindi - Devanagari
     "नहीं", "नहीं पता", "नहीं समझा", "नहीं समझी",
     "समझ नहीं आया", "समझ नहीं आयी", "समझ में नहीं आया",
@@ -207,16 +210,33 @@ async def classify(
             return {"category": "STOP", "confidence": 0.99, "extras": {}}
 
         if normalized in FAST_ACK or any(phrase in normalized for phrase in FAST_ACK):
-            # In WAITING_ANSWER state, "haan"/"yes" could be actual answers
-            if current_state == "WAITING_ANSWER":
+            # v10.2.0 Fix 1a: In answer-expecting states, "haan"/"yes" could be actual answers
+            if current_state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION"):
                 return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
             return {"category": "ACK", "confidence": 0.99, "extras": {}}
 
-    # ─── Fast Path: obvious numeric answers in WAITING_ANSWER state ───────────
-    if current_state == "WAITING_ANSWER":
+    # ─── Fast Path: obvious answers in answer-expecting states ─────────────────
+    # v10.2.0 Fix 1a: Expanded from WAITING_ANSWER to include HINT states
+    if current_state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION"):
         # Contains digits → likely an answer
         if re.search(r'\d', text):
             return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
+
+        # v10.2.0 Fix 1b: Catch number words as answers (e.g., "eight", "false", "nahi")
+        number_words = {
+            "one", "two", "three", "four", "five", "six", "seven",
+            "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+            "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+            "nineteen", "twenty", "thirty", "forty", "fifty",
+            "sixty", "seventy", "eighty", "ninety", "hundred",
+            "true", "false", "yes", "no", "sahi", "galat",
+            "haan", "nahi", "wrong", "right", "correct",
+            "ek", "do", "teen", "char", "paanch", "chhe", "saat",
+            "aath", "nau", "das",
+        }
+        text_words = set(normalized.split())
+        if text_words.intersection(number_words):
+            return {"category": "ANSWER", "confidence": 0.90, "extras": {"raw_answer": text}}
 
     # ─── LLM Classification ───────────────────────────────────────────────────
     if client is None:

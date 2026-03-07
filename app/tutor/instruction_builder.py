@@ -49,7 +49,8 @@ CURRENT SESSION: {chapter_name} — {current_topic}
 # v7.3.22 Fix 1: Chapter name mapping for metadata injection
 CHAPTER_NAMES = {
     "ch1_rational_numbers": "Chapter 1 - Rational Numbers",
-    "ch1_square_and_cube": "Chapter 6 - Squares and Square Roots",
+    # v10.2.0 Fix 4: More accurate name covering both squares AND cubes
+    "ch1_square_and_cube": "Squares, Cubes and their Roots",
     "ch2_linear_equations": "Chapter 2 - Linear Equations",
     "ch3_understanding_quadrilaterals": "Chapter 3 - Understanding Quadrilaterals",
     "ch4_practical_geometry": "Chapter 4 - Practical Geometry",
@@ -62,7 +63,9 @@ LANG_INSTRUCTIONS = {
     "english": "LANGUAGE: Respond ENTIRELY in English. No Hindi words. No Hinglish. If teaching content below is in Hindi, translate it to English first.",
     "hindi": """LANGUAGE: Respond in STANDARD Hindi (Modern Standard Hindi / Khari Boli) mixed with English for technical terms.
 Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
-Use Devanagari script mixed with English. Use 'aap' form respectfully. Use digits for math: "5 times 5 equals 25".""",
+Use Devanagari script mixed with English. Use 'aap' form respectfully. Use digits for math: "5 times 5 equals 25".
+CRITICAL: Every Hindi word MUST have complete vowel marks (matras). "ठीक" not "ठक". "है" not "ह". "हिंदी" not "हद".
+If you cannot write proper Devanagari with all matras, write in Roman Hindi instead.""",
     "hinglish": """LANGUAGE: Respond in Hinglish — natural mix of STANDARD Hindi (Khari Boli) and English.
 Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
 Use Roman script with Hindi words. Use digits for math. Use 'aap' form respectfully.""",

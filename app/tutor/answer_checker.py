@@ -449,6 +449,29 @@ def check_math_answer(
     if cbrt_verdict is not None:
         return cbrt_verdict
 
+    # v10.2.0 Fix 1c: True/false question handler
+    # Questions like "Sahi ya galat: ..." expect "galat"/"false"/"true"/"sahi"
+    correct_lower = correct_answer.lower().strip()
+    student_lower = student_text.lower().strip()
+
+    # Boolean answer mapping
+    true_words = {"true", "sahi", "haan", "yes", "ha", "right", "correct",
+                  "हां", "हाँ", "सही"}
+    false_words = {"false", "galat", "nahi", "no", "wrong", "incorrect",
+                   "नहीं", "गलत"}
+
+    student_is_true = any(w in student_lower.split() for w in true_words)
+    student_is_false = any(w in student_lower.split() for w in false_words)
+    correct_is_true = correct_lower in true_words or any(w in correct_lower for w in true_words)
+    correct_is_false = correct_lower in false_words or any(w in correct_lower for w in false_words)
+
+    if (correct_is_true or correct_is_false) and (student_is_true or student_is_false):
+        if (correct_is_true and student_is_true) or (correct_is_false and student_is_false):
+            return Verdict(True, "CORRECT", student_text, correct_answer, "")
+        else:
+            return Verdict(False, "INCORRECT", student_text, correct_answer,
+                          "Sochiye phir se — sahi hai ya galat?")
+
     # Step 1: Exact string match against correct + variants
     all_accepted = [str(correct_answer)] + [str(v) for v in variants]
     for accepted in all_accepted:

@@ -515,3 +515,39 @@ class TestSameQReloadFix:
         param = sig.parameters['asked_question_ids']
         # Should have a default or be typed as list
         assert param.annotation == inspect.Parameter.empty or 'list' in str(param.annotation).lower()
+
+
+# ─── v10.2.0 Bug 1: True/False Answer Tests ─────────────────────────────────
+
+class TestTrueFalseAnswers:
+    """v10.2.0 Fix 1c: Answer checker must handle true/false questions."""
+
+    def test_galat_matches_galat(self):
+        """'galat' should match correct answer 'galat'."""
+        v = check_math_answer("galat", "galat", [])
+        assert v.correct == True
+
+    def test_false_matches_galat(self):
+        """'false' should match correct answer 'galat' via boolean mapping."""
+        v = check_math_answer("false", "galat", ["galat", "false", "nahi", "wrong"])
+        assert v.correct == True
+
+    def test_nahi_matches_galat(self):
+        """'nahi' should match correct answer 'galat' via boolean mapping."""
+        v = check_math_answer("nahi", "galat", ["galat", "false", "nahi", "wrong"])
+        assert v.correct == True
+
+    def test_true_does_not_match_galat(self):
+        """'true' should NOT match correct answer 'galat'."""
+        v = check_math_answer("true", "galat", ["galat", "false", "nahi", "wrong"])
+        assert v.correct == False
+
+    def test_sahi_matches_sahi(self):
+        """'sahi' should match correct answer 'sahi'."""
+        v = check_math_answer("sahi", "sahi", [])
+        assert v.correct == True
+
+    def test_yes_matches_true(self):
+        """'yes' should match correct answer 'true' via boolean mapping."""
+        v = check_math_answer("yes", "true", ["true", "sahi", "haan"])
+        assert v.correct == True

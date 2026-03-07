@@ -700,6 +700,10 @@
             return;
         }
 
+        // v10.2.0 FIX Bug 2: ALWAYS show text immediately — never gate on audio
+        addMessage('didi', text, b64);
+        console.log("[Audio] Text shown FIRST, now attempting audio");
+
         isDidiSpeaking = true;
         pauseListening();
         updateVoiceUI('didi-speaking');
@@ -721,29 +725,15 @@
                 currentAudio = new Audio(url);
 
                 let hasEnded = false;
-                let textShown = false;
-                let maxTimeout = null;
-                let textFallbackTimeout = null;
 
                 const cleanup = () => {
                     if (hasEnded) return;
                     hasEnded = true;
-                    if (maxTimeout) clearTimeout(maxTimeout);
-                    if (textFallbackTimeout) clearTimeout(textFallbackTimeout);
                     URL.revokeObjectURL(url);
                     isDidiSpeaking = false;
                     currentAudio = null;
                     setTimeout(() => startListening(), 500);
                     resolve();
-                };
-
-                // KEY FIX: Show text ONLY when audio actually starts playing
-                currentAudio.onplay = () => {
-                    if (!textShown) {
-                        textShown = true;
-                        addMessage('didi', text, b64);
-                        console.log("[Audio] onplay - text bubble rendered");
-                    }
                 };
 
                 currentAudio.onended = () => {
@@ -753,40 +743,27 @@
 
                 currentAudio.onerror = (e) => {
                     console.error("[Audio] onerror:", e);
-                    if (!textShown) {
-                        textShown = true;
-                        addMessage('didi', text, b64);
-                    }
                     cleanup();
                 };
 
-                // Fallback: if audio doesn't start within 2s, show text anyway
-                textFallbackTimeout = setTimeout(() => {
-                    if (!textShown) {
-                        textShown = true;
-                        addMessage('didi', text, b64);
-                        console.log("[Audio] 2s fallback - text bubble rendered");
+                // Safety timeout: 30s max for any audio
+                setTimeout(() => {
+                    if (isDidiSpeaking && !hasEnded) {
+                        console.warn("[Audio] Safety timeout - forcing cleanup");
+                        if (currentAudio) {
+                            currentAudio.pause();
+                        }
+                        cleanup();
                     }
-                }, 2000);
-
-                // Safety timeout
-                maxTimeout = setTimeout(() => {
-                    console.warn("[Audio] Max timeout - forcing cleanup");
-                    cleanup();
                 }, 30000);
 
                 currentAudio.play().catch((e) => {
                     console.error("[Audio] Play failed:", e);
-                    if (!textShown) {
-                        textShown = true;
-                        addMessage('didi', text, b64);
-                    }
                     cleanup();
                 });
 
             } catch (e) {
                 console.error("[Audio] Decode error:", e);
-                addMessage('didi', text);
                 isDidiSpeaking = false;
                 startListening();
                 resolve();

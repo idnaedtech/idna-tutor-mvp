@@ -154,7 +154,7 @@ async def llm_call_for_eval(messages: list, max_tokens: int = 150) -> str:
     """v7.5.0: Async LLM call wrapper for answer evaluation."""
     client = get_openai_client()
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",  # Fast model for evaluation
+        model="gpt-4.1-mini",  # v10.2.0 Fix 1d: Better model for answer evaluation
         messages=messages,
         max_tokens=max_tokens,
         temperature=0.1,  # Low temp for consistent evaluation
@@ -1609,6 +1609,9 @@ async def process_message_stream(
             full_text = full_text.strip()
             display_text_raw = display_text_raw.strip()
 
+            # v10.2.0 Bug 3 diagnosis: Log raw LLM output to check for matra issues
+            logger.info(f"RAW_LLM_OUTPUT: [{display_text_raw[:200] if display_text_raw else 'EMPTY'}]")
+
             # v10.1 FIX Issue 3: Enforce on display text (keeps digits)
             enforce_result = enforce(
                 display_text_raw, new_state,
@@ -1632,9 +1635,9 @@ async def process_message_stream(
             # Send full text and metadata
             # v10.1 FIX Issue 3: Display shows original digits (4 × 4 = 16), TTS says "four into four equals sixteen"
             display_text = format_for_display(display_text_final)
-            # DEBUG: Text display (P0 debug 2026-03-07)
-            logger.info(f"FRONTEND_SEND (stream): text_len={len(display_text)}, has_audio=True, "
-                       f"preview=[{display_text[:80] if display_text else 'EMPTY'}...]")
+            # v10.2.0 Bug 3 diagnosis: Log after format_for_display
+            logger.info(f"AFTER_FORMAT_DISPLAY: [{display_text[:200] if display_text else 'EMPTY'}]")
+            logger.info(f"TTS_TEXT: [{full_text[:200] if full_text else 'EMPTY'}]")
             yield f"data: {json.dumps({'type': 'text', 'content': display_text})}\n\n"
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
