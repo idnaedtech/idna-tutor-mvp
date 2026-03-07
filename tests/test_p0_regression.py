@@ -126,10 +126,9 @@ class TestEndToEndPromptTrace:
             "Strong enforcement missing from final prompt!"
 
     def test_confusion_count_4_produces_break_offer_in_prompt(self):
-        """E2E: build_prompt with confusion_count=4 produces break offer.
+        """E2E: build_prompt with high confusion produces frustration handling.
 
-        V10: Confusion handling is embedded in DIDI_BASE persona, not a separate function.
-        The persona describes how to handle frustrated students and offer breaks.
+        v10.1: Simplified persona handles frustration generically.
         """
         from app.tutor.instruction_builder import build_prompt
         from app.tutor.state_machine import Action
@@ -145,9 +144,9 @@ class TestEndToEndPromptTrace:
         messages = build_prompt(action, ctx, None, None, None, [])
         system_prompt = messages[0]["content"]
 
-        # V10: Confusion handling embedded in persona (describes break at 4+ times)
-        assert "4 or more times" in system_prompt or "break" in system_prompt.lower(), \
-            "Confusion escalation should be embedded in V10 persona!"
+        # v10.1: Simplified persona handles frustration with offer to stop or try easier
+        assert "frustration" in system_prompt.lower() or "stop" in system_prompt.lower() or "easier" in system_prompt.lower(), \
+            "Frustration handling should be in v10.1 persona!"
 
 
 class TestLanguageNormalization:

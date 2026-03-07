@@ -150,7 +150,9 @@ def clean_for_tts(text: str) -> str:
 
     # ─── Remove any remaining special chars that TTS might choke on ──────
     # Keep: letters (any script), digits, spaces, periods, commas, ?, !
-    result = re.sub(r'[^\w\s.,?!:;\'-]', '', result, flags=re.UNICODE)
+    # v10.1 FIX: Also preserve Devanagari marks (matras) \u0900-\u097F and Telugu \u0C00-\u0C7F
+    # \w with re.UNICODE matches letters but NOT dependent vowels (matras) which are Unicode "Marks"
+    result = re.sub(r'[^\w\s.,?!:;\'\-\u0900-\u097F\u0C00-\u0C7F]', '', result, flags=re.UNICODE)
 
     # ─── Final cleanup ───────────────────────────────────────────────────
     result = re.sub(r'\s+', ' ', result).strip()

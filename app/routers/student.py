@@ -267,7 +267,7 @@ def start_session(
     LANG_NORMALIZE = {
         "hi-IN": "hinglish", "en-IN": "english",
         "hindi": "hindi", "english": "english", "hinglish": "hinglish",
-        "telugu": "telugu",  # V10: Telugu support
+        "telugu": "telugu", "te-IN": "telugu",  # v10.1: Telugu support with BCP-47
     }
     lang = LANG_NORMALIZE.get(lang_raw, "hinglish")
 
@@ -284,8 +284,13 @@ def start_session(
 
         # V10: Warm greeting from centralized strings + topic announcement
         greeting_base = get_text("warmup_greeting", lang, name=student.name)
-        greeting_text = f"{greeting_base} Today we'll look at {topic_for_greeting}. Ready to start?" if lang == "english" else \
-            f"{greeting_base} Aaj hum {topic_for_greeting} dekhenge. Shuru karein?"
+        if lang == "english":
+            greeting_text = f"{greeting_base} Today we'll look at {topic_for_greeting}. Ready to start?"
+        elif lang == "telugu":
+            # v10.1: Telugu greeting
+            greeting_text = f"Hello {student.name}! Ee roju manamu {topic_for_greeting} nerchukundaam. Ready aa?"
+        else:
+            greeting_text = f"{greeting_base} Aaj hum {topic_for_greeting} dekhenge. Shuru karein?"
 
         # Stay in GREETING — FSM will transition to TEACHING on ACK
         session.state = "GREETING"

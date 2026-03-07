@@ -47,6 +47,14 @@
   - [x] Fix 3: Add ANSWER_EVAL debug logging — routing after answer evaluation
   - [x] Fix 4: Add FRONTEND_SEND debug logging — text display troubleshooting
   - [x] verify.py 22/22, 323 tests passing
+- [-] v10.1 Question-First Mode — radical simplification for pilot 2026-03-07
+  - [x] New DIDI_BASE: practice partner persona (was: teacher monologue)
+  - [x] GREETING → WAITING_ANSWER: skip teaching, go straight to question
+  - [x] Fix garbled Hindi: preserve Devanagari matras in clean_for_tts()
+  - [x] Fix comfort loop: exit after 2 comfort turns, accept learning intent phrases
+  - [x] Telugu support: LANG_TELUGU, auto-detection, meta-question responses, greeting
+  - [x] Tests updated: 326 passing
+  - [ ] Deploy to Railway and test with live students
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 

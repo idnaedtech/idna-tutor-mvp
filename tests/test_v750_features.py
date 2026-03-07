@@ -172,3 +172,35 @@ class TestTTSEmptyGuard:
         result = asyncio.run(tts.synthesize_async("", "hi-IN"))
         assert result.audio_bytes == b''
         assert result.latency_ms == 0
+
+
+class TestHindiMatraPreservation:
+    """v10.1 fix: Hindi text must preserve all Devanagari vowel marks (matras)."""
+
+    def test_hindi_text_preserves_matras(self):
+        """Hindi text must retain all Devanagari vowel marks."""
+        from app.voice.clean_for_tts import clean_for_tts
+
+        hindi = "ठीक है, हिंदी में समझाते हैं"
+        processed = clean_for_tts(hindi)
+        assert "ठीक" in processed, f"Matras stripped: {processed}"
+        assert "हिंदी" in processed, f"Matras stripped: {processed}"
+        assert "समझाते" in processed, f"Matras stripped: {processed}"
+
+    def test_telugu_text_preserves_vowels(self):
+        """Telugu text must retain all Telugu vowel marks."""
+        from app.voice.clean_for_tts import clean_for_tts
+
+        telugu = "మీరు బాగున్నారా"  # "How are you" in Telugu
+        processed = clean_for_tts(telugu)
+        assert "మీరు" in processed, f"Telugu vowels stripped: {processed}"
+        assert "బాగున్నారా" in processed, f"Telugu vowels stripped: {processed}"
+
+    def test_hinglish_mixed_text(self):
+        """Mixed Hindi-English text preserves both scripts."""
+        from app.voice.clean_for_tts import clean_for_tts
+
+        hinglish = "अच्छा, let's try the question."
+        processed = clean_for_tts(hinglish)
+        assert "अच्छा" in processed, f"Hindi part stripped: {processed}"
+        assert "question" in processed, f"English part stripped: {processed}"

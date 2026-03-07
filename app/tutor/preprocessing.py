@@ -285,12 +285,16 @@ def build_meta_response(
     """
     Build a direct template response for a meta-question.
     Respects the student's language preference.
+    v10.1: Added Telugu support.
     """
     use_english = language_pref == "english"
+    use_telugu = language_pref in ("telugu", "te-IN")
 
     if meta_type == "chapter":
         if use_english:
             return f"We are learning {chapter_name}."
+        elif use_telugu:
+            return f"Manamu {chapter_name} chaduvutunnamu."
         else:
             return f"Hum {chapter_name} padh rahe hain."
 
@@ -300,6 +304,10 @@ def build_meta_response(
             if skill_display:
                 return f"We are currently on {skill_display} in {chapter_name}."
             return f"We are studying {chapter_name}."
+        elif use_telugu:
+            if skill_display:
+                return f"Ippudu manamu {skill_display} chaduvutunnamu, {chapter_name} lo."
+            return f"Manamu {chapter_name} chaduvutunnamu."
         else:
             if skill_display:
                 return f"Abhi hum {skill_display} padh rahe hain, {chapter_name} mein."
@@ -308,18 +316,24 @@ def build_meta_response(
     elif meta_type == "subject":
         if use_english:
             return f"We are studying {subject.title()}."
+        elif use_telugu:
+            return f"Manamu {subject.title()} chaduvutunnamu."
         else:
             return f"Hum {subject.title()} padh rahe hain."
 
     elif meta_type == "progress":
         if use_english:
             return f"We've been working on {chapter_name}. You're doing great!"
+        elif use_telugu:
+            return f"Manamu {chapter_name} practice chestunnamu. Chala bagundi!"
         else:
             return f"Hum {chapter_name} pe kaam kar rahe hain. Bahut accha chal raha hai!"
 
     # Default fallback
     if use_english:
         return f"We are learning {chapter_name}."
+    elif use_telugu:
+        return f"Manamu {chapter_name} chaduvutunnamu."
     return f"Hum {chapter_name} padh rahe hain."
 
 
@@ -338,19 +352,26 @@ _HINDI_ROMAN_WORDS = {
 
 
 def detect_input_language(text: str) -> str:
-    """Detect whether student input is primarily English, Hindi, or Hinglish.
+    """Detect whether student input is primarily English, Hindi, Telugu, or Hinglish.
 
-    Returns: 'english', 'hindi', or 'hinglish'
+    Returns: 'english', 'hindi', 'telugu', or 'hinglish'
     """
     text = text.strip()
     if not text:
         return 'hinglish'
 
+    # v10.1: Telugu detection (Unicode range 0C00-0C7F)
+    telugu_chars = len(re.findall(r'[\u0C00-\u0C7F]', text))
     devanagari_chars = len(re.findall(r'[\u0900-\u097F]', text))
-    total_alpha = len(re.findall(r'[a-zA-Z\u0900-\u097F]', text))
+    total_alpha = len(re.findall(r'[a-zA-Z\u0900-\u097F\u0C00-\u0C7F]', text))
 
     if total_alpha == 0:
         return 'hinglish'  # just numbers or punctuation
+
+    # Check Telugu first (higher priority for Telugu pilot)
+    telugu_ratio = telugu_chars / total_alpha
+    if telugu_ratio > 0.3:
+        return 'telugu'
 
     devanagari_ratio = devanagari_chars / total_alpha
 
@@ -359,7 +380,7 @@ def detect_input_language(text: str) -> str:
         return 'hindi'
 
     # No Devanagari at all → check for common Hindi words in Roman script
-    if devanagari_ratio == 0:
+    if devanagari_ratio == 0 and telugu_ratio == 0:
         words = set(text.lower().split())
         hindi_word_count = len(words.intersection(_HINDI_ROMAN_WORDS))
 

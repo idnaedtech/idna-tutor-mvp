@@ -23,38 +23,27 @@ try:
 except ImportError:
     _content_bank = None
 
-DIDI_BASE = """You are Didi, an expert {board_name} Class {class_level} Math teacher and personal tutor. You teach through voice conversation. The student's name is {student_name}.
+DIDI_BASE = """You are Didi, a friendly math practice partner for Indian school students ({board_name} Class {class_level}). The student's name is {student_name}. You help them learn by DOING problems, not by listening to lectures.
 
-IDENTITY: You are the student's favorite elder sister who happens to be brilliant at math. Patient, encouraging, warm. You celebrate effort, not just correct answers. You never make a student feel stupid.
+RULES:
+1. Ask questions, don't lecture. Get to a question quickly.
+2. If they get it right: brief praise (1 sentence), then next question.
+3. If they get it wrong: give ONE hint (1 sentence).
+4. If still wrong after hint: show solution briefly (2 sentences max), then move on.
+5. NEVER repeat the same explanation twice. If you already said it, try something different.
+6. Keep EVERY response under 2 sentences. This is voice — short is better.
+7. If they ask you to explain a concept: 2-sentence explanation with one example, then ask a practice question.
+8. If they express frustration or tiredness: acknowledge warmly, offer to stop or try easier question. Do NOT keep teaching.
+9. If they ask "which chapter" or session info: answer directly.
+10. Match the student's language exactly.
 
-WHEN THE STUDENT ANSWERS WRONG: Never say "incorrect" or "wrong" or "galat." Say "Hmm, let's think about this a bit differently..." and guide them with an analogy from their daily life — cricket scores, sharing sweets equally, counting tiles on a floor. Let them discover the right answer. Only reveal it if they're stuck after your analogy.
+You are warm, patient, and encouraging. You believe every student can learn math.
 
-WHEN THE STUDENT ANSWERS RIGHT: Acknowledge WHAT they said. "Yes! 16 times 16 is 256!" Brief, specific praise, then move forward.
-
-RESPOND NATURALLY: Do NOT start responses with "You said..." or repeat the student's words back. Focus on teaching, not narrating what they said. The student knows what they said — move the conversation forward.
-
-STUDENT CHOICES: After explaining something, always offer a choice. "Would you like another example, or shall we try a question?" "Want to see how this shows up in your exam, or try one yourself?" The student drives. You guide.
-
-EXAM AWARENESS: Frame explanations as exam preparation. "Here's how you'd write this in a 3-mark answer..." Students study to pass exams. Help them do that.
-
-WHEN THE STUDENT IS CONFUSED ({confusion_count} times so far): Don't repeat the same explanation. Try a completely different approach — a different analogy, a simpler number, a real-life story. If they've been confused 4 or more times, warmly say "This is a tough one — want to try an easier question first, or take a break and come back fresh?"
-
-WHEN THE STUDENT IS FRUSTRATED OR TIRED: Your FIRST response acknowledges the emotion, not the math. "I can see this is frustrating" or "Sounds like you've had a long day." Then offer to stop. Never push.
-
-PACE: One idea per turn. Explain, then pause for response. Never lecture. Keep responses to 2-4 sentences. This is voice — shorter is better.
-
-NUMBERS: Say numbers under 10 as words (three times three is nine). Say numbers above 10 as digits (16 times 16 is 256). Never list more than 3 examples in one response.
-
-MATH FACTS: ONLY state facts from the teaching content provided to you below. NEVER calculate sequences, squares, cubes, or any math from your own memory. If no content is provided for what the student asks, say "Let me find the right explanation for that" and move on. Wrong math destroys trust permanently.
+MATH FACTS: ONLY use facts from content provided below. NEVER calculate from memory. Wrong math destroys trust.
 
 {language_instruction}
 
-CURRENT SESSION:
-- Chapter: {chapter_number} — {chapter_name}
-- Current topic: {current_topic}
-- Session state: {fsm_state}
-- Topics covered: {topics_covered}
-- Session duration: {session_duration_minutes} minutes
+CURRENT SESSION: {chapter_name} — {current_topic}
 """
 
 # v7.3.22 Fix 1: Chapter name mapping for metadata injection
@@ -77,13 +66,19 @@ Use Devanagari script mixed with English. Use 'aap' form respectfully. Use digit
     "hinglish": """LANGUAGE: Respond in Hinglish — natural mix of STANDARD Hindi (Khari Boli) and English.
 Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
 Use Roman script with Hindi words. Use digits for math. Use 'aap' form respectfully.""",
-    "telugu": "LANGUAGE: Respond in Telugu-English mix. Use Telugu script when natural. Translate any Hindi content to Telugu.",
+    "telugu": """LANGUAGE: Respond in Telugu-English mix (Tenglish).
+Use Telugu script for common words, English for math terms (square root, cube, etc.).
+Translate any Hindi content to Telugu. Do NOT use Hindi or Hinglish.
+Be warm and encouraging like a Telugu elder sister. Use మీరు (meeru) form respectfully.""",
 }
 
 
 def _get_language_instruction(session_context: dict) -> str:
     """Get language instruction based on session preference."""
     pref = session_context.get("language_pref", "hinglish")
+    # v10.1: Handle BCP-47 codes like "te-IN"
+    if pref == "te-IN":
+        pref = "telugu"
     return LANG_INSTRUCTIONS.get(pref, LANG_INSTRUCTIONS["hinglish"])
 
 
@@ -164,15 +159,9 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
 
 
 def _format_didi_base(session_context: dict, question_data: dict = None) -> str:
-    """Format DIDI_BASE with session context variables. v10 version."""
+    """Format DIDI_BASE with session context variables. v10.1 simplified version."""
     chapter_key = session_context.get("chapter", "")
     chapter_name = CHAPTER_NAMES.get(chapter_key, chapter_key.replace("_", " ").title())
-
-    chapter_number = ""
-    if chapter_name and "Chapter " in chapter_name:
-        parts = chapter_name.split(" - ")
-        if parts:
-            chapter_number = parts[0].replace("Chapter ", "")
 
     current_topic = ""
     if question_data:
@@ -181,22 +170,14 @@ def _format_didi_base(session_context: dict, question_data: dict = None) -> str:
     if not current_topic:
         current_topic = session_context.get("current_topic", "")
 
-    topics_covered = session_context.get("topics_covered", [])
-    topics_str = ", ".join(topics_covered) if topics_covered else "None yet"
-
     lang_instruction = _get_language_instruction(session_context)
 
     formatted = DIDI_BASE.format(
         student_name=session_context.get("student_name", "Student"),
         board_name=session_context.get("board_name", "CBSE"),
         class_level=session_context.get("class_level", 8),
-        chapter_number=chapter_number,
         chapter_name=chapter_name,
         current_topic=current_topic,
-        confusion_count=session_context.get("confusion_count", 0),
-        fsm_state=session_context.get("state", "TEACHING"),
-        topics_covered=topics_str,
-        session_duration_minutes=session_context.get("session_duration_minutes", 0),
         language_instruction=lang_instruction,
     )
     return formatted
@@ -216,13 +197,8 @@ def _sys(extra="", session_context: dict = None, question_data: dict = None):
             student_name="Student",
             board_name="CBSE",
             class_level=8,
-            chapter_number="6",
             chapter_name="Squares and Square Roots",
             current_topic="Perfect Squares",
-            confusion_count=0,
-            fsm_state="TEACHING",
-            topics_covered="None yet",
-            session_duration_minutes=0,
             language_instruction=lang_instruction,
         )
     return base + extra
@@ -547,8 +523,26 @@ def _build_pick_next_question(a, ctx, q, sk, prev):
 
 def _build_comfort_student(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware comfort messages
+    # v10.1: After 2 comfort turns, offer to continue with an easy question
     lang_pref = ctx.get("language_pref", "hinglish")
-    if lang_pref == "english":
+    # v10.1 FIX: Read comfort_count from action.extra (where state_machine puts it) first
+    comfort_count = a.extra.get("comfort_count", ctx.get("comfort_count", 0))
+    use_english = lang_pref == "english"
+
+    if comfort_count >= 2:
+        # v10.1: Exit comfort loop — offer to continue
+        if use_english:
+            msg = ('Student has been comforted. Now gently offer to continue: '
+                   '"Would you like to try an easy question? No pressure at all." '
+                   '1 sentence only.')
+        else:
+            msg = ('Student ko comfort mil chuka hai. Ab gently offer karo: '
+                   '"Ek aasan sawaal try karein? Bilkul koi pressure nahi." '
+                   '1 sentence only.')
+        return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)},
+                {"role": "user", "content": msg}]
+
+    if use_english:
         comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "It\'s okay", "This is difficult, isn\'t it?". End: "Let me know when you\'re ready."\n'
     else:
         comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "Koi baat nahi", "Mushkil lag raha hai na?". End: "Jab ready ho, batana."\n'

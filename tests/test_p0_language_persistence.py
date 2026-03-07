@@ -140,27 +140,28 @@ class TestConfusionDetection:
 
 
 class TestConfusionEscalation:
-    """Test confusion escalation is embedded in v10 persona."""
+    """v10.1: Test frustration handling in simplified persona."""
 
     def test_confusion_count_in_prompt(self):
-        """v10: Confusion count should appear in prompt."""
+        """v10.1: Persona should handle frustration warmly."""
         ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
                "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
                "confusion_count": 3, "state": "TEACHING"}
         prompt = _sys(session_context=ctx)
-        assert "3 times so far" in prompt
+        # v10.1: Simplified persona handles frustration generically
+        assert "frustration" in prompt.lower() or "tired" in prompt.lower()
 
     def test_prompt_mentions_break_for_confusion(self):
-        """v10: Persona should mention offering break at high confusion."""
+        """v10.1: Persona should offer to stop when frustrated."""
         ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
                "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
                "confusion_count": 0, "state": "TEACHING"}
         prompt = _sys(session_context=ctx)
-        # New persona mentions break at 4+ confusion
-        assert "4 or more times" in prompt or "break" in prompt.lower()
+        # v10.1: Simplified persona offers to stop
+        assert "stop" in prompt.lower() or "easier question" in prompt.lower()
 
     def test_prompt_has_patient_identity(self):
-        """v10: Persona should describe patient, warm teacher identity."""
+        """v10.1: Persona should describe patient, warm practice partner."""
         ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
                "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
                "confusion_count": 0, "state": "TEACHING"}
@@ -168,13 +169,13 @@ class TestConfusionEscalation:
         assert "patient" in prompt.lower() or "warm" in prompt.lower()
 
     def test_prompt_has_natural_response_instruction(self):
-        """v10.1: Persona should instruct to respond naturally without echoing."""
+        """v10.1: Persona should keep responses short for voice."""
         ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
                "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
                "confusion_count": 0, "state": "TEACHING"}
         prompt = _sys(session_context=ctx)
-        # Changed from "echo back" to "respond naturally" - P0 fix 2026-03-07
-        assert "respond naturally" in prompt.lower()
+        # v10.1: Short responses for voice
+        assert "2 sentences" in prompt.lower() or "short" in prompt.lower()
 
 
 class TestLanguagePersistenceE2E:

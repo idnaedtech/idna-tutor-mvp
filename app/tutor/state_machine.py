@@ -132,9 +132,9 @@ def transition(
             return "GREETING", Action("re_greet", student_text=text)
         else:
             # ACK, CONCEPT_REQUEST, ANSWER, META_QUESTION, IDK, TROLL, GARBLED, UNCLEAR
-            # Student showed up to learn — proceed to TEACHING
-            return "TEACHING", Action("teach_concept", student_text=text,
-                reteach_count=0, extra={"approach": "fresh"})
+            # v10.1: Question-first mode — skip teaching monologue, go straight to question
+            return "WAITING_ANSWER", Action("read_question", student_text=text,
+                extra={"question_first": True})
 
     # ── CHECKING_UNDERSTANDING ────────────────────────────────────────────
 
@@ -356,13 +356,24 @@ def transition(
 
     if current_state == "COMFORT":
         resume = ctx.get("resume_state", "TEACHING")
-        if category == "ACK":
-            at = "read_question" if resume == "WAITING_ANSWER" else "teach_concept"
-            return resume, Action(at, student_text=text, extra={"post_comfort": True})
+        comfort_count = ctx.get("comfort_count", 0) + 1
+
+        # v10.1: Student wants to continue — accept learning-intent phrases
+        student_lower = text.lower()
+        learning_intent = any(phrase in student_lower for phrase in [
+            "teach me", "help me", "study", "learn", "question", "try",
+            "padh", "sikha", "sawaal", "shuru", "चलो", "पढ़", "सिखा"
+        ])
+
+        if category == "ACK" or learning_intent:
+            # v10.1: Go to question-first mode (skip teaching monologue)
+            return "WAITING_ANSWER", Action("read_question", student_text=text,
+                extra={"post_comfort": True, "question_first": True})
         if category == "STOP":
             return "SESSION_COMPLETE", Action("end_session", student_text=text)
-        # Still upset
-        return "COMFORT", Action("comfort_student", student_text=text)
+        # Still upset — pass comfort_count to builder
+        return "COMFORT", Action("comfort_student", student_text=text,
+            extra={"comfort_count": comfort_count})
 
     # ── DISPUTE_REPLAY ────────────────────────────────────────────────────
 

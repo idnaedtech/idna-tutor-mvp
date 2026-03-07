@@ -522,33 +522,34 @@ class TestFullSessionSimulation:
 
 
 class TestBugDGreetingNotDumpingLesson:
-    """Bug D fix: GREETING must not dump entire lesson in one turn."""
+    """v10.1: Question-first mode — GREETING goes directly to question."""
 
     def test_old_state_machine_greeting_ack_goes_to_teaching(self):
         """
-        Bug D: Old state machine must return TEACHING (not WAITING_ANSWER) for GREETING + ACK.
-        Before fix: GREETING + any → WAITING_ANSWER (skipped teaching entirely)
-        After fix: GREETING + ACK → TEACHING
+        v10.1: Question-first mode — GREETING + ACK goes to WAITING_ANSWER.
+        Old behavior: GREETING + ACK → TEACHING (teaching monologue)
+        New behavior: GREETING + ACK → WAITING_ANSWER (question first)
         """
         from app.tutor.state_machine import transition
 
         ctx = {"student_text": "haan"}
         new_state, action = transition("GREETING", "ACK", ctx)
 
-        # Bug D fix: GREETING + ACK must go to TEACHING first
-        assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
-        assert action.action_type == "teach_concept", f"Expected teach_concept, got {action.action_type}"
+        # v10.1: Question-first mode — skip teaching, go to question
+        assert new_state == "WAITING_ANSWER", f"Expected WAITING_ANSWER, got {new_state}"
+        assert action.action_type == "read_question", f"Expected read_question, got {action.action_type}"
 
     def test_old_state_machine_greeting_engagement_goes_to_teaching(self):
-        """P0 fix: Most inputs in GREETING should proceed to TEACHING (student is engaged)."""
+        """v10.1: Most inputs in GREETING proceed to WAITING_ANSWER (question-first)."""
         from app.tutor.state_machine import transition
 
-        # TROLL, CONCEPT_REQUEST, etc. = student showed up, proceed to teaching
+        # TROLL, CONCEPT_REQUEST, etc. = student showed up, proceed to question
         ctx = {"student_text": "kya?"}
         new_state, action = transition("GREETING", "TROLL", ctx)
 
-        assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
-        assert action.action_type == "teach_concept", f"Expected teach_concept, got {action.action_type}"
+        # v10.1: Question-first mode — skip teaching, go to question
+        assert new_state == "WAITING_ANSWER", f"Expected WAITING_ANSWER, got {new_state}"
+        assert action.action_type == "read_question", f"Expected read_question, got {action.action_type}"
 
     def test_old_state_machine_greeting_comfort_stays(self):
         """COMFORT in GREETING should stay in GREETING (offer support first)."""
@@ -615,15 +616,14 @@ class TestLanguagePersistenceE2E:
 class TestConfusionEscalationE2E:
     """
     End-to-end tests for confusion escalation (Bug C fix).
-    V10: Confusion handling is now embedded in DIDI_BASE persona, not a separate function.
+    v10.1: Simplified persona handles frustration generically.
     """
 
     def test_confusion_handling_in_v10_persona(self):
-        """V10: Confusion handling is embedded in DIDI_BASE persona."""
+        """v10.1: Persona handles frustration with warmth."""
         from app.tutor.instruction_builder import _sys
 
-        # V10: The persona itself describes how to handle confusion
-        # at various levels. Check that the persona mentions the break protocol.
+        # v10.1: Simplified persona handles frustration generically
         ctx = {
             "confusion_count": 4,
             "language_pref": "english",
@@ -633,9 +633,9 @@ class TestConfusionEscalationE2E:
             "state": "TEACHING",
         }
         result = _sys(session_context=ctx)
-        # V10: Persona should mention 4+ times confusion leads to break offer
-        assert "4 or more times" in result or "break" in result.lower(), \
-            "V10 persona should include confusion/break protocol"
+        # v10.1: Persona should mention handling frustration
+        assert "frustration" in result.lower() or "tired" in result.lower(), \
+            "v10.1 persona should handle frustration warmly"
 
     def test_confusion_count_in_prompt(self):
         """V10: confusion_count value should appear in the prompt."""
