@@ -35,6 +35,12 @@
   - [x] Removed instruction_builder_v9 import (kept file for reference)
   - [x] Live session test passed: state transitions, language auto-detect, V10 persona active
   - [x] verify.py 22/22, 323 tests passing
+- [x] P0 Debug logging for meta-question routing ✅ 2026-03-07
+  - [x] RAW INPUT logging at both endpoints
+  - [x] META-CHECK logging inside detect_meta_question()
+  - [x] META-ROUTE logging at routing decision point
+  - [x] RESPONSE TO FRONTEND logging for text display debugging
+  - [x] Production test: meta-questions NOW WORKING (4/4 variations pass)
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
