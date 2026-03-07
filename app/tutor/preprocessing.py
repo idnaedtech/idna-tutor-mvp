@@ -406,7 +406,8 @@ def check_language_auto_switch(
     Returns: (should_switch, new_language, updated_count)
 
     Rules:
-    - 2+ consecutive English messages while session is hindi/hinglish → auto-switch
+    - 2+ consecutive English messages while session is hindi/hinglish → auto-switch to english
+    - Hindi (Devanagari) detected while session is hinglish → switch to hindi (for Devanagari response)
     - Hindi/Hinglish message → reset English counter
     - Already matching → no action
     """
@@ -421,6 +422,11 @@ def check_language_auto_switch(
             return True, 'english', new_count
         else:
             return False, current_session_language, new_count
+
+    # v10.1 FIX Issue 5: Student speaking Hindi (Devanagari) but session is hinglish
+    # Switch to hindi so LLM responds in Devanagari script
+    if detected_language == 'hindi' and current_session_language == 'hinglish':
+        return True, 'hindi', 0
 
     # Any other case (e.g. Hindi while session is English) → reset counter
     return False, current_session_language, 0

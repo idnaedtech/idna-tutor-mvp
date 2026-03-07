@@ -449,6 +449,13 @@ class TestCheckLanguageAutoSwitch:
         assert lang == 'english'
         assert count == 3
 
+    def test_hindi_input_hinglish_session_switches_to_hindi(self):
+        """v10.1 FIX: Hindi (Devanagari) input during hinglish session switches to hindi."""
+        switch, lang, count = check_language_auto_switch('hindi', 'hinglish', 0)
+        assert switch is True
+        assert lang == 'hindi'
+        assert count == 0
+
 
 class TestLanguageAutoDetectionIntegration:
     """Test the full flow: detect language → check auto-switch."""

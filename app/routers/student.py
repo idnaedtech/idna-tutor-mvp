@@ -1571,13 +1571,17 @@ async def process_message_stream(
     async def stream_response():
         """SSE: stream audio chunks as sentences complete."""
         nonlocal new_state  # v7.5.2: Fix UnboundLocalError - new_state is modified in finally block
-        full_text = ""
+        full_text = ""  # TTS-cleaned text (for TTS processing)
+        display_text_raw = ""  # v10.1 FIX Issue 3: Original LLM text (for display with digits)
         sentence_index = 0
         cancelled = False
 
         # Fix 2: Wrap in try/finally to persist state on cancellation
         try:
             async for sentence in llm.generate_streaming(messages):
+                # v10.1 FIX Issue 3: Track original text for display (keeps digits as digits)
+                display_text_raw += " " + sentence
+
                 # Clean for TTS (v7.3.20: includes digits→words for English)
                 cleaned = prepare_for_tts(sentence, session)
 
@@ -1603,18 +1607,31 @@ async def process_message_stream(
 
             # v7.3.16 Fix 2: Run full enforce() on complete text at end
             full_text = full_text.strip()
+            display_text_raw = display_text_raw.strip()
+
+            # v10.1 FIX Issue 3: Enforce on display text (keeps digits)
             enforce_result = enforce(
+                display_text_raw, new_state,
+                verdict=verdict_str,
+                student_answer=student_text,
+                language=get_tts_language(session),
+                previous_response=prev_response,
+            )
+            display_text_final = enforce_result.text
+
+            # Also enforce TTS text for turn logging
+            enforce_result_tts = enforce(
                 full_text, new_state,
                 verdict=verdict_str,
                 student_answer=student_text,
                 language=get_tts_language(session),
                 previous_response=prev_response,
             )
-            full_text = enforce_result.text
+            full_text = enforce_result_tts.text
 
             # Send full text and metadata
-            # P0 FIX: Format text for readable display (line breaks between sentences)
-            display_text = format_for_display(full_text)
+            # v10.1 FIX Issue 3: Display shows original digits (4 × 4 = 16), TTS says "four into four equals sixteen"
+            display_text = format_for_display(display_text_final)
             # DEBUG: Text display (P0 debug 2026-03-07)
             logger.info(f"FRONTEND_SEND (stream): text_len={len(display_text)}, has_audio=True, "
                        f"preview=[{display_text[:80] if display_text else 'EMPTY'}...]")
