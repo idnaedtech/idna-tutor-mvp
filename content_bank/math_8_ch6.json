@@ -50,7 +50,8 @@
       "sq_make_perfect_square",
       "sq_root_long_division",
       "sq_root_decimals",
-      "sq_root_estimation"
+      "sq_root_estimation",
+      "cube_root_concept"
     ]
   },
 
@@ -1175,6 +1176,107 @@
         "visual_cue": "Draw a number line. Mark perfect squares. Show where the target number falls. The closer perfect square's root is our estimate.",
         "energy_moment": "Game: Main number bolunga, aap 5 second mein closest perfect square bolke estimate do. Ready? 150! (12²=144, 13²=169, closer to 144, so ≈12.2)"
       }
+    },
+    {
+      "concept_id": "math_8_ch6_cube_root_concept",
+      "ncert_section": "7.1",
+      "concept_name": "Cube Root Concept",
+      "concept_name_hi": "घनमूल की अवधारणा",
+      "definition": "The cube root of a number n is a value that, when multiplied by itself three times, gives n. Written as ∛n. For example, ∛8 = 2 because 2 × 2 × 2 = 8.",
+      "definition_tts": "Kisi number n ka cube root woh value hai jo apne aap ko teen baar multiply karne par n deta hai. Jaise 8 ka cube root 2 hai kyunki 2 guna 2 guna 2 barabar 8.",
+      "prerequisite_concepts": ["math_8_ch6_perfect_square"],
+      "examples": [
+        {
+          "level": "easy",
+          "problem": "Find the cube root of 64.",
+          "problem_tts": "64 ka cube root kya hai?",
+          "solution": "∛64 = 4, because 4 × 4 × 4 = 64.",
+          "solution_tts": "64 ka cube root 4 hai, kyunki 4 guna 4 guna 4 barabar 64.",
+          "indian_context": "Agar 4 laddoo ki 4 rows mein 4 layers rakho, toh 64 laddoo — 4 ka cube."
+        },
+        {
+          "level": "medium",
+          "problem": "Find the cube root of 729.",
+          "problem_tts": "729 ka cube root batao.",
+          "solution": "∛729 = 9, because 9 × 9 × 9 = 729.",
+          "solution_tts": "729 ka cube root 9 hai, kyunki 9 guna 9 guna 9 barabar 729.",
+          "indian_context": "Cricket mein 9 overs mein 9 runs per over mein 9 matches — total 729 runs!"
+        },
+        {
+          "level": "hard",
+          "problem": "Find the cube root of 1728.",
+          "problem_tts": "1728 ka cube root nikalo.",
+          "solution": "∛1728 = 12, because 12 × 12 × 12 = 1728.",
+          "solution_tts": "1728 ka cube root 12 hai, kyunki 12 guna 12 guna 12 barabar 1728.",
+          "indian_context": "12 inches ka 12 inches ka 12 inches — ek cubic foot mein 1728 cubic inches!"
+        }
+      ],
+      "misconceptions": [
+        {
+          "misconception": "Students confuse cube root with dividing by 3.",
+          "misconception_hi": "Bachche cube root ko 3 se divide karna samajhte hain.",
+          "correction": "Cube root means finding what number multiplied by itself 3 times gives the original. ∛27 = 3, not 27÷3 = 9.",
+          "correction_tts": "Cube root matlab woh number jo teen baar multiply karne par original de. 27 ka cube root 3 hai, 9 nahi."
+        },
+        {
+          "misconception": "Students give the cube (n³) instead of cube root (∛n).",
+          "misconception_hi": "Bachche cube root ki jagah cube de dete hain.",
+          "correction": "Cube root is the reverse of cubing. If asked ∛729, answer is 9, not 729.",
+          "correction_tts": "Cube root, cube ka ulta hai. Agar 729 ka cube root poocha, toh answer 9 hai, 729 nahi."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "cbrt_q1",
+          "level": "easy",
+          "question": "What is the cube root of 64?",
+          "question_tts": "64 ka cube root kitna hai?",
+          "expected_answer": "4",
+          "acceptable_alternates": ["four", "chaar", "चार"],
+          "answer_type": "numeric",
+          "hints": [
+            "Kaun sa number apne aap ko 3 baar multiply karne par 64 deta hai?",
+            "4 guna 4 kitna hota hai? Ab usko 4 se multiply karo."
+          ],
+          "full_solution_tts": "4 guna 4 barabar 16. 16 guna 4 barabar 64. Toh 64 ka cube root 4 hai."
+        },
+        {
+          "question_id": "cbrt_q2",
+          "level": "medium",
+          "question": "Find the cube root of 729.",
+          "question_tts": "729 ka cube root batao.",
+          "expected_answer": "9",
+          "acceptable_alternates": ["nine", "nau", "नौ"],
+          "answer_type": "numeric",
+          "hints": [
+            "9 ka cube kitna hota hai? Check karo.",
+            "9 guna 9 guna 9 calculate karo."
+          ],
+          "full_solution_tts": "9 guna 9 barabar 81. 81 guna 9 barabar 729. Toh 729 ka cube root 9 hai."
+        },
+        {
+          "question_id": "cbrt_q3",
+          "level": "hard",
+          "question": "Find the cube root of 512.",
+          "question_tts": "512 ka cube root nikalo.",
+          "expected_answer": "8",
+          "acceptable_alternates": ["eight", "aath", "आठ"],
+          "answer_type": "numeric",
+          "hints": [
+            "512 ke prime factors nikalo: 512 = 2⁹",
+            "2⁹ = (2³)³ = 8³. Toh cube root kya hua?"
+          ],
+          "full_solution_tts": "512 barabar 2 ka 9th power. 2 ka 9th power barabar 2 ke cube ka cube, matlab 8 ka cube. Toh 512 ka cube root 8 hai."
+        }
+      ],
+      "teaching_methodology": {
+        "hook": "Ek Rubik's cube mein 3 guna 3 guna 3 barabar 27 chhote cubes hote hain. Yeh hai cube ka magic!",
+        "analogy": "Cube root samjho jaise ek dabba kholna — agar dabba 125 cubic cm hai, toh har side 5 cm hogi kyunki 5 guna 5 guna 5 barabar 125.",
+        "vedic_trick": "Perfect cubes yaad rakho: 1, 8, 27, 64, 125, 216, 343, 512, 729, 1000. Inke cube roots 1 se 10 hain!",
+        "common_teacher_phrase": "Bachcho, cube root nikalne ke liye socho — kaunsa number 3 baar multiply karne par yeh number dega?",
+        "visual_cue": "Draw a cube. Show how 3×3×3 small cubes make 27. The side length (3) is the cube root of 27.",
+        "energy_moment": "Quick fire: Main cube bolunga, aap cube root! 8? (2!) 27? (3!) 64? (4!) 125? (5!)"
+      }
     }
   ],
 
@@ -1195,7 +1297,9 @@
     "description": "TTS rendering rules for Sarvam Bulbul v3",
     "rules": [
       "Replace √ with 'ka vargmool' or 'square root of'",
+      "Replace ∛ with 'ka cube root' or 'cube root of'",
       "Replace ² with 'ka square'",
+      "Replace ³ with 'ka cube'",
       "Replace × with 'guna'",
       "Replace ÷ with 'baata'",
       "Replace + with 'jod'",

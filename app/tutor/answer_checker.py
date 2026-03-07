@@ -261,6 +261,83 @@ def _extract_numeric_value(text: str) -> Optional[Fraction]:
 
 # ─── v7.3.28: Perfect Square Root Detection ──────────────────────────────────
 
+def _check_cube_root_reasoning(student_text: str, correct_answer: str, variants: list) -> Optional[Verdict]:
+    """
+    P0 Fix: Handle cube root reasoning patterns.
+
+    When student says "9 times 9 times 9 is 729" or "81 times 9 is 729",
+    they're proving that 9 is the cube root. Extract and verify.
+    """
+    student_lower = student_text.lower().strip()
+
+    # Parse correct answer as number
+    correct_num = _parse_number_word(correct_answer)
+    if correct_num is None:
+        return None
+
+    # Pattern 1: "X times X times X" = proving X is cube root
+    # e.g., "9 times 9 times 9 is 729" → 9 is the answer
+    triple_patterns = [
+        (r'(\d+)\s*(?:times|guna|×|x|into)\s*(\d+)\s*(?:times|guna|×|x|into)\s*(\d+)', 'digits'),
+        (r'(\w+)\s+(?:times|guna)\s+(\w+)\s+(?:times|guna)\s+(\w+)', 'words'),
+    ]
+
+    for pattern, ptype in triple_patterns:
+        match = re.search(pattern, student_lower)
+        if match:
+            if ptype == 'digits':
+                n1, n2, n3 = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            else:
+                n1 = _parse_number_word(match.group(1))
+                n2 = _parse_number_word(match.group(2))
+                n3 = _parse_number_word(match.group(3))
+                if None in (n1, n2, n3):
+                    continue
+
+            # All three numbers should be the same (proving cube)
+            if n1 == n2 == n3 and n1 == correct_num:
+                return Verdict(
+                    correct=True,
+                    verdict="CORRECT",
+                    student_parsed=str(n1),
+                    correct_display=correct_answer,
+                    diagnostic=f"Student correctly showed {n1} × {n1} × {n1} proves the cube root"
+                )
+
+    # Pattern 2: "X² times X" or "X times X²" = proving cube root
+    # e.g., "81 times 9 is 729" where 81 = 9² → proves 9 is cube root
+    square_times_patterns = [
+        r'(\d+)\s*(?:times|guna|×|x|into)\s*(\d+)',
+    ]
+
+    for pattern in square_times_patterns:
+        match = re.search(pattern, student_lower)
+        if match:
+            n1, n2 = int(match.group(1)), int(match.group(2))
+
+            # Check if n1 = correct² and n2 = correct (81 × 9 where correct=9)
+            if n1 == correct_num * correct_num and n2 == correct_num:
+                return Verdict(
+                    correct=True,
+                    verdict="CORRECT",
+                    student_parsed=str(n2),
+                    correct_display=correct_answer,
+                    diagnostic=f"Student correctly showed {n1} × {n2} = {n1*n2} proves cube root is {n2}"
+                )
+
+            # Check if n2 = correct² and n1 = correct (9 × 81 where correct=9)
+            if n2 == correct_num * correct_num and n1 == correct_num:
+                return Verdict(
+                    correct=True,
+                    verdict="CORRECT",
+                    student_parsed=str(n1),
+                    correct_display=correct_answer,
+                    diagnostic=f"Student correctly showed {n1} × {n2} = {n1*n2} proves cube root is {n1}"
+                )
+
+    return None
+
+
 def _check_perfect_square_root(student_text: str, correct_answer: str, variants: list) -> Optional[Verdict]:
     """
     v7.3.28 Fix 2: For "Is X a perfect square?" questions, accept square root as answer.
@@ -365,6 +442,12 @@ def check_math_answer(
     sqrt_verdict = _check_perfect_square_root(student_text, correct_answer, variants)
     if sqrt_verdict is not None:
         return sqrt_verdict
+
+    # P0 Fix: Check for cube root reasoning patterns
+    # e.g., "81 times 9 is 729" proves 9 is cube root of 729
+    cbrt_verdict = _check_cube_root_reasoning(student_text, correct_answer, variants)
+    if cbrt_verdict is not None:
+        return cbrt_verdict
 
     # Step 1: Exact string match against correct + variants
     all_accepted = [str(correct_answer)] + [str(v) for v in variants]
