@@ -415,6 +415,9 @@ async def process_message(
             stt_latency=stt_latency,
         )
 
+    # DEBUG: RAW INPUT logging (P0 debug)
+    logger.info(f"RAW INPUT (non-stream): [{student_text}]")
+
     # ── Step 1.5: Preprocessing (v8.1.0 P0 fixes) ─────────────────────────
     # Order: meta-question (bypass LLM) → language switch → confusion → LLM
     chapter_name = CHAPTER_NAMES.get(session.chapter or "", session.chapter or "")
@@ -431,6 +434,9 @@ async def process_message(
         current_skill=current_skill,
         language_pref=session.language_pref or "hinglish",
     )
+
+    # DEBUG: META-ROUTE logging (P0 debug)
+    logger.info(f"META-ROUTE (non-stream): detected={preprocess_result.meta_question_type}, bypass_llm={preprocess_result.bypass_llm}, template=[{preprocess_result.template_response[:50] if preprocess_result.template_response else 'None'}]")
 
     # Meta-question: bypass LLM entirely
     if preprocess_result.bypass_llm:
@@ -1088,6 +1094,9 @@ async def process_message_stream(
 
         return StreamingResponse(garbled_stream(), media_type="text/event-stream")
 
+    # DEBUG: RAW INPUT logging (P0 debug)
+    logger.info(f"RAW INPUT (stream): [{student_text}]")
+
     # ── Preprocessing (v8.1.0 P0 fixes) ──
     chapter_name = CHAPTER_NAMES.get(session.chapter or "", session.chapter or "")
     current_skill = ""
@@ -1104,9 +1113,15 @@ async def process_message_stream(
         language_pref=session.language_pref or "hinglish",
     )
 
+    # DEBUG: META-ROUTE logging (P0 debug)
+    logger.info(f"META-ROUTE (stream): detected={preprocess_result.meta_question_type}, bypass_llm={preprocess_result.bypass_llm}, template=[{preprocess_result.template_response[:50] if preprocess_result.template_response else 'None'}]")
+
     # Meta-question: bypass LLM entirely
     if preprocess_result.bypass_llm:
         logger.info(f"v8.1.0 (stream): Bypassing LLM for meta-question: {preprocess_result.meta_question_type}")
+        # DEBUG: Log response to frontend (P0 debug)
+        logger.info(f"RESPONSE TO FRONTEND (stream-meta): text=[{preprocess_result.template_response[:100] if preprocess_result.template_response else 'EMPTY'}], len={len(preprocess_result.template_response) if preprocess_result.template_response else 0}")
+
         tts = get_tts()
         tts_result = tts.synthesize(preprocess_result.template_response, get_tts_language(session))
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
@@ -1719,6 +1734,9 @@ def _quick_response(
     student_text: str = "", stt_latency: int = 0,
 ) -> MessageResponse:
     """Quick response without full pipeline (for low confidence, empty input)."""
+    # DEBUG: Log response to frontend (P0 debug)
+    logger.info(f"RESPONSE TO FRONTEND (quick): text=[{text[:100] if text else 'EMPTY'}], len={len(text) if text else 0}")
+
     tts = get_tts()
     try:
         tts_result = tts.synthesize(prepare_for_tts(text, session), get_tts_language(session))

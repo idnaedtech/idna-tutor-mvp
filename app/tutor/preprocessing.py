@@ -260,11 +260,17 @@ def detect_meta_question(text: str) -> Optional[str]:
     """
     text_lower = text.lower().strip()
 
+    # DEBUG: Log all pattern matching attempts
+    logger.info(f"META-CHECK: input=[{text}], text_lower=[{text_lower}]")
+
     for category, pattern in _META_PATTERNS_COMPILED.items():
-        if pattern.search(text_lower):
-            logger.info(f"Meta-question detected: {category} (text: '{text[:50]}')")
+        match = pattern.search(text_lower)
+        logger.info(f"META-CHECK: category={category}, pattern_matched={bool(match)}")
+        if match:
+            logger.info(f"META-CHECK: MATCH FOUND! category={category}, matched_text=[{match.group()}]")
             return category
 
+    logger.info(f"META-CHECK: NO MATCH for input=[{text[:50]}]")
     return None
 
 
