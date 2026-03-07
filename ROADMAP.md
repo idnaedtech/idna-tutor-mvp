@@ -2,7 +2,7 @@
 
 > **Read by Claude Code at every session start (via CLAUDE.md protocol).**
 > **Updated by:** Claude Code (task status) + CEO (priorities/scope)
-> **Last updated:** 2026-03-06
+> **Last updated:** 2026-03-07
 
 ---
 
@@ -30,6 +30,11 @@
   - [x] Integrated in BOTH streaming + non-streaming endpoints
   - [x] consecutive_english_count column + migration
   - [x] 23 new tests (323 total), verify.py 22/22
+- [x] P0 Remove ib_v9 path — both endpoints use build_prompt() ✅ 2026-03-07
+  - [x] Non-streaming endpoint (line 915) now uses build_prompt() from instruction_builder.py
+  - [x] Removed instruction_builder_v9 import (kept file for reference)
+  - [x] Live session test passed: state transitions, language auto-detect, V10 persona active
+  - [x] verify.py 22/22, 323 tests passing
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
