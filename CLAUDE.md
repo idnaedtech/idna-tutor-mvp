@@ -66,19 +66,19 @@ NON-STREAMING (SECONDARY — text input fallback):
   /api/student/session/message
   └── Same preprocessing
   └── Same classifier
-  └── v9 handlers.handle_state() → _llm_instruction
-  └── v9 instruction_builder_v9.build() → LLM messages
+  └── v7.3 state_machine.transition() → Action object
+  └── v7.3 instruction_builder.build_prompt() → LLM messages  ← UNIFIED (2026-03-07)
   └── gpt-4.1 (sync) → enforcer checks → TTS sync → JSON
 ```
 
-**Both endpoints also run the v8 FSM (`get_transition()`) for side effects only** (language storage, empathy tracking). The v8 FSM does NOT control routing — it's a logger.
+**Both endpoints now use the same instruction builder** (`build_prompt()` from `instruction_builder.py`). The ib_v9 path was removed in v10.0.3. Both endpoints also run the v8 FSM (`get_transition()`) for side effects only (language storage, empathy tracking).
 
 ### What This Means for You
 
-- **If fixing voice/teaching behavior:** Edit `app/tutor/instruction_builder.py` (v7.3)
-- **If fixing text input behavior:** Edit `app/tutor/instruction_builder_v9.py` (v9)
+- **If fixing teaching behavior:** Edit `app/tutor/instruction_builder.py` (applies to BOTH endpoints)
 - **If fixing state transitions:** Edit `app/tutor/state_machine.py` (v7.3, both endpoints)
-- **Do NOT edit** `app/fsm/handlers.py` or `app/fsm/transitions.py` for teaching behavior — they are side-effect-only for the streaming pipeline
+- **Do NOT edit** `app/fsm/handlers.py` or `app/fsm/transitions.py` for teaching behavior — they are side-effect-only
+- **Do NOT edit** `app/tutor/instruction_builder_v9.py` — kept for reference but no longer called
 
 ---
 
