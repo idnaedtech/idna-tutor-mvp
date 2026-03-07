@@ -39,13 +39,14 @@ from openai import AsyncOpenAI
 # ─── Punctuation Normalization ───────────────────────────────────────────────
 # P0 FIX: STT adds punctuation (Hindi danda ।, commas, periods) that breaks
 # fast-path matching. Strip before comparison.
-_PUNCT_RE = re.compile(r'[.,!?;:।॰\-\'"()]+')
+# P0 FIX 2026-03-07: Keep apostrophes for English contractions (don't, didn't, etc.)
+_PUNCT_RE = re.compile(r'[.,!?;:।॰\-"()]+')  # Removed ' from punctuation list
 
 
 def _normalize(text: str) -> str:
-    """Normalize text for fast-path matching: lowercase, strip punctuation, collapse spaces."""
+    """Normalize text for fast-path matching: lowercase, strip punctuation (keep apostrophes), collapse spaces."""
     t = text.strip().lower()
-    t = _PUNCT_RE.sub(' ', t)       # replace punctuation with space
+    t = _PUNCT_RE.sub(' ', t)       # replace punctuation with space (keeps apostrophes)
     t = re.sub(r'\s+', ' ', t)      # collapse multiple spaces
     return t.strip()
 
@@ -89,9 +90,9 @@ FAST_ACK = {
 }
 
 FAST_IDK = {
-    # English
+    # English - with apostrophes (preserved by _normalize)
     "nahi", "no", "don't know", "idk", "don't get it",
-    "i don't understand", "not understanding", "don't understand",
+    "i don't understand", "don't understand", "didn't understand",
     "what", "huh", "what do you mean",
     # Hindi - Devanagari
     "नहीं", "नहीं पता", "नहीं समझा", "नहीं समझी",

@@ -748,6 +748,11 @@ async def process_message(
             )
             action.verdict = verdict_obj
 
+            # DEBUG: Answer evaluation routing (P0 debug 2026-03-07)
+            logger.info(f"ANSWER_EVAL: student=[{student_text[:50]}], correct={verdict_obj.correct}, "
+                       f"state_before={state_before}, hint_level={session.current_hint_level}, "
+                       f"new_state={new_state}, action={action.action_type}")
+
             # Update session counters
             session.questions_attempted += 1
             if verdict_obj.correct:
@@ -1448,6 +1453,11 @@ async def process_message_stream(
             )
             action.verdict = verdict
 
+            # DEBUG: Answer evaluation routing (P0 debug 2026-03-07)
+            logger.info(f"ANSWER_EVAL (stream): student=[{student_text[:50]}], correct={verdict.correct}, "
+                       f"state_before={state_before}, hint_level={session.current_hint_level}, "
+                       f"new_state={new_state}, action={action.action_type}")
+
             # v7.3.26: Update session counters (same as non-streaming)
             session.questions_attempted += 1
             if verdict.correct:
@@ -1600,6 +1610,9 @@ async def process_message_stream(
             # Send full text and metadata
             # P0 FIX: Format text for readable display (line breaks between sentences)
             display_text = format_for_display(full_text)
+            # DEBUG: Text display (P0 debug 2026-03-07)
+            logger.info(f"FRONTEND_SEND (stream): text_len={len(display_text)}, has_audio=True, "
+                       f"preview=[{display_text[:80] if display_text else 'EMPTY'}...]")
             yield f"data: {json.dumps({'type': 'text', 'content': display_text})}\n\n"
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"

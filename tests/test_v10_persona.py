@@ -26,7 +26,8 @@ class TestV10PersonaContent:
         assert "ANSWER INCORRECT" not in prompt
         assert "No praise" not in prompt
         assert "patient" in prompt.lower()
-        assert "echo back" in prompt.lower()
+        # v10.1: Changed from "echo back" to "respond naturally" - P0 fix 2026-03-07
+        assert "respond naturally" in prompt.lower()
 
     def test_new_prompt_has_exam_awareness(self):
         """v10: Prompt should mention exam patterns."""

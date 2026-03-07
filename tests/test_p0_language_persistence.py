@@ -167,13 +167,14 @@ class TestConfusionEscalation:
         prompt = _sys(session_context=ctx)
         assert "patient" in prompt.lower() or "warm" in prompt.lower()
 
-    def test_prompt_has_echo_back_instruction(self):
-        """v10: Persona should instruct to echo back student's words."""
+    def test_prompt_has_natural_response_instruction(self):
+        """v10.1: Persona should instruct to respond naturally without echoing."""
         ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
                "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
                "confusion_count": 0, "state": "TEACHING"}
         prompt = _sys(session_context=ctx)
-        assert "echo back" in prompt.lower()
+        # Changed from "echo back" to "respond naturally" - P0 fix 2026-03-07
+        assert "respond naturally" in prompt.lower()
 
 
 class TestLanguagePersistenceE2E:

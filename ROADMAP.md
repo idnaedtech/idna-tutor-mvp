@@ -41,6 +41,12 @@
   - [x] META-ROUTE logging at routing decision point
   - [x] RESPONSE TO FRONTEND logging for text display debugging
   - [x] Production test: meta-questions NOW WORKING (4/4 variations pass)
+- [x] P0 Pipeline audit fixes (audit-driven, evidence-based) ✅ 2026-03-07
+  - [x] Fix 1: Remove "ALWAYS ECHO BACK" instruction — Didi no longer parrots "You said..."
+  - [x] Fix 2: Preserve apostrophes in _normalize() — FAST_IDK matches "didn't understand"
+  - [x] Fix 3: Add ANSWER_EVAL debug logging — routing after answer evaluation
+  - [x] Fix 4: Add FRONTEND_SEND debug logging — text display troubleshooting
+  - [x] verify.py 22/22, 323 tests passing
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
