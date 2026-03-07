@@ -57,6 +57,15 @@
   - [x] v10.1.1: Hindi (Devanagari) input auto-switches hinglish→hindi
   - [x] Tests updated: 327 passing, verify.py 22/22
   - [x] **Deployed v10.1.1 to Railway**
+- [x] v10.2.0 Definitive Fix — 6 ship-blocking bugs ✅ 2026-03-07
+  - [x] Bug 1 (Answer Loop): Classifier detects answers in HINT states + number words + true/false
+  - [x] Bug 2 (Text Not Rendering): Text shows FIRST before audio, never gated on playback
+  - [x] Bug 3 (Garbled Hindi): Strengthened matra requirement in LANG_INSTRUCTIONS + diagnostic logging
+  - [x] Bug 4 (Wrong Chapter): Updated to "Squares, Cubes and their Roots"
+  - [x] Bug 5 (Apostrophe): Added no-apostrophe variants to FAST_IDK
+  - [x] Bug 6 (Numbers Display): Verified v10.1.1 fix in place
+  - [x] 336 tests passing, verify.py 22/22
+  - [x] **Deployed v10.2.0 to Railway**
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
