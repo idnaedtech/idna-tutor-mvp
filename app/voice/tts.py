@@ -16,7 +16,6 @@ from typing import Optional, Protocol
 import json as json_mod
 
 import httpx
-import websockets
 
 from app.config import (
     SARVAM_API_KEY, SARVAM_TTS_URL, TTS_MODEL,
@@ -335,6 +334,7 @@ class SarvamBulbulTTS:
         all_chunks = bytearray()
 
         try:
+            import websockets
             ws_url = f"{SARVAM_TTS_STREAM_URL}?api_subscription_key={SARVAM_API_KEY}"
             async with websockets.connect(ws_url, close_timeout=5) as ws:
                 payload = {
