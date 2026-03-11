@@ -259,6 +259,12 @@ def transition(
                 "teach_concept", question_id=q_id,
                 student_text=text, extra={"return_to": "WAITING_ANSWER"},
             )
+        if category == "META_QUESTION":
+            # v10.3.0: Answer student's question directly, then return to waiting
+            return "WAITING_ANSWER", Action(
+                "answer_meta_question", question_id=q_id, student_text=text,
+                extra={"return_to": "WAITING_ANSWER"},
+            )
         if category == "DISPUTE":
             return "DISPUTE_REPLAY", Action(
                 "replay_heard", student_text=text,
@@ -288,6 +294,12 @@ def transition(
                 "teach_concept", question_id=q_id, student_text=text,
                 extra={"return_to": "HINT_1"},
             )
+        if category == "META_QUESTION":
+            # v10.3.0: Answer student's question, stay in HINT_1
+            return "HINT_1", Action(
+                "answer_meta_question", question_id=q_id, student_text=text,
+                extra={"return_to": "HINT_1"},
+            )
         return "HINT_1", Action(
             "give_hint", hint_level=1, question_id=q_id,
             student_text=text, extra={"nudge": True},
@@ -309,6 +321,12 @@ def transition(
             # Student asking for explanation - teach, then return to question
             return "TEACHING", Action(
                 "teach_concept", question_id=q_id, student_text=text,
+                extra={"return_to": "HINT_2"},
+            )
+        if category == "META_QUESTION":
+            # v10.3.0: Answer student's question, stay in HINT_2
+            return "HINT_2", Action(
+                "answer_meta_question", question_id=q_id, student_text=text,
                 extra={"return_to": "HINT_2"},
             )
         return "HINT_2", Action(

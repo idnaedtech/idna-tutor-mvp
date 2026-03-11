@@ -789,6 +789,7 @@ async def process_message(
             if session.current_question_id and session.current_question_id not in asked_ids:
                 asked_ids.append(session.current_question_id)
             # Pick new question
+            logger.info(f"PICK_NEXT: current_q={session.current_question_id}, asked_ids={asked_ids}")
             q = memory.pick_next_question(
                 db, session.student_id,
                 session.subject or "math",
@@ -798,14 +799,15 @@ async def process_message(
             )
             if q:
                 question_data = q
+                logger.info(f"PICK_NEXT: selected new q={q['id']} (was {session.current_question_id})")
                 session.current_question_id = q["id"]
                 session.current_hint_level = 0
             else:
                 # No more questions → end session
                 new_state = "SESSION_COMPLETE"
                 action = Action("end_session", student_text=student_text)
-    elif action.action_type in ("give_hint", "show_solution", "teach_concept"):
-        # Load question for hints, solutions, and teaching (to get skill info)
+    elif action.action_type in ("give_hint", "show_solution", "teach_concept", "answer_meta_question"):
+        # Load question for hints, solutions, teaching, and meta-questions (to get skill info)
         if session.current_question_id:
             question_data = _load_question(db, session.current_question_id)
 
@@ -1489,6 +1491,7 @@ async def process_message_stream(
             if session.current_question_id and session.current_question_id not in asked_ids:
                 asked_ids.append(session.current_question_id)
             # Pick new question
+            logger.info(f"PICK_NEXT (stream): current_q={session.current_question_id}, asked_ids={asked_ids}")
             q = memory.pick_next_question(
                 db, session.student_id,
                 session.subject or "math",
@@ -1498,14 +1501,15 @@ async def process_message_stream(
             )
             if q:
                 question_data = q
+                logger.info(f"PICK_NEXT (stream): selected new q={q['id']} (was {session.current_question_id})")
                 session.current_question_id = q["id"]
                 session.current_hint_level = 0
             else:
                 # No more questions → end session
                 new_state = "SESSION_COMPLETE"
                 action = Action("end_session", student_text=student_text)
-    elif action.action_type in ("give_hint", "show_solution", "teach_concept"):
-        # Load question for hints, solutions, and teaching
+    elif action.action_type in ("give_hint", "show_solution", "teach_concept", "answer_meta_question"):
+        # Load question for hints, solutions, teaching, and meta-questions
         if session.current_question_id:
             question_data = _load_question(db, session.current_question_id)
 

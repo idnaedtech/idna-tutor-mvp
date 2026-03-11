@@ -131,5 +131,135 @@ class TestV10WarmIdentity:
         assert "frustration" in prompt.lower() or "tired" in prompt.lower()
 
 
+class TestV103Acknowledgment:
+    """v10.3.0: Tests for interaction quality — acknowledgment rules."""
+
+    def test_didi_base_has_acknowledgment_rules(self):
+        """v10.3.0: DIDI_BASE must contain acknowledgment rules."""
+        ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8}
+        prompt = _sys(session_context=ctx)
+        assert "ACKNOWLEDGMENT RULES" in prompt
+        assert "ALWAYS acknowledge" in prompt
+        assert "NEVER ignore" in prompt
+
+    def test_didi_base_has_already_answered_rule(self):
+        """v10.3.0: DIDI_BASE must handle 'I already answered' complaints."""
+        ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8}
+        prompt = _sys(session_context=ctx)
+        assert "I already answered" in prompt or "I just said that" in prompt
+
+    def test_didi_base_has_adaptive_quantity_rule(self):
+        """v10.3.0: DIDI_BASE must handle 'too many' complaints."""
+        ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8}
+        prompt = _sys(session_context=ctx)
+        assert "too many" in prompt.lower()
+        assert "reduce scope" in prompt.lower() or "let's just do" in prompt.lower()
+
+    def test_evaluate_correct_acknowledges_answer(self):
+        """v10.3.0: Correct answer prompt must reference student's specific answer."""
+        from app.tutor.instruction_builder import build_prompt
+        from app.tutor.state_machine import Action
+        from app.tutor.answer_checker import Verdict
+        v = Verdict(correct=True, student_parsed="625", correct_display="625",
+                    verdict="CORRECT", diagnostic="Exact match")
+        action = Action("evaluate_answer", verdict=v, student_text="625")
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8}
+        msgs = build_prompt(action, ctx, {"target_skill": "perfect_square_identification"})
+        user_msg = msgs[-1]["content"]
+        assert "625" in user_msg
+        assert "CORRECT" in user_msg
+        assert "that's right" in user_msg.lower() or "correct" in user_msg.lower()
+
+    def test_evaluate_wrong_acknowledges_answer(self):
+        """v10.3.0: Wrong answer prompt must reference student's specific answer."""
+        from app.tutor.instruction_builder import build_prompt
+        from app.tutor.state_machine import Action
+        from app.tutor.answer_checker import Verdict
+        v = Verdict(correct=False, student_parsed="600", correct_display="625",
+                    verdict="INCORRECT", diagnostic="Close but wrong")
+        action = Action("evaluate_answer", verdict=v, student_text="600")
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8}
+        msgs = build_prompt(action, ctx, {"target_skill": "perfect_square_identification"})
+        user_msg = msgs[-1]["content"]
+        assert "600" in user_msg
+        assert "not quite" in user_msg.lower()
+        assert "Do NOT reveal" in user_msg
+
+    def test_hint_acknowledges_struggle(self):
+        """v10.3.0: Hint prompt must acknowledge student's IDK before giving hint."""
+        from app.tutor.instruction_builder import _build_give_hint
+        from app.tutor.state_machine import Action
+        action = Action("give_hint", hint_level=1, student_text="I don't know")
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube"}
+        q = {"target_skill": "perfect_square_identification", "hints": ["Think about what number times itself gives this."],
+             "question_id": "q1", "id": "q1"}
+        msgs = _build_give_hint(action, ctx, q, None, None)
+        user_msg = msgs[-1]["content"]
+        assert "okay" in user_msg.lower() or "help" in user_msg.lower()
+
+    def test_pick_next_question_explicit_new_question(self):
+        """v10.3.0: pick_next_question prompt must emphasize this is a NEW question."""
+        from app.tutor.instruction_builder import _build_pick_next_question
+        from app.tutor.state_machine import Action
+        action = Action("pick_next_question", student_text="625")
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube"}
+        q = {"target_skill": "cube_identification", "question_voice": "What is the cube of 5?",
+             "id": "q2", "question_id": "q2"}
+        msgs = _build_pick_next_question(action, ctx, q, None, None)
+        user_msg = msgs[-1]["content"]
+        assert "NEXT question" in user_msg or "NEW question" in user_msg
+
+
+class TestV103MetaQuestionInHintStates:
+    """v10.3.0: Meta-questions must be answered in HINT and WAITING_ANSWER states."""
+
+    def test_meta_question_in_waiting_answer(self):
+        """v10.3.0: META_QUESTION in WAITING_ANSWER should answer, stay in WAITING_ANSWER."""
+        from app.tutor.state_machine import transition
+        ctx = {"student_text": "which chapter are we doing?", "current_question_id": "q1",
+               "current_hint_level": 0, "current_reteach_count": 0, "questions_attempted": 1}
+        new_state, action = transition("WAITING_ANSWER", "META_QUESTION", ctx)
+        assert new_state == "WAITING_ANSWER"
+        assert action.action_type == "answer_meta_question"
+        assert action.extra.get("return_to") == "WAITING_ANSWER"
+
+    def test_meta_question_in_hint_1(self):
+        """v10.3.0: META_QUESTION in HINT_1 should answer, stay in HINT_1."""
+        from app.tutor.state_machine import transition
+        ctx = {"student_text": "is my answer correct?", "current_question_id": "q1",
+               "current_hint_level": 1, "current_reteach_count": 0, "questions_attempted": 1}
+        new_state, action = transition("HINT_1", "META_QUESTION", ctx)
+        assert new_state == "HINT_1"
+        assert action.action_type == "answer_meta_question"
+        assert action.extra.get("return_to") == "HINT_1"
+
+    def test_meta_question_in_hint_2(self):
+        """v10.3.0: META_QUESTION in HINT_2 should answer, stay in HINT_2."""
+        from app.tutor.state_machine import transition
+        ctx = {"student_text": "what do you mean?", "current_question_id": "q1",
+               "current_hint_level": 2, "current_reteach_count": 0, "questions_attempted": 1}
+        new_state, action = transition("HINT_2", "META_QUESTION", ctx)
+        assert new_state == "HINT_2"
+        assert action.action_type == "answer_meta_question"
+        assert action.extra.get("return_to") == "HINT_2"
+
+    def test_meta_question_builder_steers_back(self):
+        """v10.3.0: Meta-question from hint state should steer back to question."""
+        from app.tutor.instruction_builder import _build_answer_meta_question
+        from app.tutor.state_machine import Action
+        action = Action("answer_meta_question", student_text="which chapter?",
+                       extra={"return_to": "HINT_1"})
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8}
+        msgs = _build_answer_meta_question(action, ctx, {"target_skill": "perfect_square_identification"}, None, None)
+        user_msg = msgs[-1]["content"]
+        assert "back to our question" in user_msg.lower() or "wapas" in user_msg.lower()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

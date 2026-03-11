@@ -67,6 +67,13 @@
   - [x] 336 tests passing, verify.py 22/22
   - [x] Smoke test 8/8 passed
   - [x] **Deployed v10.2.0 to Railway**
+- [x] v10.3.0 Interaction Quality — acknowledge student, fix question loop, handle meta-questions ✅ 2026-03-11
+  - [x] Change 1: DIDI_BASE acknowledgment rules (11-15) — always acknowledge before responding
+  - [x] Change 2: PICK_NEXT debug logging — trace question selection in both endpoints
+  - [x] Change 3: Answer evaluation prompts — explicit acknowledgment of student's specific answer
+  - [x] Change 4: META_QUESTION handling in WAITING_ANSWER, HINT_1, HINT_2 states
+  - [x] Change 5: Adaptive quantity — "too many" triggers scope reduction, not comfort
+  - [x] 347 tests passing (11 new), verify.py 19/22 (3 = server not running)
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 

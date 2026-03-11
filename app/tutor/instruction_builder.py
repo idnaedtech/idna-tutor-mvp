@@ -39,6 +39,18 @@ RULES:
 
 You are warm, patient, and encouraging. You believe every student can learn math.
 
+ACKNOWLEDGMENT RULES (MOST IMPORTANT):
+11. ALWAYS acknowledge what the student just said BEFORE your response.
+    - If they gave an answer: repeat their answer and say if it's right or wrong. "625 — perfect!" or "600 — not quite, let me help."
+    - If they asked a question: answer it directly first. "Good question — we're studying Squares and Cubes."
+    - If they said they don't understand: validate them. "That's okay, this is tricky. Let me try differently."
+    - If they expressed a feeling: name the feeling. "Sounds like you had a rough day."
+    - If they made a complaint: address the specific complaint. "You're right, that was too many at once. Let's simplify."
+12. NEVER ignore what the student said. NEVER respond as if they said nothing.
+13. If the student says "I already answered" or "I just said that" — apologize briefly and acknowledge their answer: "Sorry about that! You said 625, and that's correct. Let's move on."
+14. If you're not sure what they meant, ask: "I want to make sure I understood — did you mean 625?"
+15. When the student says "too many", "bahut saare", "I can't remember all" — DO NOT offer a break. Instead, reduce scope: "Okay, let's just do the first 5" or "Let's start with an easy one." Adapt the difficulty DOWN, don't give up.
+
 MATH FACTS: ONLY use facts from content provided below. NEVER calculate from memory. Wrong math destroys trust.
 
 {language_instruction}
@@ -431,19 +443,25 @@ def _build_evaluate_answer(a, ctx, q, sk, prev):
         return [
             {"role": "system", "content": _sys(session_context=ctx, question_data=q)},
             {"role": "user", "content":
-             f'Student said: "{v.student_parsed or a.student_text}". '
-             f'The answer is {v.correct_display} and they got it RIGHT. '
-             f'Echo back what they said, praise specifically, then move forward.'}
+             f'The student answered: "{v.student_parsed or a.student_text}". '
+             f'The correct answer is: "{v.correct_display}". '
+             f'Their answer is CORRECT. '
+             f'Acknowledge their specific answer with brief praise: '
+             f'"{v.student_parsed or a.student_text} — that\'s right!" or "Correct, {v.correct_display}!" '
+             f'Then say "Let\'s try the next one." '
+             f'2 sentences maximum.'}
         ]
     else:
         return [
             {"role": "system", "content": _sys(session_context=ctx, question_data=q)},
             {"role": "user", "content":
-             f'Student said: "{v.student_parsed or a.student_text}". '
-             f'The correct answer is {v.correct_display}. '
-             f'Diagnostic: {v.diagnostic}. '
-             f'Guide them with an analogy. Do NOT reveal the answer yet. '
-             f'Let them discover it.'}
+             f'The student answered: "{v.student_parsed or a.student_text}". '
+             f'The correct answer is: "{v.correct_display}". '
+             f'Diagnostic: "{v.diagnostic}". '
+             f'First acknowledge their answer: "{v.student_parsed or a.student_text} — not quite." '
+             f'Then give ONE specific hint about what went wrong. '
+             f'Do NOT reveal the correct answer. '
+             f'2 sentences maximum.'}
         ]
 
 
@@ -483,7 +501,9 @@ def _build_give_hint(a, ctx, q, sk, prev):
     # v7.3.24: Use appropriate language instruction
     lang_instruction = "Say naturally in English." if use_english else "Say naturally in Hinglish."
     # V10: DIDI_NO_PRAISE deleted — persona handles hint tone naturally
-    return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
+    # v10.3.0: Acknowledge student's struggle before giving hint
+    ack = '"That\'s okay, let me help." ' if use_english else '"Koi baat nahi, hint deti hoon." '
+    return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Start with {ack} Then give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
 
 
 def _build_show_solution(a, ctx, q, sk, prev):
@@ -518,9 +538,8 @@ def _build_pick_next_question(a, ctx, q, sk, prev):
             return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'After solution, transition to next question. Say briefly "{transition}" Then read: "{q["question_voice"]}". {q_lang}'}]
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'After solution, say briefly: "{transition}"'}]
     if q:
-        # Include praise for correct answer + the next question
-        # V10: DIDI_PRAISE_OK deleted — persona handles praise naturally
-        return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student answered correctly. Brief praise (1 sentence), then read next question: "{q["question_voice"]}". {q_lang}'}]
+        # v10.3.0: Explicit acknowledgment of correct answer before moving to next question
+        return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student answered the previous question correctly. Say brief praise like "Well done!" (1 sentence), then read the NEXT question: "{q["question_voice"]}". {q_lang} This is a NEW question — do NOT re-ask the old one.'}]
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'No more questions available. Say: "{done_msg}"'}]
 
 
@@ -610,24 +629,35 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
     ch_key = ctx.get("chapter", "")
     # v7.3.28 Fix 1: Use human-readable chapter name
     ch = CHAPTER_NAMES.get(ch_key, ch_key.replace("_", " ").title())
+    return_to = a.extra.get("return_to", "")
 
     # Get teaching content for more examples
     from app.content.seed_questions import SKILL_TEACHING
     skill_key = q.get("target_skill", "") if q else ""
     lesson = SKILL_TEACHING.get(skill_key, {})
 
+    # v10.3.0: After answering, steer back to the question if in answer/hint states
+    if return_to in ("WAITING_ANSWER", "HINT_1", "HINT_2"):
+        steer_back = ' Then gently steer back: "Now, back to our question..."' if use_english else ' Phir wapas laao: "Ab, apne sawaal pe wapas aate hain..."'
+    else:
+        steer_back = ""
+
     # v7.3.28 Fix 1: Check chapter/topic FIRST since meta_type is always "more_examples"
-    if "chapter" in a.student_text.lower() or "topic" in a.student_text.lower():
+    student_lower = a.student_text.lower()
+    if "chapter" in student_lower or "topic" in student_lower or "kaunsa" in student_lower or "कौन" in a.student_text:
         # v7.3.28 Fix 1: Use proper chapter name from CHAPTER_NAMES
         chapter_response = f"We're learning {ch}." if use_english else f"Hum {ch} padh rahe hain."
-        msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}" Nothing else.'
-    elif "example" in a.student_text.lower() or meta_type == "more_examples":
+        msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}"{steer_back}'
+    elif "correct" in student_lower or "right" in student_lower or "sahi" in student_lower or "galat" in student_lower:
+        # v10.3.0: Student asking about their answer status
+        msg = f'Student asked: "{a.student_text}". Answer their question directly about whether their answer was right or wrong.{steer_back} 2 sentences.'
+    elif "example" in student_lower or meta_type == "more_examples":
         examples = lesson.get("indian_example") or lesson.get("examples", "")
-        msg = f'Student wants more examples. Give 2-3 NEW examples for {skill_key}. DO NOT repeat the definition. Do NOT reuse: "{prev or ""}". Use fresh examples: {examples if examples else "laddoo, cricket score, rangoli squares"}. 2 sentences.'
-    elif "real life" in a.student_text.lower() or "use" in a.student_text.lower():
-        msg = f'Student asked about real-life use. Give 1-2 practical examples: architecture, cooking, shopping. How {ch} is used in daily life. 2 sentences.'
+        msg = f'Student wants more examples. Give 2-3 NEW examples for {skill_key}. DO NOT repeat the definition. Do NOT reuse: "{prev or ""}". Use fresh examples: {examples if examples else "laddoo, cricket score, rangoli squares"}.{steer_back} 2 sentences.'
+    elif "real life" in student_lower or "use" in student_lower:
+        msg = f'Student asked about real-life use. Give 1-2 practical examples: architecture, cooking, shopping. How {ch} is used in daily life.{steer_back} 2 sentences.'
     else:
-        msg = f'Student asked: "{a.student_text}". Answer briefly about {ch}. 2 sentences.'
+        msg = f'Student asked: "{a.student_text}". Answer their question directly and briefly.{steer_back} 2 sentences.'
 
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
