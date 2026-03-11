@@ -60,7 +60,7 @@ TTS_PACE = float(os.getenv("TTS_PACE", "0.85"))
 # UX: Lower temperature (0.5) for more consistent, natural prosody
 TTS_TEMPERATURE = float(os.getenv("TTS_TEMPERATURE", "0.5"))
 TTS_MODEL = os.getenv("TTS_MODEL", "bulbul:v3")
-TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", "24000"))
+TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", "8000"))
 SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"
 SARVAM_TTS_STREAM_URL = "wss://api.sarvam.ai/text-to-speech/stream"
 
