@@ -74,6 +74,14 @@
   - [x] Change 4: META_QUESTION handling in WAITING_ANSWER, HINT_1, HINT_2 states
   - [x] Change 5: Adaptive quantity — "too many" triggers scope reduction, not comfort
   - [x] 347 tests passing (11 new), verify.py 19/22 (3 = server not running)
+- [x] v10.3.1 Single TTS + Review API + Debug Timing ✅ 2026-03-11
+  - [x] Single TTS call replaces per-sentence TTS in streaming endpoint
+  - [x] Text sent to frontend FIRST, then single TTS call for full response
+  - [x] Session Review API: /api/review/daily, /sessions, /transcript/{id}, /dashboard
+  - [x] Auto-detect quality flags: answer_loop, correct_ignored, comfort_loop, meta_ignored
+  - [x] HTML dashboard with clickable sessions and full transcript view
+  - [x] Debug timing: classifier_ms, eval_ms, llm_ms, tts_ms, total_ms in debug overlay
+  - [x] 347 tests passing, verify.py 22/22
 - [ ] Live student test — clean 5-question session without loop/crash/language reset
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 

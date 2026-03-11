@@ -1332,7 +1332,8 @@
             const sb = debugInfo.state_before || '?';
             const sa = debugInfo.state_after || '?';
             const qid = debugInfo.question_id ? debugInfo.question_id.substring(0, 8) : '?';
-            html += `<div class="debug-line">[classifier: ${cls} | verdict: ${vrd} | state: ${sb} → ${sa} | q: ${qid}]</div>`;
+            const timing = debugInfo.total_ms ? ` | ${debugInfo.classifier_ms||0}+${debugInfo.eval_ms||0}+${debugInfo.llm_ms||0}+${debugInfo.tts_ms||0}=${debugInfo.total_ms}ms` : '';
+            html += `<div class="debug-line">[classifier: ${cls} | verdict: ${vrd} | state: ${sb} → ${sa} | q: ${qid}${timing}]</div>`;
         }
 
         div.innerHTML = html;

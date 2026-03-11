@@ -1300,12 +1300,14 @@ async def process_message_stream(
 
     # ── Classify ──
     # v7.3.0: Use async LLM classifier (module-level singleton)
+    t_classify = time.perf_counter()
     classify_result = await classify(
         student_text,
         current_state=session.state,
         subject=session.subject or "math",
         client=get_openai_client(),
     )
+    classifier_ms = int((time.perf_counter() - t_classify) * 1000)
     category = classify_result["category"]
     logger.info(f"CLASSIFIER: text='{student_text[:50]}' → category={category}, extras={classify_result.get('extras', {})}")
     # Handle LANGUAGE_SWITCH preference from classifier (Break 4 fix)
@@ -1410,6 +1412,7 @@ async def process_message_stream(
     # ── Answer check (if ANSWER) ──
     verdict = None
     verdict_str = None
+    eval_ms = 0
     if action.action_type == "evaluate_answer" and session.current_question_id:
         question = await run_in_threadpool(
             lambda: db.query(Question).filter(
@@ -1424,6 +1427,7 @@ async def process_message_stream(
                 if question.target_skill:
                     misconceptions = cb.get_misconceptions(question.target_skill)
 
+                t_eval = time.perf_counter()
                 eval_result = await evaluate_answer(
                     question_text=question.question_voice or question.question_text,
                     expected_answer=question.answer,
@@ -1432,6 +1436,7 @@ async def process_message_stream(
                     student_response=student_text,
                     llm_call_func=llm_call_for_eval,
                 )
+                eval_ms = int((time.perf_counter() - t_eval) * 1000)
 
                 verdict_map = {
                     "correct": ("CORRECT", True),
@@ -1450,7 +1455,7 @@ async def process_message_stream(
                     diagnostic=eval_result.get("feedback_hi", ""),
                 )
                 verdict_str = v_str
-                logger.info(f"v7.5.0 LLM eval (stream): '{student_text[:30]}' -> {v_str}")
+                logger.info(f"v7.5.0 LLM eval (stream): '{student_text[:30]}' -> {v_str} ({eval_ms}ms)")
 
             except Exception as e:
                 logger.warning(f"v7.5.0 LLM eval failed (stream), using fallback: {e}")
@@ -1582,50 +1587,26 @@ async def process_message_stream(
     # === END Pre-load ===
 
     async def stream_response():
-        """SSE: stream audio chunks as sentences complete."""
+        """SSE: collect full LLM response, single TTS call, stream to frontend."""
         nonlocal new_state  # v7.5.2: Fix UnboundLocalError - new_state is modified in finally block
-        full_text = ""  # TTS-cleaned text (for TTS processing)
+        full_text = ""  # TTS-cleaned text (for turn logging)
         display_text_raw = ""  # v10.1 FIX Issue 3: Original LLM text (for display with digits)
-        sentence_index = 0
         cancelled = False
 
         # Fix 2: Wrap in try/finally to persist state on cancellation
+        llm_ms = 0
+        tts_ms = 0
         try:
+            # v10.3.1: Collect full LLM response first (no per-sentence TTS)
+            t_llm = time.perf_counter()
             async for sentence in llm.generate_streaming(messages):
-                # v10.1 FIX Issue 3: Track original text for display (keeps digits as digits)
                 display_text_raw += " " + sentence
+            llm_ms = int((time.perf_counter() - t_llm) * 1000)
 
-                # Clean for TTS (v7.3.20: includes digits→words for English)
-                cleaned = prepare_for_tts(sentence, session)
-
-                # v7.3.16 Fix 2: Light enforce per chunk (only banned phrases)
-                # Do NOT run full enforce() here — it breaks length/sentence rules mid-stream
-                cleaned = light_enforce(cleaned, verdict=verdict_str)
-                full_text += " " + cleaned
-
-                # Generate TTS for this sentence
-                try:
-                    tts_result = await tts.synthesize_async(cleaned, get_tts_language(session))
-                    audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
-
-                    # Stream audio chunk to frontend
-                    yield f"data: {json.dumps({'type': 'audio_chunk', 'index': sentence_index, 'audio': audio_chunk, 'is_last': False})}\n\n"
-                    sentence_index += 1
-                except Exception as e:
-                    logger.error(f"TTS error for sentence: {e}")
-
-            # Mark last chunk
-            if sentence_index > 0:
-                yield f"data: {json.dumps({'type': 'last_chunk'})}\n\n"
-
-            # v7.3.16 Fix 2: Run full enforce() on complete text at end
-            full_text = full_text.strip()
             display_text_raw = display_text_raw.strip()
-
-            # v10.2.0 Bug 3 diagnosis: Log raw LLM output to check for matra issues
             logger.info(f"RAW_LLM_OUTPUT: [{display_text_raw[:200] if display_text_raw else 'EMPTY'}]")
 
-            # v10.1 FIX Issue 3: Enforce on display text (keeps digits)
+            # Enforce on display text (keeps digits for frontend)
             enforce_result = enforce(
                 display_text_raw, new_state,
                 verdict=verdict_str,
@@ -1634,33 +1615,38 @@ async def process_message_stream(
                 previous_response=prev_response,
             )
             display_text_final = enforce_result.text
-
-            # Also enforce TTS text for turn logging
-            enforce_result_tts = enforce(
-                full_text, new_state,
-                verdict=verdict_str,
-                student_answer=student_text,
-                language=get_tts_language(session),
-                previous_response=prev_response,
-            )
-            full_text = enforce_result_tts.text
-
-            # Send full text and metadata
-            # v10.1 FIX Issue 3: Display shows original digits (4 × 4 = 16), TTS says "four into four equals sixteen"
             display_text = format_for_display(display_text_final)
-            # v10.2.0 Bug 3 diagnosis: Log after format_for_display
             logger.info(f"AFTER_FORMAT_DISPLAY: [{display_text[:200] if display_text else 'EMPTY'}]")
-            logger.info(f"TTS_TEXT: [{full_text[:200] if full_text else 'EMPTY'}]")
+
+            # v10.3.1: Send text to frontend FIRST (don't wait for audio)
             yield f"data: {json.dumps({'type': 'text', 'content': display_text})}\n\n"
+
+            # v10.3.1: Single TTS call with full response
+            tts_text = prepare_for_tts(display_text_final, session)
+            full_text = tts_text  # For turn logging
+            logger.info(f"TTS_TEXT: [{full_text[:200] if full_text else 'EMPTY'}]")
+
+            try:
+                t_tts = time.perf_counter()
+                tts_result = await tts.synthesize_async(tts_text, get_tts_language(session))
+                tts_ms = int((time.perf_counter() - t_tts) * 1000)
+                audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+                yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
+                logger.info(f"TTS_SINGLE_CALL: {tts_ms}ms, {len(tts_text)} chars")
+            except Exception as e:
+                logger.error(f"TTS error (single call): {e}")
+
+            # Send metadata
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
-            yield f"data: {json.dumps({'type': 'debug', 'classifier': category, 'verdict': verdict_str, 'state_before': state_before, 'state_after': new_state, 'question_id': _session_current_question_id})}\n\n"
+            total_ms = classifier_ms + eval_ms + llm_ms + tts_ms
+            yield f"data: {json.dumps({'type': 'debug', 'classifier': category, 'verdict': verdict_str, 'state_before': state_before, 'state_after': new_state, 'question_id': _session_current_question_id, 'classifier_ms': classifier_ms, 'eval_ms': eval_ms, 'llm_ms': llm_ms, 'tts_ms': tts_ms, 'total_ms': total_ms})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
 
         except asyncio.CancelledError:
             # Fix 2: Handle cancellation gracefully - persist partial state
             cancelled = True
-            logger.info(f"Stream cancelled after {sentence_index} sentences, persisting partial state")
+            logger.info(f"Stream cancelled, persisting partial state")
 
         finally:
             # Fix: Use fresh DB session to avoid DetachedInstanceError
