@@ -4,6 +4,7 @@ sqlalchemy==2.0.36
 pydantic==2.10.4
 python-multipart==0.0.19
 httpx==0.28.1
+websockets>=13.0
 openai==1.58.1
 PyJWT==2.10.1
 sympy==1.13.3

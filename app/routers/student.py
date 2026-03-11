@@ -1661,13 +1661,28 @@ async def process_message_stream(
 
             try:
                 t_tts = time.perf_counter()
-                tts_result = await tts.synthesize_async(tts_text, get_tts_language(session))
+                tts_lang = get_tts_language(session)
+                chunk_index = 0
+                async for audio_bytes in tts.synthesize_streaming(tts_text, tts_lang):
+                    if audio_bytes:
+                        audio_b64 = base64.b64encode(audio_bytes).decode()
+                        yield f"data: {json.dumps({'type': 'audio_chunk', 'index': chunk_index, 'audio': audio_b64, 'is_last': False})}\n\n"
+                        chunk_index += 1
                 tts_ms = int((time.perf_counter() - t_tts) * 1000)
-                audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
-                yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
-                logger.info(f"TTS_SINGLE_CALL: {tts_ms}ms, {len(tts_text)} chars")
+                # Send final empty marker so frontend knows streaming is done
+                yield f"data: {json.dumps({'type': 'audio_chunk', 'index': chunk_index, 'audio': '', 'is_last': True})}\n\n"
+                logger.info(f"TTS_STREAM: {tts_ms}ms, {chunk_index} chunks, {len(tts_text)} chars")
             except Exception as e:
-                logger.error(f"TTS error (single call): {e}")
+                logger.error(f"TTS streaming error: {e}")
+                # Fallback: try single REST call
+                try:
+                    tts_result = await tts.synthesize_async(tts_text, get_tts_language(session))
+                    tts_ms = int((time.perf_counter() - t_tts) * 1000)
+                    if tts_result.audio_bytes:
+                        audio_b64 = base64.b64encode(tts_result.audio_bytes).decode()
+                        yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_b64, 'is_last': True})}\n\n"
+                except Exception as e2:
+                    logger.error(f"TTS REST fallback also failed: {e2}")
 
             # Send metadata
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"

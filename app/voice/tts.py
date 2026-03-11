@@ -13,13 +13,17 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
+import json as json_mod
+
 import httpx
+import websockets
 
 from app.config import (
     SARVAM_API_KEY, SARVAM_TTS_URL, TTS_MODEL,
     TTS_SPEAKER, TTS_PACE, TTS_TEMPERATURE, TTS_SAMPLE_RATE,
     AUDIO_CACHE_DIR,
 )
+from app.config import SARVAM_TTS_STREAM_URL
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,15 @@ class MockTTS:
     ) -> TTSResult:
         """Async version for streaming endpoint compatibility."""
         return self.synthesize(text, language, speaker)
+
+    async def synthesize_streaming(
+        self,
+        text: str,
+        language: str = "hi-IN",
+        speaker: str = "mock",
+    ):
+        """Mock streaming — yields single chunk."""
+        yield self._SILENT_MP3
 
 
 # ─── Sarvam Bulbul v3 ────────────────────────────────────────────────────────
@@ -291,6 +304,87 @@ class SarvamBulbulTTS:
         # Graceful fallback: return empty audio instead of crashing
         logger.warning("TTS [async] returning empty audio as fallback")
         return TTSResult(audio_bytes=b'', latency_ms=elapsed, cached=False, cache_path=None)
+
+    async def synthesize_streaming(
+        self,
+        text: str,
+        language: str = "hi-IN",
+        speaker: str = TTS_SPEAKER,
+    ):
+        """
+        v10.3.1: WebSocket streaming TTS — yields audio chunks as they're generated.
+        Falls back to REST API if WebSocket fails.
+        Yields: bytes chunks of audio data (WAV/PCM from Sarvam stream API).
+        """
+        if not text or not text.strip():
+            return
+
+        # Check cache first — if cached, yield entire file at once
+        cache_key = self._cache_key(text, language, speaker)
+        cache_path = AUDIO_CACHE_DIR / f"{cache_key}.mp3"
+        if cache_path.exists():
+            audio = cache_path.read_bytes()
+            logger.info(f"TTS [stream cache hit]: {cache_path.name}")
+            yield audio
+            return
+
+        if len(text) > 2000:
+            text = text[:1997] + "..."
+
+        start = time.perf_counter()
+        all_chunks = bytearray()
+
+        try:
+            ws_url = f"{SARVAM_TTS_STREAM_URL}?api_subscription_key={SARVAM_API_KEY}"
+            async with websockets.connect(ws_url, close_timeout=5) as ws:
+                payload = {
+                    "text": text,
+                    "target_language_code": language,
+                    "speaker": speaker,
+                    "model": TTS_MODEL,
+                    "pace": TTS_PACE,
+                    "temperature": TTS_TEMPERATURE,
+                    "enable_preprocessing": True,
+                }
+                await ws.send(json_mod.dumps(payload))
+                logger.info(f"TTS [ws] sent {len(text)} chars to stream API")
+
+                chunk_count = 0
+                async for message in ws:
+                    if isinstance(message, bytes):
+                        # Raw audio bytes
+                        all_chunks.extend(message)
+                        chunk_count += 1
+                        yield bytes(message)
+                    elif isinstance(message, str):
+                        # JSON message — may contain base64 audio or status
+                        try:
+                            data = json_mod.loads(message)
+                            if "audio" in data:
+                                audio_bytes = base64.b64decode(data["audio"])
+                                all_chunks.extend(audio_bytes)
+                                chunk_count += 1
+                                yield audio_bytes
+                            elif data.get("status") == "end":
+                                break
+                        except (json_mod.JSONDecodeError, KeyError):
+                            pass
+
+                elapsed = int((time.perf_counter() - start) * 1000)
+                logger.info(f"TTS [ws]: {elapsed}ms, {chunk_count} chunks, {len(all_chunks)} bytes")
+
+                # Cache the complete audio for future use
+                if all_chunks:
+                    cache_path.write_bytes(bytes(all_chunks))
+
+        except Exception as e:
+            elapsed = int((time.perf_counter() - start) * 1000)
+            logger.warning(f"TTS [ws] failed after {elapsed}ms: {e}, falling back to REST")
+
+            # Fallback to REST API
+            result = await self.synthesize_async(text, language, speaker)
+            if result.audio_bytes:
+                yield result.audio_bytes
 
 
 # ─── Pre-generation ──────────────────────────────────────────────────────────
