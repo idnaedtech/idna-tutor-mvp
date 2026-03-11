@@ -183,6 +183,8 @@ class MessageResponse(BaseModel):
     llm_ms: int = 0
     tts_ms: int = 0
     total_ms: int = 0
+    # v10.3.0: Debug info for chat UI (temporary)
+    debug: Optional[dict] = None
 
 class SessionEndResponse(BaseModel):
     summary_text: str
@@ -1034,6 +1036,13 @@ async def process_message(
         llm_ms=llm_result.latency_ms,
         tts_ms=tts_latency,
         total_ms=total_ms,
+        debug={
+            "classifier": category,
+            "verdict": verdict_str,
+            "state_before": state_before,
+            "state_after": new_state,
+            "question_id": session.current_question_id,
+        },
     )
 
 
@@ -1645,6 +1654,7 @@ async def process_message_stream(
             yield f"data: {json.dumps({'type': 'text', 'content': display_text})}\n\n"
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
+            yield f"data: {json.dumps({'type': 'debug', 'classifier': category, 'verdict': verdict_str, 'state_before': state_before, 'state_after': new_state, 'question_id': _session_current_question_id})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
 
         except asyncio.CancelledError:

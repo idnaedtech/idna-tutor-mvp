@@ -166,6 +166,14 @@
             margin-top: 4px;
         }
         .msg.student .timestamp { color: rgba(255,255,255,0.7); }
+        .msg .debug-line {
+            font-size: 10px;
+            color: #999;
+            font-family: monospace;
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px dashed #ddd;
+        }
 
         /* Typing indicator */
         .typing {
@@ -671,7 +679,7 @@
 
             if (resp.ok) {
                 const data = await resp.json();
-                addMessage('didi', data.didi_text, data.didi_audio_b64);
+                addMessage('didi', data.didi_text, data.didi_audio_b64, data.debug);
                 if (data.didi_audio_b64) {
                     await playDidiAudio(data.didi_audio_b64);
                 }
@@ -687,21 +695,21 @@
     // ─── Audio Playback ────────────────────────────────
 
     // UX FIX: Play audio and show text in SYNC (text appears when audio starts)
-    async function playDidiAudioWithText(b64, text) {
+    async function playDidiAudioWithText(b64, text, debugInfo = null) {
         console.log("[Audio] playDidiAudioWithText called");
 
         if (!b64 || b64.length === 0) {
             // No audio - show text after 2s timeout as fallback
             console.log("[Audio] No audio, showing text after 2s fallback");
             setTimeout(() => {
-                addMessage('didi', text);
+                addMessage('didi', text, null, debugInfo);
                 startListening();
             }, 2000);
             return;
         }
 
         // v10.2.0 FIX Bug 2: ALWAYS show text immediately — never gate on audio
-        addMessage('didi', text, b64);
+        addMessage('didi', text, b64, debugInfo);
         console.log("[Audio] Text shown FIRST, now attempting audio");
 
         isDidiSpeaking = true;
@@ -933,6 +941,7 @@
             let transcript = '';
             let verdict = null;
             let newState = null;
+            let debugInfo = null;  // v10.3.0: Debug info for chat UI
             let sseBuffer = '';  // v7.5.0: Buffer for incomplete SSE events
 
             while (true) {
@@ -998,13 +1007,17 @@
                             }
                         }
 
+                        if (data.type === 'debug') {
+                            debugInfo = data;
+                        }
+
                         if (data.type === 'done') {
                             newState = data.state;
                             console.log('[SSE] DONE received, state:', newState, 'fullText:', fullText?.length, 'chars');
                             // Add Didi's message to chat (without audio - already playing)
                             if (fullText) {
                                 console.log('[SSE] Adding message to chat:', fullText.substring(0, 50));
-                                addMessage('didi', fullText);
+                                addMessage('didi', fullText, null, debugInfo);
                             } else {
                                 console.warn('[SSE] NO TEXT to display! fullText is empty');
                             }
@@ -1095,10 +1108,10 @@
 
             // UX FIX: Buffer text until audio plays (voice/text sync)
             if (data.didi_audio_b64) {
-                await playDidiAudioWithText(data.didi_audio_b64, data.didi_text);
+                await playDidiAudioWithText(data.didi_audio_b64, data.didi_text, data.debug);
             } else {
                 // No audio - show text immediately with 2s fallback
-                addMessage('didi', data.didi_text);
+                addMessage('didi', data.didi_text, null, data.debug);
                 startListening();
             }
 
@@ -1156,9 +1169,9 @@
 
             // UX FIX: Buffer text until audio plays (voice/text sync)
             if (data.didi_audio_b64) {
-                await playDidiAudioWithText(data.didi_audio_b64, data.didi_text);
+                await playDidiAudioWithText(data.didi_audio_b64, data.didi_text, data.debug);
             } else {
-                addMessage('didi', data.didi_text);
+                addMessage('didi', data.didi_text, null, data.debug);
                 startListening();
             }
 
@@ -1289,7 +1302,7 @@
     }
 
     // ─── Messages ──────────────────────────────────────
-    function addMessage(who, text, audioB64 = null) {
+    function addMessage(who, text, audioB64 = null, debugInfo = null) {
         const div = document.createElement('div');
         div.className = `msg ${who}`;
 
@@ -1311,6 +1324,16 @@
         const time = now.getHours().toString().padStart(2,'0') + ':' +
                      now.getMinutes().toString().padStart(2,'0');
         html += `<div class="timestamp">${time}</div>`;
+
+        // v10.3.0: Debug line for Didi messages (temporary)
+        if (who === 'didi' && debugInfo) {
+            const cls = debugInfo.classifier || '?';
+            const vrd = debugInfo.verdict || 'none';
+            const sb = debugInfo.state_before || '?';
+            const sa = debugInfo.state_after || '?';
+            const qid = debugInfo.question_id ? debugInfo.question_id.substring(0, 8) : '?';
+            html += `<div class="debug-line">[classifier: ${cls} | verdict: ${vrd} | state: ${sb} → ${sa} | q: ${qid}]</div>`;
+        }
 
         div.innerHTML = html;
         chatArea.insertBefore(div, typing);
