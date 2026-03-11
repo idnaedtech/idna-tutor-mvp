@@ -99,10 +99,9 @@
   - [x] Persistent HTTP clients for TTS (eliminate per-request TCP+TLS handshake) ✅
   - [x] TTS sample rate 24kHz→22kHz (8kHz caused WAV fallback) ✅
   - [x] Text appears on screen immediately before audio (perceived latency ~1s) ✅
-  - [x] WebSocket streaming TTS (`wss://api.sarvam.ai/text-to-speech/stream`) — audio playback starts before full generation ✅
-  - **Production results:** LLM 693-1169ms ✅ | TTS 3400-5900ms REST baseline | Perceived TTS latency reduced via streaming chunks
-  - **Note:** Sarvam REST API has 3-5s baseline; WebSocket streaming sends first audio chunk earlier, reducing perceived wait
-  - [ ] **Next:** Production test to measure actual time-to-first-audio with WebSocket streaming
+  - **Production results:** LLM 557-683ms ✅ | TTS 4900-5900ms ❌ | Total 6500-7500ms
+  - **Blocker:** Sarvam WebSocket streaming TTS (`wss://api.sarvam.ai/text-to-speech/stream`) returns HTTP 403 — endpoint not available on current API plan
+  - [ ] **Next:** Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers with streaming support
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
 ### P0 Exit Criteria
