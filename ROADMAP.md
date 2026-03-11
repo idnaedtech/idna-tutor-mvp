@@ -82,7 +82,17 @@
   - [x] HTML dashboard with clickable sessions and full transcript view
   - [x] Debug timing: classifier_ms, eval_ms, llm_ms, tts_ms, total_ms in debug overlay
   - [x] 347 tests passing, verify.py 22/22
-- [ ] Live student test — clean 5-question session without loop/crash/language reset
+  - [x] Fix: session counter persistence — db.commit() before generator (bug found in live test)
+- [x] Live student test — clean 5-turn session without loop/crash/language reset ✅ 2026-03-11
+  - [x] Turn 1: ACK → GREETING→WAITING_ANSWER, question asked (cn_01)
+  - [x] Turn 2: Correct answer → CORRECT, advanced to sq_e01, counters persisted
+  - [x] Turn 3: Correct answer → CORRECT, advanced to sq_e05
+  - [x] Turn 4: Wrong answer → INCORRECT, HINT_1, acknowledgment "That's okay, let me help"
+  - [x] Turn 5: Correct after hint → CORRECT, advanced to next question
+  - [x] Language auto-detected to English (no explicit switch needed)
+  - [x] All acknowledgment rules working ("Well done!", hint acknowledgment)
+  - [x] Session counters correct: 4 attempted, 3 correct
+  - [x] Bug found & fixed: session field updates not committed before SSE generator (96cd1f1)
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
 ### P0 Exit Criteria
