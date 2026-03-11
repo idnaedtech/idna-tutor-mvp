@@ -1,10 +1,10 @@
 # CLAUDE.md — IDNA EdTech Operating Rules
 
 > **This file is read by Claude Code on every session start.**
-> **Last updated:** 2026-03-08
+> **Last updated:** 2026-03-11
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v10.2.0
+> **Current version:** v10.3.1
 > **Can be modified by CEO only.**
 
 ---
