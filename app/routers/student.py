@@ -252,9 +252,11 @@ def start_session(
     )
     asked_question_ids = [q[0] for q in prev_answered]
 
-    # Pick first question (or weakest skill question for returning students)
+    # v10.4.0: Start at Level 2 for assessment
+    # Pick first question at Level 2 — if student gets it right, stay L2; if wrong, drop to L1
     first_question = memory.pick_next_question(
-        db, student_id, "math", chapter, asked_question_ids=asked_question_ids
+        db, student_id, "math", chapter, asked_question_ids=asked_question_ids,
+        current_level=session.current_level,
     )
     if first_question:
         session.current_question_id = first_question["id"]
@@ -767,6 +769,13 @@ async def process_message(
                 session.current_hint_level = 0
                 # v8.1.0: Reset confusion_count on correct answer
                 session.confusion_count = 0
+                # v10.4.0: Level advancement — 3 correct in a row → advance
+                session.consecutive_correct += 1
+                session.consecutive_wrong = 0
+                if session.consecutive_correct >= 3 and session.current_level < 5:
+                    session.current_level += 1
+                    session.consecutive_correct = 0
+                    logger.info(f"LEVEL_UP: student advanced to Level {session.current_level}")
                 # Update skill mastery
                 memory.update_skill(
                     db, session.student_id, session.subject,
@@ -775,6 +784,13 @@ async def process_message(
             else:
                 session.current_hint_level += 1
                 session.total_hints_used += 1
+                # v10.4.0: Level drop — 2 wrong in a row → drop back
+                session.consecutive_wrong += 1
+                session.consecutive_correct = 0
+                if session.consecutive_wrong >= 2 and session.current_level > 1:
+                    session.current_level -= 1
+                    session.consecutive_wrong = 0
+                    logger.info(f"LEVEL_DOWN: student dropped to Level {session.current_level}")
                 memory.update_skill(
                     db, session.student_id, session.subject,
                     question.target_skill, False,
@@ -791,13 +807,14 @@ async def process_message(
             if session.current_question_id and session.current_question_id not in asked_ids:
                 asked_ids.append(session.current_question_id)
             # Pick new question
-            logger.info(f"PICK_NEXT: current_q={session.current_question_id}, asked_ids={asked_ids}")
+            logger.info(f"PICK_NEXT: current_q={session.current_question_id}, asked_ids={asked_ids}, level={session.current_level}")
             q = memory.pick_next_question(
                 db, session.student_id,
                 session.subject or "math",
                 session.chapter or "ch1_square_and_cube",
                 asked_ids,
                 difficulty_preference=action.extra.get("difficulty"),
+                current_level=session.current_level,
             )
             if q:
                 question_data = q
@@ -871,6 +888,8 @@ async def process_message(
         "student_text": student_text,
         # P0 FIX: Flag for emotional distress detection
         "student_emotional": _student_emotional,
+        # v10.4.0: Level-aware teaching
+        "current_level": session.current_level or 2,
     }
 
     # v7.3.0: Record student input to conversation history
@@ -1500,9 +1519,23 @@ async def process_message_stream(
                 session.current_hint_level = 0
                 # v8.1.0: Reset confusion_count on correct answer
                 session.confusion_count = 0
+                # v10.4.0: Level advancement — 3 correct in a row → advance
+                session.consecutive_correct += 1
+                session.consecutive_wrong = 0
+                if session.consecutive_correct >= 3 and session.current_level < 5:
+                    session.current_level += 1
+                    session.consecutive_correct = 0
+                    logger.info(f"LEVEL_UP (stream): student advanced to Level {session.current_level}")
             else:
                 session.current_hint_level += 1
                 session.total_hints_used += 1
+                # v10.4.0: Level drop — 2 wrong in a row → drop back
+                session.consecutive_wrong += 1
+                session.consecutive_correct = 0
+                if session.consecutive_wrong >= 2 and session.current_level > 1:
+                    session.current_level -= 1
+                    session.consecutive_wrong = 0
+                    logger.info(f"LEVEL_DOWN (stream): student dropped to Level {session.current_level}")
 
     # v7.3.26: Pick next question (if needed) — CRITICAL FIX
     # This was missing, causing correct answers to not advance to next question
@@ -1519,13 +1552,14 @@ async def process_message_stream(
             if session.current_question_id and session.current_question_id not in asked_ids:
                 asked_ids.append(session.current_question_id)
             # Pick new question
-            logger.info(f"PICK_NEXT (stream): current_q={session.current_question_id}, asked_ids={asked_ids}")
+            logger.info(f"PICK_NEXT (stream): current_q={session.current_question_id}, asked_ids={asked_ids}, level={session.current_level}")
             q = memory.pick_next_question(
                 db, session.student_id,
                 session.subject or "math",
                 session.chapter or "ch1_square_and_cube",
                 asked_ids,
                 difficulty_preference=action.extra.get("difficulty"),
+                current_level=session.current_level,
             )
             if q:
                 question_data = q
@@ -1578,6 +1612,8 @@ async def process_message_stream(
         "student_text": student_text,
         # P0 FIX: Flag for emotional distress detection
         "student_emotional": _student_emotional,
+        # v10.4.0: Level-aware teaching
+        "current_level": session.current_level or 2,
     }
     prev_response = session.turns[-1].didi_response if session.turns else None
 
@@ -1674,7 +1710,7 @@ async def process_message_stream(
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'verdict', 'value': verdict_str, 'diagnostic': verdict.diagnostic if verdict else None})}\n\n"
             total_ms = classifier_ms + eval_ms + llm_ms + tts_ms
-            yield f"data: {json.dumps({'type': 'debug', 'classifier': category, 'verdict': verdict_str, 'state_before': state_before, 'state_after': new_state, 'question_id': _session_current_question_id, 'classifier_ms': classifier_ms, 'eval_ms': eval_ms, 'llm_ms': llm_ms, 'tts_ms': tts_ms, 'total_ms': total_ms})}\n\n"
+            yield f"data: {json.dumps({'type': 'debug', 'classifier': category, 'verdict': verdict_str, 'state_before': state_before, 'state_after': new_state, 'question_id': _session_current_question_id, 'level': session.current_level, 'classifier_ms': classifier_ms, 'eval_ms': eval_ms, 'llm_ms': llm_ms, 'tts_ms': tts_ms, 'total_ms': total_ms})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'state': new_state})}\n\n"
 
         except asyncio.CancelledError:

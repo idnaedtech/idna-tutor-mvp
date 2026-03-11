@@ -53,6 +53,12 @@ ACKNOWLEDGMENT RULES (MOST IMPORTANT):
 
 MATH FACTS: ONLY use facts from content provided below. NEVER calculate from memory. Wrong math destroys trust.
 
+LEVEL AWARENESS:
+The student is at Level {current_level} of 5.
+{level_instruction}
+NEVER give examples or questions above their current level.
+If they ask about something from a higher level, say: "Great question! We'll get to that soon. First, let's master this."
+
 {language_instruction}
 
 CURRENT SESSION: {chapter_name} — {current_topic}
@@ -86,6 +92,21 @@ Use Telugu script for common words, English for math terms (square root, cube, e
 Translate any Hindi content to Telugu. Do NOT use Hindi or Hinglish.
 Be warm and encouraging like a Telugu elder sister. Use మీరు (meeru) form respectfully.""",
 }
+
+
+LEVEL_INSTRUCTIONS = {
+    1: "Student is at Level 1 (basic multiplication). Use ONLY simple multiplication: 'What is N times N?' No math terminology. No 'square' or 'cube' words yet.",
+    2: "Student is at Level 2 (learning squares). They know multiplication. Introduce 'square' as 'a number times itself'. Keep examples under 15x15.",
+    3: "Student is at Level 3 (learning square roots). They know squares. Introduce 'square root' as 'which number was squared?' Connect to squares they already know.",
+    4: "Student is at Level 4 (patterns). They know squares and roots. Teach patterns: perfect square recognition, last digit rules, memorization tricks.",
+    5: "Student is at Level 5 (prime factorization). They know squares, roots, and patterns. NOW teach prime factorization method for large numbers.",
+}
+
+
+def _get_level_instruction(session_context: dict) -> str:
+    """Get level-appropriate teaching instruction."""
+    level = session_context.get("current_level", 2)
+    return LEVEL_INSTRUCTIONS.get(level, LEVEL_INSTRUCTIONS[2])
 
 
 def _get_language_instruction(session_context: dict) -> str:
@@ -186,6 +207,8 @@ def _format_didi_base(session_context: dict, question_data: dict = None) -> str:
         current_topic = session_context.get("current_topic", "")
 
     lang_instruction = _get_language_instruction(session_context)
+    level_instruction = _get_level_instruction(session_context)
+    current_level = session_context.get("current_level", 2)
 
     formatted = DIDI_BASE.format(
         student_name=session_context.get("student_name", "Student"),
@@ -194,6 +217,8 @@ def _format_didi_base(session_context: dict, question_data: dict = None) -> str:
         chapter_name=chapter_name,
         current_topic=current_topic,
         language_instruction=lang_instruction,
+        level_instruction=level_instruction,
+        current_level=current_level,
     )
     return formatted
 
@@ -215,6 +240,8 @@ def _sys(extra="", session_context: dict = None, question_data: dict = None):
             chapter_name="Squares and Square Roots",
             current_topic="Perfect Squares",
             language_instruction=lang_instruction,
+            level_instruction=LEVEL_INSTRUCTIONS[2],
+            current_level=2,
         )
     return base + extra
 

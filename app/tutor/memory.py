@@ -131,26 +131,18 @@ def pick_next_question(
     chapter: str,
     asked_question_ids: list[str],
     difficulty_preference: Optional[str] = None,
+    current_level: int = None,
 ) -> Optional[dict]:
     """
-    Pick the next question adaptively.
-    
+    v10.4.0: Level-aware question picker.
+
     Strategy:
-    1. Check parent instructions (e.g., "focus on fractions")
-    2. Find skills with lowest mastery
-    3. Pick a question for that skill not already asked this session
-    4. If all questions asked, return None (session complete)
+    1. If current_level is set, pick from that level only
+    2. Exclude already-asked questions
+    3. If no questions at current level, advance to next level
+    4. Falls back to old behavior if current_level is None
     """
-    # Check for parent instructions
-    parent_instruction = (
-        db.query(ParentInstruction)
-        .filter(
-            ParentInstruction.student_id == student_id,
-            ParentInstruction.fulfilled == False,
-        )
-        .order_by(ParentInstruction.created_at.desc())
-        .first()
-    )
+    import random as _random
 
     # Build base query — active questions for this chapter
     base_q = db.query(Question).filter(
@@ -163,43 +155,70 @@ def pick_next_question(
     if asked_question_ids:
         base_q = base_q.filter(Question.id.notin_(asked_question_ids))
 
-    # If parent instruction exists, try to match skill
+    # v10.4.0: Level-aware selection
+    if current_level is not None:
+        level_q = base_q.filter(Question.level == current_level)
+        available = level_q.all()
+        if available:
+            return _question_to_dict(_random.choice(available))
+
+        # No questions at current level — try next level up
+        for next_level in range(current_level + 1, 6):
+            level_q = base_q.filter(Question.level == next_level)
+            available = level_q.all()
+            if available:
+                return _question_to_dict(_random.choice(available))
+
+        # Try lower levels as last resort
+        for prev_level in range(current_level - 1, 0, -1):
+            level_q = base_q.filter(Question.level == prev_level)
+            available = level_q.all()
+            if available:
+                return _question_to_dict(_random.choice(available))
+
+        return None  # All questions exhausted
+
+    # Legacy fallback: Check parent instructions, then weakest skill
+    parent_instruction = (
+        db.query(ParentInstruction)
+        .filter(
+            ParentInstruction.student_id == student_id,
+            ParentInstruction.fulfilled == False,
+        )
+        .order_by(ParentInstruction.created_at.desc())
+        .first()
+    )
+
     if parent_instruction and parent_instruction.instruction:
         instruction_text = parent_instruction.instruction.lower().strip()
-        # P1 fix: Guard against empty instruction causing IndexError on split()[0]
         matching = None
         if instruction_text:
             words = instruction_text.split()
             if words:
-                # Try to find questions matching the instruction topic
                 matching = base_q.filter(
                     Question.target_skill.ilike(f"%{words[0]}%")
                 ).first()
         if matching:
-            # Mark instruction as fulfilled
             parent_instruction.fulfilled = True
             db.commit()
             return _question_to_dict(matching)
 
-    # Adaptive: find weakest skill, then pick question for it
     weakest = get_weakest_skill(db, student_id, subject)
     if weakest:
         q = base_q.filter(Question.target_skill == weakest).first()
         if q:
             return _question_to_dict(q)
 
-    # Difficulty preference (after max reteach → pick easy)
     if difficulty_preference == "easy":
         q = base_q.filter(Question.difficulty <= 2).first()
         if q:
             return _question_to_dict(q)
 
-    # Default: next available question, lowest difficulty first
     q = base_q.order_by(Question.difficulty.asc()).first()
     if q:
         return _question_to_dict(q)
 
-    return None  # All questions asked
+    return None
 
 
 def _question_to_dict(q: Question) -> dict:
@@ -218,6 +237,7 @@ def _question_to_dict(q: Question) -> dict:
         "solution": q.solution or "",
         "target_skill": q.target_skill,
         "difficulty": q.difficulty,
+        "level": getattr(q, 'level', 3),
     }
 
 

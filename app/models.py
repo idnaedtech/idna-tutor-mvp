@@ -120,6 +120,11 @@ class Session(Base):
     current_concept_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Position in concept graph
     concept_mastery: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # {concept_id: True/False}
 
+    # v10.4.0: 5-level teaching scaffold
+    current_level: Mapped[int] = mapped_column(Integer, default=2, server_default='2')
+    consecutive_correct: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+    consecutive_wrong: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+
     # Session summary (generated at end)
     summary_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     summary_audio_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -212,6 +217,7 @@ class Question(Base):
     solution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     target_skill: Mapped[str] = mapped_column(String(50))
     difficulty: Mapped[int] = mapped_column(Integer, default=1)
+    level: Mapped[int] = mapped_column(Integer, default=3, server_default='3')
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

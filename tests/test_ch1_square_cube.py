@@ -9,7 +9,7 @@ from app.content.ch1_square_and_cube import (
 
 class TestQuestionBank:
     def test_total_questions(self):
-        assert len(QUESTIONS) == 50
+        assert len(QUESTIONS) == 74
 
     def test_difficulty_distribution(self):
         easy = get_questions_by_difficulty("easy")
@@ -18,7 +18,7 @@ class TestQuestionBank:
         assert len(easy) >= 15
         assert len(medium) >= 15
         assert len(hard) >= 10
-        assert len(easy) + len(medium) + len(hard) == 50
+        assert len(easy) + len(medium) + len(hard) == 74
 
     def test_no_duplicate_ids(self):
         ids = [q["id"] for q in QUESTIONS]
@@ -54,7 +54,7 @@ class TestQuestionBank:
 
     def test_chapter_stats(self):
         stats = chapter_stats()
-        assert stats["total_questions"] == 50
+        assert stats["total_questions"] == 74
         assert stats["skills_count"] >= 15
 
 

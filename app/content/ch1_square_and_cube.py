@@ -81,6 +81,21 @@ CHAPTER_META = {
 
 SKILL_LESSONS = {
 
+    # --- MULTIPLICATION RECALL (v10.4.0 Level 1) ---
+
+    "multiplication_recall": {
+        "skill": "multiplication_recall",
+        "title": "Multiplication Tables",
+        "title_hi": "Multiplication Tables",
+        "pre_teach": (
+            "Aaj hum ek number ko khud se multiply karke dekhenge. "
+            "Jaise 3 times 3 = 9. Simple multiplication se shuru karte hain!"
+        ),
+        "common_errors": [
+            "Student confuses multiplication with addition (3×3=6)",
+        ],
+    },
+
     # --- SQUARES ---
 
     "perfect_square_concept": {
@@ -565,6 +580,7 @@ QUESTIONS = [
         "accept_patterns": ["haan", "yes", "ha", "sahi", "true", "7 ka square"],
         "common_mistakes": ["Student says no because 49 is odd"],
         "target_skill": "perfect_square_concept",
+        "level": 2,
     },
     {
         "id": "sq_e02",
@@ -581,6 +597,7 @@ QUESTIONS = [
         "accept_patterns": ["144", "ek sau chawalees", "one forty four"],
         "common_mistakes": ["Student says 24 (12×2 instead of 12×12)"],
         "target_skill": "squares_table_1_to_30",
+        "level": 2,
     },
     {
         "id": "sq_e03",
@@ -599,6 +616,7 @@ QUESTIONS = [
         "accept_patterns": ["nahi", "no", "nah", "galat", "false", "nahi ho sakta"],
         "common_mistakes": ["Student thinks 2048 is a square because 2^11 = 2048"],
         "target_skill": "square_units_digit",
+        "level": 2,
     },
     {
         "id": "sq_e04",
@@ -616,6 +634,7 @@ QUESTIONS = [
         "accept_patterns": ["2032", "2048", "1027", "2032 2048 1027", "pehle teen"],
         "common_mistakes": ["Student includes 1089 (it IS a square: 33²)"],
         "target_skill": "square_units_digit",
+        "level": 2,
     },
     {
         "id": "sq_e05",
@@ -633,6 +652,7 @@ QUESTIONS = [
         "accept_patterns": ["32", "battis", "thirty two"],
         "common_mistakes": ["Says 33 (forgets to subtract 1)", "Says 256 or 289"],
         "target_skill": "perfect_square_concept",
+        "level": 2,
     },
     {
         "id": "sq_e06",
@@ -650,6 +670,7 @@ QUESTIONS = [
         "accept_patterns": ["nahi", "no", "nah", "false", "galat"],
         "common_mistakes": ["Student says yes because 156 ends in 6"],
         "target_skill": "sqrt_prime_factorisation",
+        "level": 5,
     },
 
     # ========================================
@@ -675,6 +696,7 @@ QUESTIONS = [
             "Adds 252 instead of 251",
         ],
         "target_skill": "square_odd_pattern",
+        "level": 4,
     },
     {
         "id": "sq_m02",
@@ -692,6 +714,7 @@ QUESTIONS = [
         "accept_patterns": ["21", "21 m", "21 meter", "ekkees", "twenty one"],
         "common_mistakes": ["Says 22 or 20 from guessing"],
         "target_skill": "sqrt_prime_factorisation",
+        "level": 5,
     },
     {
         "id": "sq_m03",
@@ -709,6 +732,7 @@ QUESTIONS = [
         "accept_patterns": ["18", "haan 18", "yes 18", "athaara"],
         "common_mistakes": ["Gets factors wrong", "Says 16 or 20"],
         "target_skill": "sqrt_prime_factorisation",
+        "level": 5,
     },
     {
         "id": "sq_m04",
@@ -729,6 +753,7 @@ QUESTIONS = [
         ],
         "common_mistakes": ["Says 12 and 13", "Says 25 (confusing with 250/10)"],
         "target_skill": "sqrt_estimation",
+        "level": 3,
     },
     {
         "id": "sq_m05",
@@ -746,6 +771,7 @@ QUESTIONS = [
         "accept_patterns": ["21", "ekkees", "twenty one", "441"],
         "common_mistakes": ["Says 29 (adding 4+5+20)"],
         "target_skill": "square_odd_pattern",
+        "level": 4,
     },
     {
         "id": "sq_m06",
@@ -763,6 +789,7 @@ QUESTIONS = [
         "accept_patterns": ["11", "11 cm", "gyarah", "eleven"],
         "common_mistakes": ["Says 12 (12²=144 > 125)", "Says 62 or 63 (divides by 2)"],
         "target_skill": "sqrt_estimation",
+        "level": 3,
     },
 
     # ========================================
@@ -792,6 +819,7 @@ QUESTIONS = [
         "accept_patterns": ["900", "nau sau", "nine hundred"],
         "common_mistakes": ["Says 180 (LCM but not a square)", "Says 3600 (multiplies by 20)"],
         "target_skill": "make_perfect_square",
+        "level": 5,
     },
     {
         "id": "sq_h02",
@@ -817,6 +845,7 @@ QUESTIONS = [
         "accept_patterns": ["3", "teen", "three"],
         "common_mistakes": ["Says 7 (7 is already paired)", "Can't factorize 9408"],
         "target_skill": "make_perfect_square",
+        "level": 5,
     },
     {
         "id": "sq_h03",
@@ -835,6 +864,7 @@ QUESTIONS = [
         "accept_patterns": ["90 91", "90 aur 91", "90 and 91"],
         "common_mistakes": ["Can't identify the n(n+1) pattern"],
         "target_skill": "square_odd_pattern",
+        "level": 5,
     },
     {
         "id": "sq_h04",
@@ -859,6 +889,7 @@ QUESTIONS = [
         "accept_patterns": ["44", "chawalees", "forty four"],
         "common_mistakes": ["Says 46 (doesn't check 45²)"],
         "target_skill": "sqrt_estimation",
+        "level": 5,
     },
     {
         "id": "sq_h05",
@@ -876,6 +907,7 @@ QUESTIONS = [
         "accept_patterns": ["haan", "yes", "34", "haan 34", "yes 34"],
         "common_mistakes": ["Stops at 289 without recognizing 17²"],
         "target_skill": "sqrt_prime_factorisation",
+        "level": 5,
     },
 
     # ========================================
@@ -896,6 +928,7 @@ QUESTIONS = [
         "accept_patterns": ["125", "ek sau pachchees", "one twenty five"],
         "common_mistakes": ["Says 15 (5×3)", "Says 25 (5²)"],
         "target_skill": "perfect_cube_concept",
+        "level": 2,
     },
     {
         "id": "cb_e02",
@@ -913,6 +946,7 @@ QUESTIONS = [
         "accept_patterns": ["4", "chaar", "four"],
         "common_mistakes": ["Says 8 (confusing with √64)", "Says 21 (64÷3)"],
         "target_skill": "cube_root_concept",
+        "level": 3,
     },
     {
         "id": "cb_e03",
@@ -928,6 +962,7 @@ QUESTIONS = [
         "accept_patterns": ["8", "aath", "eight"],
         "common_mistakes": ["Says 170 (512÷3)"],
         "target_skill": "cube_root_concept",
+        "level": 3,
     },
     {
         "id": "cb_e04",
@@ -943,6 +978,7 @@ QUESTIONS = [
         "accept_patterns": ["9", "nau", "nine"],
         "common_mistakes": ["Says 27 (confusing with √729)", "Says 243 (729÷3)"],
         "target_skill": "cube_root_concept",
+        "level": 3,
     },
     {
         "id": "cb_e05",
@@ -959,6 +995,7 @@ QUESTIONS = [
         "accept_patterns": ["galat", "false", "nahi", "wrong", "no"],
         "common_mistakes": ["Confuses with addition rule (odd+odd=even)"],
         "target_skill": "perfect_cube_concept",
+        "level": 4,
     },
     {
         "id": "cb_e06",
@@ -975,6 +1012,7 @@ QUESTIONS = [
         "accept_patterns": ["galat", "false", "nahi", "wrong"],
         "common_mistakes": ["Confuses cube digit rules with square digit rules"],
         "target_skill": "cube_units_digit",
+        "level": 4,
     },
 
     # ========================================
@@ -997,6 +1035,7 @@ QUESTIONS = [
         "accept_patterns": ["30", "tees", "thirty"],
         "common_mistakes": ["Says 300 (extra zero)", "Says 3000"],
         "target_skill": "cbrt_prime_factorisation",
+        "level": 3,
     },
     {
         "id": "cb_m02",
@@ -1014,6 +1053,7 @@ QUESTIONS = [
         "accept_patterns": ["22", "baees", "twenty two"],
         "common_mistakes": ["Gets stuck on factorising 1331"],
         "target_skill": "cbrt_prime_factorisation",
+        "level": 5,
     },
     {
         "id": "cb_m03",
@@ -1031,6 +1071,7 @@ QUESTIONS = [
         "accept_patterns": ["11", "gyarah", "eleven"],
         "common_mistakes": ["Says 13 or 31 (digit confusion)"],
         "target_skill": "cbrt_prime_factorisation",
+        "level": 3,
     },
     {
         "id": "cb_m04",
@@ -1048,6 +1089,7 @@ QUESTIONS = [
         "accept_patterns": ["galat", "false", "nahi", "wrong"],
         "common_mistakes": ["Doesn't think about the minimum 2-digit number"],
         "target_skill": "perfect_cube_concept",
+        "level": 4,
     },
     {
         "id": "cb_m05",
@@ -1065,6 +1107,7 @@ QUESTIONS = [
         "accept_patterns": ["1000", "ek hazaar", "one thousand", "10 ka cube"],
         "common_mistakes": ["Tries to add all 10 numbers manually"],
         "target_skill": "cube_odd_pattern",
+        "level": 4,
     },
     {
         "id": "cb_m06",
@@ -1082,6 +1125,7 @@ QUESTIONS = [
         "accept_patterns": ["galat", "false", "nahi", "wrong"],
         "common_mistakes": ["Doesn't calculate 99³"],
         "target_skill": "perfect_cube_concept",
+        "level": 4,
     },
 
     # ========================================
@@ -1112,6 +1156,7 @@ QUESTIONS = [
         "accept_patterns": ["7", "saat", "seven"],
         "common_mistakes": ["Says 49 (7²) or 63 (7×9)", "Says 3 (3 is already complete)"],
         "target_skill": "make_perfect_cube",
+        "level": 5,
     },
     {
         "id": "cb_h02",
@@ -1129,6 +1174,7 @@ QUESTIONS = [
         "accept_patterns": ["17", "satrah", "seventeen"],
         "common_mistakes": ["Says 13 (wrong digit mapping)"],
         "target_skill": "cbrt_prime_factorisation",
+        "level": 5,
     },
     {
         "id": "cb_h03",
@@ -1146,6 +1192,7 @@ QUESTIONS = [
         "accept_patterns": ["32", "battis", "thirty two"],
         "common_mistakes": ["Says 22 or 42"],
         "target_skill": "cbrt_prime_factorisation",
+        "level": 5,
     },
     {
         "id": "cb_h04",
@@ -1171,6 +1218,7 @@ QUESTIONS = [
         ],
         "common_mistakes": ["Picks 67²-66² thinking squares are bigger than cube differences"],
         "target_skill": "perfect_cube_concept",
+        "level": 5,
     },
     {
         "id": "cb_h05",
@@ -1192,6 +1240,7 @@ QUESTIONS = [
         ],
         "common_mistakes": ["Only finds one decomposition"],
         "target_skill": "taxicab_ramanujan",
+        "level": 5,
     },
 
     # ========================================
@@ -1213,6 +1262,7 @@ QUESTIONS = [
         ],
         "accept_patterns": ["1 4 9 16 25 36 49 64 81 100", "perfect squares", "square numbers"],
         "target_skill": "perfect_square_concept",
+        "level": 2,
     },
     {
         "id": "cn_02",
@@ -1231,6 +1281,7 @@ QUESTIONS = [
             "one factor pairs with itself", "middle factor",
         ],
         "target_skill": "square_factor_pairs",
+        "level": 4,
     },
     {
         "id": "cn_03",
@@ -1246,6 +1297,7 @@ QUESTIONS = [
         ],
         "accept_patterns": ["nahi", "no", "nah", "false", "even zeros"],
         "target_skill": "square_zeros_parity",
+        "level": 4,
     },
     {
         "id": "cn_04",
@@ -1263,6 +1315,7 @@ QUESTIONS = [
             "add triangular", "triangular plus next triangular",
         ],
         "target_skill": "triangular_square_relation",
+        "level": 4,
     },
     {
         "id": "cn_05",
@@ -1278,6 +1331,7 @@ QUESTIONS = [
         ],
         "accept_patterns": ["nahi", "no", "false", "3 ke multiple"],
         "target_skill": "cube_units_digit",
+        "level": 4,
     },
     {
         "id": "cn_06",
@@ -1293,6 +1347,7 @@ QUESTIONS = [
         ],
         "accept_patterns": ["3", "teen", "three", "3 levels"],
         "target_skill": "successive_differences",
+        "level": 5,
     },
 
     # ========================================
@@ -1311,6 +1366,7 @@ QUESTIONS = [
         "accept_patterns": ["625", "chheh sau pachchees"],
         "common_mistakes": ["Says 50 (25×2)"],
         "target_skill": "squares_table_1_to_30",
+        "level": 2,
     },
     {
         "id": "sq_m07",
@@ -1328,6 +1384,7 @@ QUESTIONS = [
         "accept_patterns": ["49", "unchaas", "forty nine", "7 ka square"],
         "common_mistakes": ["Adds manually and makes arithmetic error"],
         "target_skill": "square_odd_pattern",
+        "level": 4,
     },
     {
         "id": "sq_m08",
@@ -1345,6 +1402,7 @@ QUESTIONS = [
         "accept_patterns": ["nahi", "no", "false", "galat"],
         "common_mistakes": ["Factorisation error"],
         "target_skill": "sqrt_prime_factorisation",
+        "level": 5,
     },
     {
         "id": "sq_e08",
@@ -1362,6 +1420,7 @@ QUESTIONS = [
         "accept_patterns": ["198", "ek sau anthaanavve"],
         "common_mistakes": ["Says 199 (forgets -1)"],
         "target_skill": "perfect_square_concept",
+        "level": 2,
     },
     {
         "id": "sq_h06",
@@ -1379,6 +1438,7 @@ QUESTIONS = [
         "accept_patterns": ["34 46 56 74", "34, 46, 56, 74"],
         "common_mistakes": ["Includes 38 or 82"],
         "target_skill": "square_units_digit",
+        "level": 5,
     },
     {
         "id": "cb_e07",
@@ -1392,6 +1452,7 @@ QUESTIONS = [
         "accept_patterns": ["343", "teen sau taintaalees"],
         "common_mistakes": ["Says 21 (7×3)", "Says 49 (7²)"],
         "target_skill": "cubes_table_1_to_20",
+        "level": 2,
     },
     {
         "id": "cb_m07",
@@ -1409,6 +1470,7 @@ QUESTIONS = [
         "accept_patterns": ["nahi", "no", "false", "galat"],
         "common_mistakes": ["Thinks 500 is a cube because 5³=125 divides it"],
         "target_skill": "make_perfect_cube",
+        "level": 5,
     },
     {
         "id": "cb_h06",
@@ -1426,6 +1488,7 @@ QUESTIONS = [
         "accept_patterns": ["23", "teees", "twenty three"],
         "common_mistakes": ["Says 27 (wrong digit mapping)"],
         "target_skill": "cbrt_prime_factorisation",
+        "level": 5,
     },
     {
         "id": "sq_m09",
@@ -1443,6 +1506,7 @@ QUESTIONS = [
         "accept_patterns": ["nahi", "no", "false", "galat", "not a square"],
         "common_mistakes": ["Arithmetic error in subtraction chain"],
         "target_skill": "square_odd_pattern",
+        "level": 4,
     },
     {
         "id": "cb_m08",
@@ -1460,6 +1524,339 @@ QUESTIONS = [
         "accept_patterns": ["15", "pandrah", "fifteen"],
         "common_mistakes": ["Groups in pairs instead of triplets"],
         "target_skill": "cbrt_prime_factorisation",
+        "level": 5,
+    },
+
+    # ========================================
+    # LEVEL 1 — MULTIPLICATION RECALL (10)
+    # v10.4.0: Foundation questions for students who need multiplication basics
+    # ========================================
+
+    {
+        "id": "mult_01",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "3 times 3 kitna hota hai?",
+        "question_en": "What is 3 times 3?",
+        "answer": "9",
+        "hints": ["Teen baar teen gino."],
+        "accept_patterns": ["9", "nau", "nine"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_02",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "5 times 5 kitna hota hai?",
+        "question_en": "What is 5 times 5?",
+        "answer": "25",
+        "hints": ["Paanch baar paanch gino."],
+        "accept_patterns": ["25", "pachchees", "twenty five"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_03",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "7 times 7 kitna hota hai?",
+        "question_en": "What is 7 times 7?",
+        "answer": "49",
+        "hints": ["Saat baar saat gino."],
+        "accept_patterns": ["49", "unchaas", "forty nine"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_04",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "4 times 4 kitna hota hai?",
+        "question_en": "What is 4 times 4?",
+        "answer": "16",
+        "hints": ["Chaar baar chaar gino."],
+        "accept_patterns": ["16", "solah", "sixteen"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_05",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "6 times 6 kitna hota hai?",
+        "question_en": "What is 6 times 6?",
+        "answer": "36",
+        "hints": ["Chheh baar chheh gino."],
+        "accept_patterns": ["36", "chhattees", "thirty six"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_06",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "8 times 8 kitna hota hai?",
+        "question_en": "What is 8 times 8?",
+        "answer": "64",
+        "hints": ["Aath baar aath gino."],
+        "accept_patterns": ["64", "chaunsath", "sixty four"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_07",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "9 times 9 kitna hota hai?",
+        "question_en": "What is 9 times 9?",
+        "answer": "81",
+        "hints": ["Nau baar nau gino."],
+        "accept_patterns": ["81", "ikyaasi", "eighty one"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_08",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "10 times 10 kitna hota hai?",
+        "question_en": "What is 10 times 10?",
+        "answer": "100",
+        "hints": ["Das baar das gino."],
+        "accept_patterns": ["100", "sau", "hundred", "one hundred"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_09",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "2 times 2 times 2 kitna hota hai?",
+        "question_en": "What is 2 times 2 times 2?",
+        "answer": "8",
+        "hints": ["Pehle 2 times 2 = 4. Ab 4 times 2 = ?"],
+        "accept_patterns": ["8", "aath", "eight"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+    {
+        "id": "mult_10",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "11 times 11 kitna hota hai?",
+        "question_en": "What is 11 times 11?",
+        "answer": "121",
+        "hints": ["11 times 10 = 110. Ab 110 + 11 = ?"],
+        "accept_patterns": ["121", "ek sau ikkees", "one twenty one"],
+        "target_skill": "multiplication_recall",
+        "level": 1,
+    },
+
+    # ========================================
+    # LEVEL 2 — BASIC SQUARES (8)
+    # v10.4.0: Bridge from multiplication to square concept
+    # ========================================
+
+    {
+        "id": "sq_b01",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "3 ka square kitna hai? Yaani 3 times 3?",
+        "question_en": "What is 3 squared? That means 3 times 3.",
+        "answer": "9",
+        "hints": ["3 times 3 calculate karo."],
+        "accept_patterns": ["9", "nau", "nine"],
+        "target_skill": "perfect_square_concept",
+        "level": 2,
+    },
+    {
+        "id": "sq_b02",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "5 ka square kitna hai?",
+        "question_en": "What is 5 squared?",
+        "answer": "25",
+        "hints": ["5 times 5 = ?"],
+        "accept_patterns": ["25", "pachchees", "twenty five"],
+        "target_skill": "perfect_square_concept",
+        "level": 2,
+    },
+    {
+        "id": "sq_b03",
+        "chapter": "ch1_square_and_cube",
+        "type": "identify",
+        "difficulty": "easy",
+        "question": "Kya 16 ek perfect square hai?",
+        "question_en": "Is 16 a perfect square?",
+        "answer": "haan",
+        "explanation": "4 times 4 = 16. Haan, 16 perfect square hai.",
+        "hints": ["Kaunsa number khud se multiply karke 16 dega?"],
+        "accept_patterns": ["haan", "yes", "ha", "true", "4 ka square"],
+        "target_skill": "perfect_square_concept",
+        "level": 2,
+    },
+    {
+        "id": "sq_b04",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "8 ka square kitna hai?",
+        "question_en": "What is 8 squared?",
+        "answer": "64",
+        "hints": ["8 times 8 = ?"],
+        "accept_patterns": ["64", "chaunsath", "sixty four"],
+        "target_skill": "squares_table_1_to_30",
+        "level": 2,
+    },
+    {
+        "id": "sq_b05",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "10 ka square kitna hai?",
+        "question_en": "What is 10 squared?",
+        "answer": "100",
+        "hints": ["10 times 10 = ?"],
+        "accept_patterns": ["100", "sau", "hundred"],
+        "target_skill": "squares_table_1_to_30",
+        "level": 2,
+    },
+    {
+        "id": "sq_b06",
+        "chapter": "ch1_square_and_cube",
+        "type": "identify",
+        "difficulty": "easy",
+        "question": "Kya 10 ek perfect square hai?",
+        "question_en": "Is 10 a perfect square?",
+        "answer": "nahi",
+        "explanation": "3 times 3 = 9, 4 times 4 = 16. 10 beech mein hai, toh perfect square nahi.",
+        "hints": ["Kaunsa number khud se multiply karke 10 dega? 3 times 3 = 9, 4 times 4 = 16."],
+        "accept_patterns": ["nahi", "no", "nah", "false"],
+        "target_skill": "perfect_square_concept",
+        "level": 2,
+    },
+    {
+        "id": "sq_b07",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "6 ka square kitna hai?",
+        "question_en": "What is 6 squared?",
+        "answer": "36",
+        "hints": ["6 times 6 = ?"],
+        "accept_patterns": ["36", "chhattees", "thirty six"],
+        "target_skill": "squares_table_1_to_30",
+        "level": 2,
+    },
+    {
+        "id": "cb_b01",
+        "chapter": "ch1_square_and_cube",
+        "type": "compute",
+        "difficulty": "easy",
+        "question": "3 ka cube kitna hai? Yaani 3 times 3 times 3?",
+        "question_en": "What is 3 cubed? That means 3 times 3 times 3.",
+        "answer": "27",
+        "hints": ["3 times 3 = 9. Ab 9 times 3 = ?"],
+        "accept_patterns": ["27", "sattaees", "twenty seven"],
+        "target_skill": "perfect_cube_concept",
+        "level": 2,
+    },
+
+    # ========================================
+    # LEVEL 3 — BASIC ROOTS (6)
+    # v10.4.0: Simple root questions bridging to harder material
+    # ========================================
+
+    {
+        "id": "rt_01",
+        "chapter": "ch1_square_and_cube",
+        "type": "sqrt",
+        "difficulty": "easy",
+        "question": "9 ka square root kitna hai? Yaani kaunsa number times khud = 9?",
+        "question_en": "What is the square root of 9? Which number times itself = 9?",
+        "answer": "3",
+        "hints": ["3 times 3 = ?"],
+        "accept_patterns": ["3", "teen", "three"],
+        "target_skill": "square_root_concept",
+        "level": 3,
+    },
+    {
+        "id": "rt_02",
+        "chapter": "ch1_square_and_cube",
+        "type": "sqrt",
+        "difficulty": "easy",
+        "question": "25 ka square root kitna hai?",
+        "question_en": "What is the square root of 25?",
+        "answer": "5",
+        "hints": ["Kaunsa number khud se multiply karke 25 dega?"],
+        "accept_patterns": ["5", "paanch", "five"],
+        "target_skill": "square_root_concept",
+        "level": 3,
+    },
+    {
+        "id": "rt_03",
+        "chapter": "ch1_square_and_cube",
+        "type": "sqrt",
+        "difficulty": "easy",
+        "question": "100 ka square root kitna hai?",
+        "question_en": "What is the square root of 100?",
+        "answer": "10",
+        "hints": ["10 times 10 = ?"],
+        "accept_patterns": ["10", "das", "ten"],
+        "target_skill": "square_root_concept",
+        "level": 3,
+    },
+    {
+        "id": "rt_04",
+        "chapter": "ch1_square_and_cube",
+        "type": "sqrt",
+        "difficulty": "easy",
+        "question": "36 ka square root kitna hai?",
+        "question_en": "What is the square root of 36?",
+        "answer": "6",
+        "hints": ["6 times 6 = ?"],
+        "accept_patterns": ["6", "chheh", "six"],
+        "target_skill": "square_root_concept",
+        "level": 3,
+    },
+    {
+        "id": "rt_05",
+        "chapter": "ch1_square_and_cube",
+        "type": "cube_root",
+        "difficulty": "easy",
+        "question": "27 ka cube root kitna hai? Yaani kaunsa number teen baar multiply karke 27 dega?",
+        "question_en": "What is the cube root of 27? Which number times itself times itself = 27?",
+        "answer": "3",
+        "hints": ["3 times 3 times 3 = ?"],
+        "accept_patterns": ["3", "teen", "three"],
+        "target_skill": "cube_root_concept",
+        "level": 3,
+    },
+    {
+        "id": "rt_06",
+        "chapter": "ch1_square_and_cube",
+        "type": "cube_root",
+        "difficulty": "easy",
+        "question": "125 ka cube root kitna hai?",
+        "question_en": "What is the cube root of 125?",
+        "answer": "5",
+        "hints": ["5 times 5 = 25. Ab 25 times 5 = ?"],
+        "accept_patterns": ["5", "paanch", "five"],
+        "target_skill": "cube_root_concept",
+        "level": 3,
     },
 ]
 
@@ -1569,12 +1966,15 @@ def chapter_stats() -> dict:
 
 # Question ID mappings to concepts
 _PERFECT_SQUARE_QUESTIONS = [
+    "mult_01", "mult_02", "mult_03", "mult_04", "mult_05", "mult_06", "mult_07", "mult_08", "mult_09", "mult_10",
+    "sq_b01", "sq_b02", "sq_b03", "sq_b04", "sq_b05", "sq_b06", "sq_b07", "cb_b01",
     "sq_e01", "sq_e02", "sq_e03", "sq_e04", "sq_e05", "sq_e06", "sq_e07", "sq_e08",
     "sq_m01", "sq_m05", "sq_m07", "sq_m09",
     "sq_h03", "sq_h06",
     "cn_01", "cn_02", "cn_03", "cn_04",
 ]
 _SQUARE_ROOT_QUESTIONS = [
+    "rt_01", "rt_02", "rt_03", "rt_04",
     "sq_m02", "sq_m03", "sq_m04", "sq_m06", "sq_m08",
     "sq_h01", "sq_h02", "sq_h04", "sq_h05",
 ]
@@ -1585,6 +1985,7 @@ _PERFECT_CUBE_QUESTIONS = [
     "cn_05", "cn_06",
 ]
 _CUBE_ROOT_QUESTIONS = [
+    "rt_05", "rt_06",
     "cb_m01", "cb_m02", "cb_m03", "cb_m08",
     "cb_h02", "cb_h03", "cb_h06",
 ]
@@ -1926,6 +2327,7 @@ CHAPTER_GRAPH = ChapterGraph(
 # ============================================================
 
 SKILL_TO_CONCEPT = {
+    "multiplication_recall": "perfect_square",  # v10.4.0: foundation skill
     "perfect_square_concept": "perfect_square",
     "square_factor_pairs": "perfect_square",
     "squares_table_1_to_30": "perfect_square",

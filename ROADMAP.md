@@ -102,6 +102,15 @@
   - **Production results:** LLM 557-683ms ✅ | TTS 4900-5900ms ❌ | Total 6500-7500ms
   - **Blocker:** Sarvam WebSocket streaming TTS (`wss://api.sarvam.ai/text-to-speech/stream`) returns HTTP 403 — endpoint not available on current API plan
   - [ ] **Next:** Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers with streaming support
+- [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
+  - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
+  - [x] Change 2: Session model fields (current_level, consecutive_correct, consecutive_wrong) + Question level field + migrations
+  - [x] Change 3: Level-aware pick_next_question() — picks from current level, falls through to adjacent levels
+  - [x] Change 4: Level advancement logic — 3 correct in a row → advance, 2 wrong in a row → drop back (both endpoints)
+  - [x] Change 5: Assessment at session start — new sessions start at Level 2
+  - [x] Changes 6+8: Level-aware LLM prompts — LEVEL_INSTRUCTIONS dict, DIDI_BASE includes level awareness section
+  - [x] Change 7: Level in debug SSE event + session_ctx for both endpoints
+  - [x] 347 tests passing, verify.py 22/22
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
 ### P0 Exit Criteria

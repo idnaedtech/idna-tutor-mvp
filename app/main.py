@@ -111,7 +111,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v10.3.1 ready")
+    logger.info("IDNA Didi v10.4.0 ready")
     yield
     logger.info("Shutting down")
 
@@ -132,6 +132,11 @@ def _run_migrations():
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS topics_covered JSONB",
         # P0: Language auto-detection
         "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consecutive_english_count INTEGER DEFAULT 0",
+        # v10.4.0: 5-level teaching scaffold
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS current_level INTEGER DEFAULT 2",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consecutive_correct INTEGER DEFAULT 0",
+        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consecutive_wrong INTEGER DEFAULT 0",
+        "ALTER TABLE question_bank ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 3",
     ]
 
     with engine.connect() as conn:
@@ -192,6 +197,7 @@ def _seed_questions(db):
             solution=q_data.get("solution") or q_data.get("explanation"),
             target_skill=q_data["target_skill"],
             difficulty=difficulty,
+            level=q_data.get("level", 3),
             active=True,
         )
         db.add(q)
@@ -215,9 +221,9 @@ def _seed_test_student(db):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v10.1",
-    description="AI Voice Tutor for Class 8 NCERT — Question-First Mode",
-    version="10.3.2",
+    title="IDNA Didi v10.4",
+    description="AI Voice Tutor for Class 8 NCERT — 5-Level Teaching Scaffold",
+    version="10.4.0",
     lifespan=lifespan,
 )
 
@@ -264,7 +270,7 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "10.3.2"}
+    return {"status": "ok", "version": "10.4.0"}
 
 
 # Keep-alive endpoint for UptimeRobot (prevents Railway sleep)
