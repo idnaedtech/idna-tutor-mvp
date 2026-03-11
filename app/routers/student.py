@@ -965,6 +965,20 @@ async def process_message(
     # ── Step 9: Clean for TTS ────────────────────────────────────────────
     cleaned_text = prepare_for_tts(didi_text, session)
 
+    # v10.3.1: Hard truncate TTS text to reduce latency (display keeps full text)
+    MAX_TTS_CHARS = 150
+    if len(cleaned_text) > MAX_TTS_CHARS:
+        truncated = cleaned_text[:MAX_TTS_CHARS]
+        last_end = max(
+            truncated.rfind('. '),
+            truncated.rfind('। '),
+            truncated.rfind('? '),
+            truncated.rfind('! '),
+        )
+        if last_end > 50:
+            cleaned_text = truncated[:last_end + 1]
+        logger.info(f"TTS_TRUNCATED (non-stream): {len(didi_text)} → {len(cleaned_text)} chars")
+
     # ── Step 10: TTS ─────────────────────────────────────────────────────
     tts = get_tts()
     try:
@@ -1627,6 +1641,21 @@ async def process_message_stream(
 
             # v10.3.1: Single TTS call with full response
             tts_text = prepare_for_tts(display_text_final, session)
+
+            # v10.3.1: Hard truncate TTS text to reduce latency (display keeps full text)
+            MAX_TTS_CHARS = 150
+            if len(tts_text) > MAX_TTS_CHARS:
+                truncated = tts_text[:MAX_TTS_CHARS]
+                last_end = max(
+                    truncated.rfind('. '),
+                    truncated.rfind('। '),
+                    truncated.rfind('? '),
+                    truncated.rfind('! '),
+                )
+                if last_end > 50:
+                    tts_text = truncated[:last_end + 1]
+                logger.info(f"TTS_TRUNCATED: {len(display_text_final)} → {len(tts_text)} chars")
+
             full_text = tts_text  # For turn logging
             logger.info(f"TTS_TEXT: [{full_text[:200] if full_text else 'EMPTY'}]")
 
