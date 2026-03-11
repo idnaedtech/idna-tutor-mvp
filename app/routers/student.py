@@ -1527,6 +1527,10 @@ async def process_message_stream(
         if session.current_question_id:
             question_data = _load_question(db, session.current_question_id)
 
+    # v10.3.1: Persist all session field updates (counters, question_id, hint_level)
+    # BEFORE the generator starts. The generator uses fresh_db which would overwrite.
+    await run_in_threadpool(lambda: db.commit())
+
     # ── Build prompt ──
     # v7.3.22 Fix 2: Include language_pref in session_ctx for streaming endpoint
     # v8.1.0: Include confusion_count and full context for escalation protocol
