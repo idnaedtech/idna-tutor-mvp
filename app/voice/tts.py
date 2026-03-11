@@ -80,7 +80,12 @@ class SarvamBulbulTTS:
     """
     Sarvam Bulbul v3 — 11 Indian languages, 35+ voices.
     Single API call per utterance (no chunking — v6.2.4 proved this works).
+    v10.3.1: Persistent HTTP clients to avoid per-request TCP+TLS handshake.
     """
+
+    def __init__(self):
+        self._sync_client = httpx.Client(timeout=10.0)
+        self._async_client = httpx.AsyncClient(timeout=10.0)
 
     def synthesize(
         self,
@@ -134,24 +139,22 @@ class SarvamBulbulTTS:
 
         for attempt in range(max_retries):
             try:
-                with httpx.Client(timeout=30.0) as client:
-                    response = client.post(SARVAM_TTS_URL, json=payload, headers=headers)
-                    if response.status_code == 500:
-                        # Server error - retry with backoff
-                        logger.warning(f"TTS [sarvam] HTTP 500 on attempt {attempt + 1}/{max_retries}")
-                        if attempt < max_retries - 1:
-                            import time as time_mod
-                            time_mod.sleep(1.0 * (attempt + 1))  # 1s, 2s backoff
-                            continue
-                    if response.status_code != 200:
-                        logger.error(f"TTS [sarvam] HTTP {response.status_code}: {response.text}")
-                    response.raise_for_status()
-                    data = response.json()
+                response = self._sync_client.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=10.0)
+                if response.status_code == 500:
+                    # Server error - retry with backoff
+                    logger.warning(f"TTS [sarvam] HTTP 500 on attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        import time as time_mod
+                        time_mod.sleep(1.0 * (attempt + 1))  # 1s, 2s backoff
+                        continue
+                if response.status_code != 200:
+                    logger.error(f"TTS [sarvam] HTTP {response.status_code}: {response.text}")
+                response.raise_for_status()
+                data = response.json()
 
                 elapsed = int((time.perf_counter() - start) * 1000)
 
                 # Sarvam returns base64 audio in audios[0]
-                import base64
                 audio_b64 = data.get("audios", [""])[0]
                 if not audio_b64:
                     raise ValueError("Empty audio response from Sarvam")
@@ -246,18 +249,17 @@ class SarvamBulbulTTS:
 
         for attempt in range(max_retries):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.post(SARVAM_TTS_URL, json=payload, headers=headers)
-                    if response.status_code == 500:
-                        # Server error - retry with backoff
-                        logger.warning(f"TTS [async] HTTP 500 on attempt {attempt + 1}/{max_retries}")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(1.0 * (attempt + 1))  # 1s, 2s backoff
-                            continue
-                    if response.status_code != 200:
-                        logger.error(f"TTS [async] HTTP {response.status_code}: {response.text}")
-                    response.raise_for_status()
-                    data = response.json()
+                response = await self._async_client.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=10.0)
+                if response.status_code == 500:
+                    # Server error - retry with backoff
+                    logger.warning(f"TTS [async] HTTP 500 on attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1.0 * (attempt + 1))  # 1s, 2s backoff
+                        continue
+                if response.status_code != 200:
+                    logger.error(f"TTS [async] HTTP {response.status_code}: {response.text}")
+                response.raise_for_status()
+                data = response.json()
 
                 elapsed = int((time.perf_counter() - start) * 1000)
 
