@@ -323,7 +323,15 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "10.4.1"}
+    db = SessionLocal()
+    try:
+        q_count = db.query(Question).count()
+        from sqlalchemy import func
+        level_rows = db.query(Question.level, func.count()).group_by(Question.level).all()
+        levels = {lvl: cnt for lvl, cnt in level_rows}
+    finally:
+        db.close()
+    return {"status": "ok", "version": "10.4.1", "questions": q_count, "levels": levels}
 
 
 # Keep-alive endpoint for UptimeRobot (prevents Railway sleep)
