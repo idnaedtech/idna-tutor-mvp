@@ -1177,7 +1177,14 @@ async def process_message_stream(
         logger.info(f"RESPONSE TO FRONTEND (stream-meta): text=[{preprocess_result.template_response[:100] if preprocess_result.template_response else 'EMPTY'}], len={len(preprocess_result.template_response) if preprocess_result.template_response else 0}")
 
         tts = get_tts()
-        tts_result = tts.synthesize(preprocess_result.template_response, get_tts_language(session))
+        # v10.5.0: Truncate meta-question TTS to reduce latency
+        meta_tts_text = prepare_for_tts(preprocess_result.template_response, session)
+        if len(meta_tts_text) > 150:
+            trunc = meta_tts_text[:150]
+            last_end = max(trunc.rfind('. '), trunc.rfind('। '), trunc.rfind('? '), trunc.rfind('! '))
+            if last_end > 50:
+                meta_tts_text = trunc[:last_end + 1]
+        tts_result = tts.synthesize(meta_tts_text, get_tts_language(session))
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
 
         if session.conversation_history is None:
@@ -1643,7 +1650,7 @@ async def process_message_stream(
     # === END Pre-load ===
 
     async def stream_response():
-        """SSE: collect full LLM response, single TTS call, stream to frontend."""
+        """SSE: collect LLM response with parallel TTS, stream to frontend."""
         nonlocal new_state  # v7.5.2: Fix UnboundLocalError - new_state is modified in finally block
         full_text = ""  # TTS-cleaned text (for turn logging)
         display_text_raw = ""  # v10.1 FIX Issue 3: Original LLM text (for display with digits)
@@ -1653,10 +1660,34 @@ async def process_message_stream(
         llm_ms = 0
         tts_ms = 0
         try:
-            # v10.3.1: Collect full LLM response first (no per-sentence TTS)
+            # v10.5.0: Parallel TTS — start TTS on first sentence while LLM continues
             t_llm = time.perf_counter()
+            MAX_TTS_CHARS = 150
+            first_tts_task = None
+            first_tts_text = None
+            t_tts_start = None
+            tts_lang = get_tts_language(session)
+            tts_inst = get_tts()
+
             async for sentence in llm.generate_streaming(messages):
                 display_text_raw += " " + sentence
+
+                # Start TTS on first sentence immediately (overlaps with remaining LLM)
+                if first_tts_task is None and sentence.strip():
+                    first_tts_text = prepare_for_tts(sentence.strip(), session)
+                    if len(first_tts_text) > MAX_TTS_CHARS:
+                        trunc = first_tts_text[:MAX_TTS_CHARS]
+                        last_end = max(
+                            trunc.rfind('. '), trunc.rfind('। '),
+                            trunc.rfind('? '), trunc.rfind('! '),
+                        )
+                        if last_end > 50:
+                            first_tts_text = trunc[:last_end + 1]
+                    t_tts_start = time.perf_counter()
+                    first_tts_task = asyncio.create_task(
+                        tts_inst.synthesize_async(first_tts_text, tts_lang)
+                    )
+
             llm_ms = int((time.perf_counter() - t_llm) * 1000)
 
             display_text_raw = display_text_raw.strip()
@@ -1667,7 +1698,7 @@ async def process_message_stream(
                 display_text_raw, new_state,
                 verdict=verdict_str,
                 student_answer=student_text,
-                language=get_tts_language(session),
+                language=tts_lang,
                 previous_response=prev_response,
             )
             display_text_final = enforce_result.text
@@ -1677,34 +1708,43 @@ async def process_message_stream(
             # v10.3.1: Send text to frontend FIRST (don't wait for audio)
             yield f"data: {json.dumps({'type': 'text', 'content': display_text})}\n\n"
 
-            # v10.3.1: Single TTS call with full response
-            tts_text = prepare_for_tts(display_text_final, session)
-
-            # v10.3.1: Hard truncate TTS text to reduce latency (display keeps full text)
-            MAX_TTS_CHARS = 150
-            if len(tts_text) > MAX_TTS_CHARS:
-                truncated = tts_text[:MAX_TTS_CHARS]
+            # Prepare final TTS text from enforced output
+            final_tts_text = prepare_for_tts(display_text_final, session)
+            if len(final_tts_text) > MAX_TTS_CHARS:
+                trunc = final_tts_text[:MAX_TTS_CHARS]
                 last_end = max(
-                    truncated.rfind('. '),
-                    truncated.rfind('। '),
-                    truncated.rfind('? '),
-                    truncated.rfind('! '),
+                    trunc.rfind('. '), trunc.rfind('। '),
+                    trunc.rfind('? '), trunc.rfind('! '),
                 )
                 if last_end > 50:
-                    tts_text = truncated[:last_end + 1]
-                logger.info(f"TTS_TRUNCATED: {len(display_text_final)} → {len(tts_text)} chars")
+                    final_tts_text = trunc[:last_end + 1]
+                logger.info(f"TTS_TRUNCATED: {len(display_text_final)} → {len(final_tts_text)} chars")
 
-            full_text = tts_text  # For turn logging
+            full_text = final_tts_text  # For turn logging
             logger.info(f"TTS_TEXT: [{full_text[:200] if full_text else 'EMPTY'}]")
 
+            # v10.5.0: Use parallel TTS if first sentence is still valid in enforced text
             try:
-                t_tts = time.perf_counter()
-                tts_result = await tts.synthesize_async(tts_text, get_tts_language(session))
-                tts_ms = int((time.perf_counter() - t_tts) * 1000)
+                if first_tts_task and final_tts_text.startswith(first_tts_text.rstrip()):
+                    # Parallel hit: first sentence unchanged by enforcer
+                    # Use first sentence audio (shorter but faster — full text shown on screen)
+                    tts_result = await first_tts_task
+                    tts_ms = int((time.perf_counter() - t_tts_start) * 1000)
+                    overlap_ms = llm_ms - int((t_tts_start - t_llm) * 1000) if t_tts_start else 0
+                    full_text = first_tts_text  # Log what was actually TTS'd
+                    logger.info(f"TTS_PARALLEL_HIT: {tts_ms}ms, {len(first_tts_text)} chars, overlap={overlap_ms}ms saved")
+                else:
+                    # Parallel miss: enforcer changed first sentence, redo TTS
+                    if first_tts_task:
+                        first_tts_task.cancel()
+                        logger.info(f"TTS_PARALLEL_MISS: enforcer changed text, redoing TTS")
+                    t_tts = time.perf_counter()
+                    tts_result = await tts_inst.synthesize_async(final_tts_text, tts_lang)
+                    tts_ms = int((time.perf_counter() - t_tts) * 1000)
+                    logger.info(f"TTS_SEQUENTIAL: {tts_ms}ms, {len(final_tts_text)} chars")
                 if tts_result.audio_bytes:
                     audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
                     yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
-                logger.info(f"TTS_SINGLE_CALL: {tts_ms}ms, {len(tts_text)} chars")
             except Exception as e:
                 logger.error(f"TTS error: {e}")
 

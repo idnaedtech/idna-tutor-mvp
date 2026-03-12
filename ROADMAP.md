@@ -99,9 +99,16 @@
   - [x] Persistent HTTP clients for TTS (eliminate per-request TCP+TLS handshake) ✅
   - [x] TTS sample rate 24kHz→22kHz (8kHz caused WAV fallback) ✅
   - [x] Text appears on screen immediately before audio (perceived latency ~1s) ✅
-  - **Production results:** LLM 557-683ms ✅ | TTS 4900-5900ms ❌ | Total 6500-7500ms
-  - **Blocker:** Sarvam WebSocket streaming TTS (`wss://api.sarvam.ai/text-to-speech/stream`) returns HTTP 403 — endpoint not available on current API plan
-  - [ ] **Next:** Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers with streaming support
+  - [x] v10.5.0: Parallel first-sentence TTS during LLM streaming ✅ 2026-03-12
+    - TTS starts on first LLM sentence immediately (overlaps with remaining LLM generation)
+    - If enforcer doesn't change first sentence (common case), parallel result used → saves ~400ms+ overlap
+    - First sentence is shorter (~40-80 chars vs 150 chars) → TTS ~3s vs ~4-5s
+    - Meta-question TTS path also truncated to 150 chars (was untruncated)
+    - Logging: TTS_PARALLEL_HIT/MISS with overlap_ms for production monitoring
+  - **Expected results:** LLM 557-683ms ✅ | TTS ~3000ms (first sentence, parallel) | Total ~3500-4000ms
+  - **Remaining blocker:** Sarvam WebSocket streaming TTS (`wss://api.sarvam.ai/text-to-speech/stream`) returns HTTP 403 — endpoint not available on current API plan
+  - [ ] **Next:** Deploy v10.5.0, measure production TTS_PARALLEL_HIT rate and actual latency improvement
+  - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
   - [x] Change 2: Session model fields (current_level, consecutive_correct, consecutive_wrong) + Question level field + migrations
