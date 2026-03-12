@@ -2,7 +2,7 @@
 
 > **Read by Claude Code at every session start (via CLAUDE.md protocol).**
 > **Updated by:** Claude Code (task status) + CEO (priorities/scope)
-> **Last updated:** 2026-03-08
+> **Last updated:** 2026-03-12
 
 ---
 
@@ -110,6 +110,13 @@
   - [x] Change 5: Assessment at session start — new sessions start at Level 2
   - [x] Changes 6+8: Level-aware LLM prompts — LEVEL_INSTRUCTIONS dict, DIDI_BASE includes level awareness section
   - [x] Change 7: Level in debug SSE event + session_ctx for both endpoints
+  - [x] 347 tests passing, verify.py 22/22
+- [x] v10.4.1 Deploy fixes ✅ 2026-03-12
+  - [x] Fix 1: Question seeder upsert — insert 24 new questions + update levels on 43 existing (84 total: L1:10, L2:18, L3:23, L4:13, L5:20)
+  - [x] Fix 2: DetachedInstanceError in meta_stream — session.state accessed after DB session closed, captured before generator
+  - [x] Fix 3: Post-session nudge spam — frontend kept sending [silence] every 30s after session ended (400 Bad Request), fixed by clearing sessionId in endSession()
+  - [x] Fix 4: /health/detail diagnostic endpoint — shows question count and level distribution
+  - [x] Production confirmed: /health/detail returns questions=84 with 5-level distribution
   - [x] 347 tests passing, verify.py 22/22
 - [ ] 10 students using Didi regularly (Nizamabad/Hyderabad)
 
