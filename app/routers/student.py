@@ -1187,11 +1187,13 @@ async def process_message_stream(
         flag_modified(session, "conversation_history")
         await run_in_threadpool(lambda: db.commit())
 
+        current_state = session.state  # Capture before generator to avoid DetachedInstanceError
+
         async def meta_stream():
             yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
             yield f"data: {json.dumps({'type': 'text', 'content': preprocess_result.template_response})}\n\n"
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
-            yield f"data: {json.dumps({'type': 'done', 'state': session.state})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'state': current_state})}\n\n"
 
         return StreamingResponse(meta_stream(), media_type="text/event-stream")
 

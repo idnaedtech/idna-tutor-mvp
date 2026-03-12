@@ -688,8 +688,10 @@
             console.error("[Silence] Nudge failed:", e);
         }
 
-        // Restart timer after nudge
-        startInactivityTimer();
+        // Restart timer after nudge — but NOT if session ended
+        if (sessionId) {
+            startInactivityTimer();
+        }
     }
 
     // ─── Audio Playback ────────────────────────────────
@@ -1300,6 +1302,7 @@
             }
         } catch (e) { /* show overlay anyway */ }
 
+        sessionId = null;  // Stop inactivity timer from re-firing
         document.getElementById('endOverlay').classList.add('show');
     }
 
