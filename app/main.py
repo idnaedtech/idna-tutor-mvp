@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     # v8.1.0: Auto-migrate missing columns (no Alembic in project)
     _run_migrations()
 
-    # Seed question bank if empty
+    # Seed question bank — upsert to catch new questions and level updates
     db = SessionLocal()
     try:
         count = db.query(Question).count()
@@ -53,7 +53,12 @@ async def lifespan(app: FastAPI):
             _seed_questions(db)
             logger.info(f"Seeded {db.query(Question).count()} questions")
         else:
-            logger.info(f"Question bank has {count} questions")
+            added, updated = _upsert_questions(db)
+            total = db.query(Question).count()
+            if added or updated:
+                logger.info(f"Question bank upsert: {added} added, {updated} updated, {total} total")
+            else:
+                logger.info(f"Question bank has {total} questions")
 
         # Seed test student if none exist
         student_count = db.query(Student).count()
@@ -202,6 +207,54 @@ def _seed_questions(db):
         )
         db.add(q)
     db.commit()
+
+
+def _upsert_questions(db):
+    """Insert missing questions and update level field on existing ones."""
+    from app.content.seed_questions import QUESTIONS
+
+    diff_map = {"easy": 1, "medium": 2, "hard": 3}
+    added = 0
+    updated = 0
+    existing_ids = {q.id for q in db.query(Question).all()}
+
+    for q_data in QUESTIONS:
+        difficulty = q_data.get("difficulty", 1)
+        if isinstance(difficulty, str):
+            difficulty = diff_map.get(difficulty, 2)
+        seed_level = q_data.get("level", 3)
+
+        if q_data["id"] not in existing_ids:
+            q = Question(
+                id=q_data["id"],
+                subject=q_data.get("subject", "math"),
+                chapter=q_data["chapter"],
+                class_level=q_data.get("class_level", 8),
+                question_type=q_data.get("question_type") or q_data.get("type", "direct"),
+                question_text=q_data.get("question_text") or q_data.get("question_en") or q_data.get("question"),
+                question_voice=q_data.get("question_voice") or q_data.get("question"),
+                answer=q_data["answer"],
+                answer_variants=q_data.get("answer_variants") or q_data.get("accept_patterns"),
+                key_concepts=q_data.get("key_concepts"),
+                eval_method=q_data.get("eval_method", "exact"),
+                hints=q_data.get("hints"),
+                solution=q_data.get("solution") or q_data.get("explanation"),
+                target_skill=q_data["target_skill"],
+                difficulty=difficulty,
+                level=seed_level,
+                active=True,
+            )
+            db.add(q)
+            added += 1
+        else:
+            # Update level if it changed from default
+            existing = db.query(Question).filter(Question.id == q_data["id"]).first()
+            if existing and existing.level != seed_level:
+                existing.level = seed_level
+                updated += 1
+
+    db.commit()
+    return added, updated
 
 
 def _seed_test_student(db):
