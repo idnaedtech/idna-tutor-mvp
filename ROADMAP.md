@@ -149,6 +149,13 @@
     - Fix 3 (HIGH): Telugu language pre-scan — added Telugu triggers to both streaming and non-streaming endpoints (was only in classifier LLM path)
     - Fix 4 (HIGH): Roman Hindi → Devanagari — hinglish LANG_INSTRUCTIONS now requires Devanagari for Hindi words (Roman Hindi sounds garbled in TTS)
     - 398 tests passing (9 new), verify.py 22/22
+  - [x] v10.6.1: CTO code audit — 3 root cause fixes ✅ 2026-03-14
+    - Bug 1: Question levels — sq_e01 L2→L4 (pattern recognition), ch1_q1-q10 rational number questions deactivated (wrong chapter). Upsert syncs active field.
+    - Bug 2: Telugu prompt architecture — `_lang()` helper for 3-way language selection. ALL prompt builders now have Telugu branches in USER messages. Covers emotion, correction, teach, question, eval, hint, solution, comfort, greet, meta, language switch, inline eval.
+    - Bug 3: asked_ids includes ALL question_ids regardless of verdict (was CORRECT/INCORRECT only). Questions presented but not answered no longer repeat. Fixed in 4 locations.
+    - Bonus: Test student name "Priya"→"Test Student" auto-fix on startup
+    - Production: L1:10, L2:11, L3:27, L4:16, L5:20 (74 active of 84 total)
+    - 398 tests passing, verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
