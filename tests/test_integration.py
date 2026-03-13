@@ -526,30 +526,31 @@ class TestBugDGreetingNotDumpingLesson:
 
     def test_old_state_machine_greeting_ack_goes_to_teaching(self):
         """
-        v10.1: Question-first mode — GREETING + ACK goes to WAITING_ANSWER.
-        Old behavior: GREETING + ACK → TEACHING (teaching monologue)
-        New behavior: GREETING + ACK → WAITING_ANSWER (question first)
+        v10.5.2: GREETING + ACK → TEACHING (chapter intro before question).
+        Old (v10.1): GREETING + ACK → WAITING_ANSWER (question first)
+        New (v10.5.2): GREETING + ACK → TEACHING (chapter intro, then question)
         """
         from app.tutor.state_machine import transition
 
         ctx = {"student_text": "haan"}
         new_state, action = transition("GREETING", "ACK", ctx)
 
-        # v10.1: Question-first mode — skip teaching, go to question
-        assert new_state == "WAITING_ANSWER", f"Expected WAITING_ANSWER, got {new_state}"
-        assert action.action_type == "read_question", f"Expected read_question, got {action.action_type}"
+        # v10.5.2: Greeting response → chapter intro (TEACHING)
+        assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
+        assert action.action_type == "teach_concept", f"Expected teach_concept, got {action.action_type}"
+        assert action.extra.get("chapter_intro") is True
 
     def test_old_state_machine_greeting_engagement_goes_to_teaching(self):
-        """v10.1: Most inputs in GREETING proceed to WAITING_ANSWER (question-first)."""
+        """v10.5.2: Most inputs in GREETING proceed to TEACHING (chapter intro)."""
         from app.tutor.state_machine import transition
 
-        # TROLL, CONCEPT_REQUEST, etc. = student showed up, proceed to question
+        # TROLL, CONCEPT_REQUEST, etc. = student showed up, proceed to chapter intro
         ctx = {"student_text": "kya?"}
         new_state, action = transition("GREETING", "TROLL", ctx)
 
-        # v10.1: Question-first mode — skip teaching, go to question
-        assert new_state == "WAITING_ANSWER", f"Expected WAITING_ANSWER, got {new_state}"
-        assert action.action_type == "read_question", f"Expected read_question, got {action.action_type}"
+        # v10.5.2: Chapter intro before question
+        assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
+        assert action.action_type == "teach_concept", f"Expected teach_concept, got {action.action_type}"
 
     def test_old_state_machine_greeting_comfort_stays(self):
         """COMFORT in GREETING should stay in GREETING (offer support first)."""

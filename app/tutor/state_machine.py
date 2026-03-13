@@ -132,9 +132,9 @@ def transition(
             return "GREETING", Action("re_greet", student_text=text)
         else:
             # ACK, CONCEPT_REQUEST, ANSWER, META_QUESTION, IDK, TROLL, GARBLED, UNCLEAR
-            # v10.1: Question-first mode — skip teaching monologue, go straight to question
-            return "WAITING_ANSWER", Action("read_question", student_text=text,
-                extra={"question_first": True})
+            # v10.5.2: Greeting response → chapter intro (TEACHING), then question
+            return "TEACHING", Action("teach_concept", student_text=text,
+                extra={"chapter_intro": True, "reset_teaching_turn": True})
 
     # ── CHECKING_UNDERSTANDING ────────────────────────────────────────────
 

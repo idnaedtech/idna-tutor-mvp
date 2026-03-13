@@ -9,10 +9,10 @@ from typing import Optional
 STRINGS = {
     # ── Session Start ──────────────────────────────────────────────
     "warmup_greeting": {
-        "english": "Hey {name}! How are you doing today? How was school?",
-        "hindi": "Hey {name}! Kaisi ho aaj? School kaisa raha?",
-        "hinglish": "Hey {name}! Kaisi ho aaj? School kaisa raha?",
-        "telugu": "Hey {name}! Ela unnav eppudu? School ela jarigindi?",
+        "english": "Hey {name}! How are you doing today? How was your day?",
+        "hindi": "Hey {name}! Kaisi ho aaj? Aaj ka din kaisa raha?",
+        "hinglish": "Hey {name}! Kaisi ho aaj? Aaj ka din kaisa raha?",
+        "telugu": "Hey {name}! Ela unnav eppudu? Ee roju ela jarigindi?",
     },
     "warmup_transition": {
         "english": "Nice! So today we're going to look at something interesting in {topic}. Ready when you are!",

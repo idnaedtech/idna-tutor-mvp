@@ -115,6 +115,13 @@
     - Fallback to regex check_math_answer() if LLM doesn't output prefix tag
     - Session counters updated in generator's finally block with fresh DB session
     - 354 tests passing (8 new inline eval tests)
+  - [x] v10.5.2: 5 smoke test fixes ✅ 2026-03-13
+    - Fix 1 (CRITICAL): TTS speaks full response, not first sentence only (parallel TTS removed)
+    - Fix 2 (HIGH): Greeting flow — greet → wait → chapter intro → question (3-turn warmup)
+    - Fix 3 (HIGH): State-dependent TTS limits (TEACHING:350, HINT:200, GREETING:150 chars)
+    - Fix 4 (MEDIUM): Meta-question text sent BEFORE audio (was after)
+    - Fix 5 (LOW): "How was your day?" replaces "How was school?" in all 4 languages
+    - 359 tests passing (5 new), verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions

@@ -285,6 +285,20 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     lang_pref = ctx.get("language_pref", "hinglish")
     use_english = lang_pref == "english"
 
+    # v10.5.2: Chapter intro — brief explanation before first question
+    if a.extra.get("chapter_intro"):
+        ch_key = ctx.get("chapter", "")
+        ch_name = CHAPTER_NAMES.get(ch_key, ch_key.replace("_", " ").title())
+        if use_english:
+            msg = (f'Student just responded to greeting. Give a brief 2-3 sentence chapter introduction about "{ch_name}". '
+                   f'Explain what the topic is about in simple terms with one relatable example. '
+                   f'Then say "Let\'s try a question!" to transition. Do NOT ask a math question yet.')
+        else:
+            msg = (f'Student ne greeting ka jawab diya. "{ch_name}" ka brief 2-3 sentence introduction do. '
+                   f'Simple example ke saath topic samjhao. '
+                   f'Phir bolo "Chalo ek question try karte hain!" Math question MAT poocho abhi.')
+        return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
+
     # v7.2.0: Phase-based teaching with teaching_turn (BUG 1/3 fix)
     teaching_turn = getattr(a, 'teaching_turn', 0) or a.reteach_count
     if teaching_turn > 0:

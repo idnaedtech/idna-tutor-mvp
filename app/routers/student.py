@@ -286,15 +286,9 @@ def start_session(
         topic_name_en = lesson.get("name") or lesson.get("title_hi", "math")
         topic_for_greeting = topic_name_en if lang == "english" else topic_name
 
-        # V10: Warm greeting from centralized strings + topic announcement
-        greeting_base = get_text("warmup_greeting", lang, name=student.name)
-        if lang == "english":
-            greeting_text = f"{greeting_base} Today we'll look at {topic_for_greeting}. Ready to start?"
-        elif lang == "telugu":
-            # v10.1: Telugu greeting
-            greeting_text = f"Hello {student.name}! Ee roju manamu {topic_for_greeting} nerchukundaam. Ready aa?"
-        else:
-            greeting_text = f"{greeting_base} Aaj hum {topic_for_greeting} dekhenge. Shuru karein?"
+        # v10.5.2: Warm greeting ONLY — no topic, no question. Wait for student response.
+        # Chapter intro comes in next turn (GREETING→TEACHING via chapter_intro flag)
+        greeting_text = get_text("warmup_greeting", lang, name=student.name)
 
         # Stay in GREETING — FSM will transition to TEACHING on ACK
         session.state = "GREETING"
@@ -1177,10 +1171,10 @@ async def process_message_stream(
         logger.info(f"RESPONSE TO FRONTEND (stream-meta): text=[{preprocess_result.template_response[:100] if preprocess_result.template_response else 'EMPTY'}], len={len(preprocess_result.template_response) if preprocess_result.template_response else 0}")
 
         tts = get_tts()
-        # v10.5.0: Truncate meta-question TTS to reduce latency
+        # v10.5.2: Meta-question TTS — 200 char limit (was 150, too short for explanations)
         meta_tts_text = prepare_for_tts(preprocess_result.template_response, session)
-        if len(meta_tts_text) > 150:
-            trunc = meta_tts_text[:150]
+        if len(meta_tts_text) > 200:
+            trunc = meta_tts_text[:200]
             last_end = max(trunc.rfind('. '), trunc.rfind('। '), trunc.rfind('? '), trunc.rfind('! '))
             if last_end > 50:
                 meta_tts_text = trunc[:last_end + 1]
@@ -1197,8 +1191,9 @@ async def process_message_stream(
         current_state = session.state  # Capture before generator to avoid DetachedInstanceError
 
         async def meta_stream():
-            yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
+            # v10.5.2: Text BEFORE audio (same as main response path)
             yield f"data: {json.dumps({'type': 'text', 'content': preprocess_result.template_response})}\n\n"
+            yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'state': current_state})}\n\n"
 
@@ -1619,41 +1614,21 @@ async def process_message_stream(
         llm_ms = 0
         tts_ms = 0
         try:
-            # v10.5.0: Parallel TTS — start TTS on first sentence while LLM continues
             t_llm = time.perf_counter()
-            MAX_TTS_CHARS = 150
-            first_tts_task = None
-            first_tts_text = None
-            t_tts_start = None
             tts_lang = get_tts_language(session)
             tts_inst = get_tts()
 
+            # v10.5.2: State-dependent TTS char limits
+            # TEACHING needs room to explain, GREETING should be short
+            if state_before == "TEACHING":
+                MAX_TTS_CHARS = 350
+            elif state_before in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION"):
+                MAX_TTS_CHARS = 200
+            else:
+                MAX_TTS_CHARS = 150
+
             async for sentence in llm.generate_streaming(messages):
                 display_text_raw += " " + sentence
-
-                # Start TTS on first sentence immediately (overlaps with remaining LLM)
-                if first_tts_task is None and sentence.strip():
-                    tts_sentence = sentence.strip()
-                    # v10.5.1: Strip inline eval verdict tag before TTS
-                    if _use_inline_eval:
-                        for tag in ("[CORRECT]", "[INCORRECT]"):
-                            if tts_sentence.startswith(tag):
-                                tts_sentence = tts_sentence[len(tag):].strip()
-                    if not tts_sentence:
-                        continue  # Tag-only sentence, wait for real content
-                    first_tts_text = prepare_for_tts(tts_sentence, session)
-                    if len(first_tts_text) > MAX_TTS_CHARS:
-                        trunc = first_tts_text[:MAX_TTS_CHARS]
-                        last_end = max(
-                            trunc.rfind('. '), trunc.rfind('। '),
-                            trunc.rfind('? '), trunc.rfind('! '),
-                        )
-                        if last_end > 50:
-                            first_tts_text = trunc[:last_end + 1]
-                    t_tts_start = time.perf_counter()
-                    first_tts_task = asyncio.create_task(
-                        tts_inst.synthesize_async(first_tts_text, tts_lang)
-                    )
 
             llm_ms = int((time.perf_counter() - t_llm) * 1000)
 
@@ -1725,25 +1700,12 @@ async def process_message_stream(
             full_text = final_tts_text  # For turn logging
             logger.info(f"TTS_TEXT: [{full_text[:200] if full_text else 'EMPTY'}]")
 
-            # v10.5.0: Use parallel TTS if first sentence is still valid in enforced text
+            # v10.5.2: Always TTS the full enforced response (not first sentence only)
             try:
-                if first_tts_task and final_tts_text.startswith(first_tts_text.rstrip()):
-                    # Parallel hit: first sentence unchanged by enforcer
-                    # Use first sentence audio (shorter but faster — full text shown on screen)
-                    tts_result = await first_tts_task
-                    tts_ms = int((time.perf_counter() - t_tts_start) * 1000)
-                    overlap_ms = llm_ms - int((t_tts_start - t_llm) * 1000) if t_tts_start else 0
-                    full_text = first_tts_text  # Log what was actually TTS'd
-                    logger.info(f"TTS_PARALLEL_HIT: {tts_ms}ms, {len(first_tts_text)} chars, overlap={overlap_ms}ms saved")
-                else:
-                    # Parallel miss: enforcer changed first sentence, redo TTS
-                    if first_tts_task:
-                        first_tts_task.cancel()
-                        logger.info(f"TTS_PARALLEL_MISS: enforcer changed text, redoing TTS")
-                    t_tts = time.perf_counter()
-                    tts_result = await tts_inst.synthesize_async(final_tts_text, tts_lang)
-                    tts_ms = int((time.perf_counter() - t_tts) * 1000)
-                    logger.info(f"TTS_SEQUENTIAL: {tts_ms}ms, {len(final_tts_text)} chars")
+                t_tts = time.perf_counter()
+                tts_result = await tts_inst.synthesize_async(final_tts_text, tts_lang)
+                tts_ms = int((time.perf_counter() - t_tts) * 1000)
+                logger.info(f"TTS_FULL: {tts_ms}ms, {len(final_tts_text)} chars")
                 if tts_result.audio_bytes:
                     audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
                     yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"

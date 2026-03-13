@@ -261,6 +261,64 @@ class TestV103MetaQuestionInHintStates:
         assert "back to our question" in user_msg.lower() or "wapas" in user_msg.lower()
 
 
+class TestV1052GreetingFlow:
+    """v10.5.2: Greeting waits for response, then chapter intro, then question."""
+
+    def test_greeting_waits_for_response(self):
+        """GREETING + ACK → TEACHING with chapter_intro flag (not straight to question)."""
+        from app.tutor.state_machine import transition
+        ctx = {"student_text": "accha tha"}
+        new_state, action = transition("GREETING", "ACK", ctx)
+        assert new_state == "TEACHING"
+        assert action.action_type == "teach_concept"
+        assert action.extra.get("chapter_intro") is True
+
+    def test_chapter_intro_before_first_question(self):
+        """chapter_intro flag produces intro prompt, NOT a math question."""
+        from app.tutor.instruction_builder import _build_teach_concept
+        from app.tutor.state_machine import Action
+        action = Action("teach_concept", student_text="accha tha",
+                       extra={"chapter_intro": True})
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING", "current_level": 2}
+        q = {"target_skill": "perfect_square_identification", "id": "sq_b01",
+             "question_voice": "What is 5 squared?"}
+        msgs = _build_teach_concept(action, ctx, q, None, None)
+        user_msg = msgs[-1]["content"]
+        assert "introduction" in user_msg.lower() or "intro" in user_msg.lower()
+        assert "NOT ask a math question" in user_msg or "MAT poocho" in user_msg
+
+    def test_chapter_intro_hinglish(self):
+        """Chapter intro in Hinglish also doesn't ask question."""
+        from app.tutor.instruction_builder import _build_teach_concept
+        from app.tutor.state_machine import Action
+        action = Action("teach_concept", student_text="haan",
+                       extra={"chapter_intro": True})
+        ctx = {"language_pref": "hinglish", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING", "current_level": 2}
+        msgs = _build_teach_concept(action, ctx, None, None, None)
+        user_msg = msgs[-1]["content"]
+        assert "MAT poocho" in user_msg
+
+    def test_greeting_no_school_reference(self):
+        """Greeting should say 'how was your day' not 'how was school'."""
+        from app.tutor.strings import get_text
+        for lang in ("english", "hindi", "hinglish", "telugu"):
+            greeting = get_text("warmup_greeting", lang, name="Priya")
+            assert "school" not in greeting.lower(), f"'{lang}' greeting still mentions school: {greeting}"
+
+    def test_tts_full_text_not_first_sentence(self):
+        """v10.5.2: TTS should use full enforced text, not first-sentence-only parallel result.
+        Verified by checking that the parallel TTS code was removed from stream_response."""
+        import inspect
+        from app.routers.student import process_message_stream
+        source = inspect.getsource(process_message_stream)
+        assert "TTS_FULL" in source, "stream_response should log TTS_FULL"
+        assert "TTS_PARALLEL_HIT" not in source, "parallel first-sentence TTS should be removed"
+
+
 class TestInlineEval:
     """v10.5.1: Inline eval — combined answer eval + response in single LLM call."""
 
