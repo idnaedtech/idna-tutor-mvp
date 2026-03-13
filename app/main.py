@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
             _seed_test_student(db)
             logger.info("Test student created (PIN: 1234)")
 
-        # v10.6.1: Fix test student name (was "Priya" which conflicts with anti-Priya rule)
+        # v10.6.2: Fix test student name (was "Priya" which conflicts with anti-Priya rule)
         test_student = db.query(Student).filter(Student.pin == "1234").first()
         if test_student and test_student.name == "Priya":
             test_student.name = "Test Student"
@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v10.6.1 ready")
+    logger.info("IDNA Didi v10.6.2 ready")
     yield
     logger.info("Shutting down")
 
@@ -323,9 +323,9 @@ def _seed_pilot_students(db):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v10.6.1",
+    title="IDNA Didi v10.6.2",
     description="AI Voice Tutor for Class 8 NCERT — Inline Eval",
-    version="10.6.1",
+    version="10.6.2",
     lifespan=lifespan,
 )
 
@@ -372,7 +372,7 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "10.6.1"}
+    return {"status": "ok", "version": "10.6.2"}
 
 
 @app.get("/health/detail")
@@ -385,7 +385,7 @@ async def health_detail():
         levels = {str(lvl): cnt for lvl, cnt in level_rows}
     finally:
         db.close()
-    return {"status": "ok", "version": "10.6.1", "questions": q_count, "levels": levels}
+    return {"status": "ok", "version": "10.6.2", "questions": q_count, "levels": levels}
 
 
 # Keep-alive endpoint for UptimeRobot (prevents Railway sleep)
