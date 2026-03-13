@@ -69,15 +69,16 @@ CURRENT SESSION: {chapter_name} — {current_topic}
 
 # v7.3.22 Fix 1: Chapter name mapping for metadata injection
 CHAPTER_NAMES = {
-    "ch1_rational_numbers": "Chapter 1 - Rational Numbers",
+    "ch1_rational_numbers": "Chapter 1, Rational Numbers",
     # v10.5.5: Include chapter number — students ask "which chapter number?"
-    "ch1_square_and_cube": "Chapter 6 - Squares and Square Roots (and Chapter 7 - Cubes and Cube Roots)",
-    "ch2_linear_equations": "Chapter 2 - Linear Equations",
-    "ch3_understanding_quadrilaterals": "Chapter 3 - Understanding Quadrilaterals",
-    "ch4_practical_geometry": "Chapter 4 - Practical Geometry",
-    "ch5_data_handling": "Chapter 5 - Data Handling",
-    "ch6_squares_square_roots": "Chapter 6 - Squares and Square Roots",
-    "ch7_cubes_cube_roots": "Chapter 7 - Cubes and Cube Roots",
+    # v10.6.3: Commas not dashes — TTS reads "-" as "minus"
+    "ch1_square_and_cube": "Chapter 6, Squares and Square Roots (and Chapter 7, Cubes and Cube Roots)",
+    "ch2_linear_equations": "Chapter 2, Linear Equations",
+    "ch3_understanding_quadrilaterals": "Chapter 3, Understanding Quadrilaterals",
+    "ch4_practical_geometry": "Chapter 4, Practical Geometry",
+    "ch5_data_handling": "Chapter 5, Data Handling",
+    "ch6_squares_square_roots": "Chapter 6, Squares and Square Roots",
+    "ch7_cubes_cube_roots": "Chapter 7, Cubes and Cube Roots",
 }
 
 LANG_INSTRUCTIONS = {
@@ -737,7 +738,7 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
     student_lower = a.student_text.lower()
     if "chapter" in student_lower or "topic" in student_lower or "kaunsa" in student_lower or "कौन" in a.student_text or "number" in student_lower:
         # v10.5.5: Include chapter number in response
-        chapter_response = _lang(ctx, f"We're learning {ch}.", f"Hum {ch} padh rahe hain.", f"మనం {ch} నేర్చుకుంటున్నాం.")
+        chapter_response = _lang(ctx, f"We are learning {ch}.", f"हम {ch} पढ़ रहे हैं।", f"మనం {ch} నేర్చుకుంటున్నాం.")
         msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}" Include the chapter NUMBER.{steer_back}'
     elif "correct" in student_lower or "right" in student_lower or "sahi" in student_lower or "galat" in student_lower:
         # v10.3.0: Student asking about their answer status

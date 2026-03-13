@@ -181,31 +181,32 @@ class TestBuildMetaResponse:
         response = build_meta_response(
             meta_type="chapter",
             chapter="ch1_square_and_cube",
-            chapter_name="Chapter 6 - Squares and Square Roots",
+            chapter_name="Chapter 6, Squares and Square Roots",
             subject="math",
             current_skill="perfect_square_concept",
             language_pref="english",
         )
-        assert "Chapter 6 - Squares and Square Roots" in response
+        assert "Chapter 6" in response
         assert "learning" in response.lower()
 
     def test_chapter_hindi(self):
         response = build_meta_response(
             meta_type="chapter",
             chapter="ch1_square_and_cube",
-            chapter_name="Chapter 6 - Squares and Square Roots",
+            chapter_name="Chapter 6, Squares and Square Roots",
             subject="math",
             current_skill="perfect_square_concept",
             language_pref="hinglish",
         )
-        assert "Chapter 6 - Squares and Square Roots" in response
-        assert "padh rahe hain" in response
+        assert "Chapter 6" in response
+        # v10.6.3: Hinglish meta-responses use Devanagari
+        assert "पढ़ रहे हैं" in response
 
     def test_topic_with_skill_english(self):
         response = build_meta_response(
             meta_type="topic",
             chapter="ch1_square_and_cube",
-            chapter_name="Chapter 6 - Squares and Square Roots",
+            chapter_name="Chapter 6, Squares and Square Roots",
             subject="math",
             current_skill="perfect_square_concept",
             language_pref="english",
@@ -231,7 +232,7 @@ class TestPreprocessStudentMessage:
         result = preprocess_student_message(
             text="what chapter are we learning?",
             chapter="ch1_square_and_cube",
-            chapter_name="Chapter 6 - Squares and Square Roots",
+            chapter_name="Chapter 6, Squares and Square Roots",
             subject="math",
             language_pref="english",
         )

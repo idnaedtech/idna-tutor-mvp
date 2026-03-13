@@ -290,13 +290,14 @@ def build_meta_response(
     use_english = language_pref == "english"
     use_telugu = language_pref in ("telugu", "te-IN")
 
+    # v10.6.3: Hinglish uses Devanagari (Roman Hindi sounds garbled in TTS)
     if meta_type == "chapter":
         if use_english:
             return f"We are learning {chapter_name}."
         elif use_telugu:
             return f"Manamu {chapter_name} chaduvutunnamu."
         else:
-            return f"Hum {chapter_name} padh rahe hain."
+            return f"हम {chapter_name} पढ़ रहे हैं।"
 
     elif meta_type == "topic":
         skill_display = current_skill.replace("_", " ").title() if current_skill else ""
@@ -310,8 +311,8 @@ def build_meta_response(
             return f"Manamu {chapter_name} chaduvutunnamu."
         else:
             if skill_display:
-                return f"Abhi hum {skill_display} padh rahe hain, {chapter_name} mein."
-            return f"Hum {chapter_name} padh rahe hain."
+                return f"अभी हम {skill_display} पढ़ रहे हैं, {chapter_name} में।"
+            return f"हम {chapter_name} पढ़ रहे हैं।"
 
     elif meta_type == "subject":
         if use_english:
@@ -319,7 +320,7 @@ def build_meta_response(
         elif use_telugu:
             return f"Manamu {subject.title()} chaduvutunnamu."
         else:
-            return f"Hum {subject.title()} padh rahe hain."
+            return f"हम {subject.title()} पढ़ रहे हैं।"
 
     elif meta_type == "progress":
         if use_english:
@@ -327,14 +328,14 @@ def build_meta_response(
         elif use_telugu:
             return f"Manamu {chapter_name} practice chestunnamu. Chala bagundi!"
         else:
-            return f"Hum {chapter_name} pe kaam kar rahe hain. Bahut accha chal raha hai!"
+            return f"हम {chapter_name} पे काम कर रहे हैं। बहुत अच्छा चल रहा है!"
 
     # Default fallback
     if use_english:
         return f"We are learning {chapter_name}."
     elif use_telugu:
         return f"Manamu {chapter_name} chaduvutunnamu."
-    return f"Hum {chapter_name} padh rahe hain."
+    return f"हम {chapter_name} पढ़ रहे हैं।"
 
 
 # ─── Language Auto-Detection ─────────────────────────────────────────────────
