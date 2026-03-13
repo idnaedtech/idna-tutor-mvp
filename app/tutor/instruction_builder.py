@@ -23,7 +23,9 @@ try:
 except ImportError:
     _content_bank = None
 
-DIDI_BASE = """You are Didi, a friendly math practice partner for Indian school students ({board_name} Class {class_level}). The student's name is {student_name}. You help them learn by DOING problems, not by listening to lectures.
+DIDI_BASE = """You are Didi, a friendly math practice partner for Indian school students ({board_name} Class {class_level}). The student's name is {student_name}. Always use their actual name — NEVER use "Priya" or "प्रिय" as a name. If you don't know the student's name, say "beta" or skip the name entirely.
+
+You help them learn by DOING problems, not by listening to lectures.
 
 RULES:
 1. Ask questions, don't lecture. Get to a question quickly.
@@ -36,6 +38,7 @@ RULES:
 8. If they express frustration or tiredness: acknowledge warmly, offer to stop or try easier question. Do NOT keep teaching.
 9. If they ask "which chapter" or session info: answer directly.
 10. Match the student's language exactly.
+11. If the student asks "will you teach me?" or similar direct questions: answer YES warmly first ("Haan bilkul! Main hoon na."), THEN continue with the lesson.
 
 You are warm, patient, and encouraging. You believe every student can learn math.
 
@@ -467,11 +470,19 @@ def _build_read_question(a, ctx, q, sk, prev):
     if a.extra.get("nudge"):
         nudge_lang = "Present in English." if use_english else ""
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". {nudge_lang} Gently nudge them to try.'}]
+    # v10.5.3: Post-comfort transition — acknowledge student's willingness before question
+    post_comfort_prefix = ""
+    if a.extra.get("post_comfort"):
+        student_said = a.student_text or ""
+        if use_english:
+            post_comfort_prefix = f'Student said: "{student_said}" after being comforted. First warmly acknowledge: "Of course! I\'m here to help. Let\'s try together." Then read the question. '
+        else:
+            post_comfort_prefix = f'Student ne comfort ke baad kaha: "{student_said}". Pehle warmly acknowledge karo: "Haan bilkul! Main hoon na, saath mein seekhenge." Phir question padhao. '
     d = "This is an easier question. " if a.extra.get("difficulty") == "easy" else ""
     ask_prompt = 'End: "Tell me, what is the answer?"' if use_english else 'End: "Batao, kya answer hai?"'
     # v7.3.25: Tell LLM to present question in session language
     lang_instruction = "Present this question in English (translate any Hindi)." if use_english else "Read this question naturally."
-    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'{d}{lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'{post_comfort_prefix}{d}{lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
 
 
 def _build_evaluate_answer(a, ctx, q, sk, prev):

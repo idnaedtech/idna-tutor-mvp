@@ -87,6 +87,10 @@ FAST_ACK = {
     "ji", "ji haan", "ji ha",
     "haan shuru karo", "haan shuru karte hain",
     "ji shuru karte hain", "ji shuru karo", "ji shuru kijiye",
+    # v10.5.3: "okay after that" / "next" patterns — ACK, not ANSWER
+    "okay after that", "next question",
+    "iske baad", "uske baad", "aage batao", "aage",
+    "agla sawaal", "aur batao",
 }
 
 FAST_IDK = {

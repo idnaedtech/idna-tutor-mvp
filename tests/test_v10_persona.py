@@ -418,5 +418,122 @@ class TestInlineEval:
         assert "LANGUAGE:" in sys_msg
 
 
+class TestV1053Fixes:
+    """v10.5.3: Anti-Priya, post-comfort acknowledgment, ACK classification."""
+
+    def test_didi_base_anti_priya_rule(self):
+        """DIDI_BASE explicitly forbids using 'Priya' as a name."""
+        from app.tutor.instruction_builder import DIDI_BASE
+        assert "NEVER use" in DIDI_BASE
+        assert "Priya" in DIDI_BASE
+        assert "प्रिय" in DIDI_BASE
+
+    def test_student_name_used_not_priya(self):
+        """System prompt uses actual student name, not 'Priya' as default."""
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Ananya", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING", "current_level": 2}
+        prompt = _sys(session_context=ctx)
+        assert "Ananya" in prompt
+        # The anti-Priya rule should be in the prompt
+        assert "NEVER" in prompt
+
+    def test_student_name_default_when_missing(self):
+        """When student_name is not in context, default to 'Student', not 'Priya'."""
+        ctx = {"language_pref": "hinglish", "chapter": "ch1_square_and_cube",
+               "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING", "current_level": 2}
+        prompt = _sys(session_context=ctx)
+        assert "Student" in prompt
+
+    def test_post_comfort_acknowledgment_english(self):
+        """Post-comfort transition includes warm acknowledgment before question."""
+        from app.tutor.state_machine import Action
+        from app.tutor.instruction_builder import build_prompt
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "WAITING_ANSWER", "current_level": 2}
+        q = {"question_voice": "What is 5 squared?", "answer": "25",
+             "answer_variants": [], "hints": [], "id": "sq_b01",
+             "target_skill": "perfect_square_identification"}
+        action = Action("read_question", student_text="Will you teach me math?",
+                        extra={"post_comfort": True, "question_first": True})
+        msgs = build_prompt(action, ctx, question_data=q)
+        user_msg = msgs[-1]["content"]
+        assert "acknowledge" in user_msg.lower() or "comfort" in user_msg.lower()
+
+    def test_post_comfort_acknowledgment_hindi(self):
+        """Post-comfort Hindi response includes acknowledgment."""
+        from app.tutor.state_machine import Action
+        from app.tutor.instruction_builder import build_prompt
+        ctx = {"language_pref": "hinglish", "chapter": "ch1_square_and_cube",
+               "student_name": "Ravi", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "WAITING_ANSWER", "current_level": 2}
+        q = {"question_voice": "5 ka square kya hai?", "answer": "25",
+             "answer_variants": [], "hints": [], "id": "sq_b01",
+             "target_skill": "perfect_square_identification"}
+        action = Action("read_question",
+                        student_text="आप मुझे मैथ्स सिखाएंगे?",
+                        extra={"post_comfort": True, "question_first": True})
+        msgs = build_prompt(action, ctx, question_data=q)
+        user_msg = msgs[-1]["content"]
+        assert "bilkul" in user_msg.lower() or "acknowledge" in user_msg.lower()
+
+    def test_ack_classification_okay_after_that(self):
+        """'okay after that' should be classified as ACK, not ANSWER."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("okay after that", current_state="TEACHING")
+        assert result == "ACK"
+
+    def test_ack_classification_iske_baad(self):
+        """'iske baad' should be classified as ACK."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("iske baad", current_state="TEACHING")
+        assert result == "ACK"
+
+    def test_ack_classification_aage_batao(self):
+        """'aage batao' should be classified as ACK."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("aage batao", current_state="TEACHING")
+        assert result == "ACK"
+
+    def test_ack_classification_next_question(self):
+        """'next question' should be classified as ACK in TEACHING state."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("next question", current_state="TEACHING")
+        assert result == "ACK"
+
+    def test_ack_not_answer_in_teaching_state(self):
+        """'okay after that' in TEACHING state must be ACK, not ANSWER."""
+        from app.tutor.input_classifier import classify_student_input
+        # In TEACHING state, these should never be ANSWER
+        for phrase in ["okay after that", "ok next", "iske baad", "aage batao"]:
+            result = classify_student_input(phrase, current_state="TEACHING")
+            assert result == "ACK", f"'{phrase}' classified as {result}, expected ACK"
+
+    def test_level_instruction_in_prompt(self):
+        """System prompt includes level-appropriate instruction."""
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Test", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING", "current_level": 1}
+        prompt = _sys(session_context=ctx)
+        assert "Level 1" in prompt
+        assert "multiplication" in prompt.lower()
+
+    def test_level_3_instruction(self):
+        """Level 3 instruction mentions square roots."""
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Test", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING", "current_level": 3}
+        prompt = _sys(session_context=ctx)
+        assert "Level 3" in prompt
+        assert "square root" in prompt.lower()
+
+    def test_didi_base_direct_question_rule(self):
+        """DIDI_BASE includes rule for handling direct questions like 'will you teach me?'."""
+        from app.tutor.instruction_builder import DIDI_BASE
+        assert "teach me" in DIDI_BASE.lower()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
