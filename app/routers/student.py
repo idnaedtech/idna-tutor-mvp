@@ -714,55 +714,68 @@ async def process_message(
         )
 
         if question:
-            # v7.5.0: Use LLM-based answer evaluation with Content Bank context
-            try:
-                cb = get_content_bank()
-                # Get misconceptions from content bank if available
-                misconceptions = []
-                if question.target_skill:
-                    misconceptions = cb.get_misconceptions(question.target_skill)
+            # v10.6.1: Fast pre-check with regex checker — handles yes/no, exact matches,
+            # and numeric answers without LLM call. Only use LLM for ambiguous cases.
+            regex_verdict = check_math_answer(
+                student_text,
+                question.answer,
+                question.answer_variants or [],
+            )
+            if regex_verdict.correct:
+                verdict_obj = regex_verdict
+                verdict_str = regex_verdict.verdict
+                diagnostic = regex_verdict.diagnostic
+                logger.info(f"FAST_EVAL: '{student_text[:30]}' -> CORRECT (regex pre-check)")
+            else:
+                # v7.5.0: Use LLM-based answer evaluation with Content Bank context
+                try:
+                    cb = get_content_bank()
+                    # Get misconceptions from content bank if available
+                    misconceptions = []
+                    if question.target_skill:
+                        misconceptions = cb.get_misconceptions(question.target_skill)
 
-                eval_result = await evaluate_answer(
-                    question_text=question.question_voice or question.question_text,
-                    expected_answer=question.answer,
-                    acceptable_alternates=question.answer_variants or [],
-                    misconceptions=misconceptions,
-                    student_response=student_text,
-                    llm_call_func=llm_call_for_eval,
-                )
+                    eval_result = await evaluate_answer(
+                        question_text=question.question_voice or question.question_text,
+                        expected_answer=question.answer,
+                        acceptable_alternates=question.answer_variants or [],
+                        misconceptions=misconceptions,
+                        student_response=student_text,
+                        llm_call_func=llm_call_for_eval,
+                    )
 
-                # Convert LLM eval result to Verdict object for compatibility
-                verdict_map = {
-                    "correct": ("CORRECT", True),
-                    "incorrect": ("INCORRECT", False),
-                    "partial": ("PARTIAL", False),
-                    "idk": ("INCORRECT", False),
-                    "unclear": ("INCORRECT", False),
-                }
-                v_str, v_correct = verdict_map.get(eval_result["verdict"], ("INCORRECT", False))
+                    # Convert LLM eval result to Verdict object for compatibility
+                    verdict_map = {
+                        "correct": ("CORRECT", True),
+                        "incorrect": ("INCORRECT", False),
+                        "partial": ("PARTIAL", False),
+                        "idk": ("INCORRECT", False),
+                        "unclear": ("INCORRECT", False),
+                    }
+                    v_str, v_correct = verdict_map.get(eval_result["verdict"], ("INCORRECT", False))
 
-                verdict_obj = Verdict(
-                    correct=v_correct,
-                    verdict=v_str,
-                    student_parsed=eval_result.get("student_answer_extracted", ""),
-                    correct_display=question.answer,
-                    diagnostic=eval_result.get("feedback_hi", ""),
-                )
-                verdict_str = v_str
-                diagnostic = eval_result.get("feedback_hi", "")
+                    verdict_obj = Verdict(
+                        correct=v_correct,
+                        verdict=v_str,
+                        student_parsed=eval_result.get("student_answer_extracted", ""),
+                        correct_display=question.answer,
+                        diagnostic=eval_result.get("feedback_hi", ""),
+                    )
+                    verdict_str = v_str
+                    diagnostic = eval_result.get("feedback_hi", "")
 
-                logger.info(f"v7.5.0 LLM eval: '{student_text[:30]}' -> {v_str} (extracted: {eval_result.get('student_answer_extracted')})")
+                    logger.info(f"v7.5.0 LLM eval: '{student_text[:30]}' -> {v_str} (extracted: {eval_result.get('student_answer_extracted')})")
 
-            except Exception as e:
-                # Fallback to regex-based checker if LLM eval fails
-                logger.warning(f"v7.5.0 LLM eval failed, using fallback: {e}")
-                verdict_obj = check_math_answer(
-                    student_text,
-                    question.answer,
-                    question.answer_variants or [],
-                )
-                verdict_str = verdict_obj.verdict
-                diagnostic = verdict_obj.diagnostic
+                except Exception as e:
+                    # Fallback to regex-based checker if LLM eval fails
+                    logger.warning(f"v7.5.0 LLM eval failed, using fallback: {e}")
+                    verdict_obj = check_math_answer(
+                        student_text,
+                        question.answer,
+                        question.answer_variants or [],
+                    )
+                    verdict_str = verdict_obj.verdict
+                    diagnostic = verdict_obj.diagnostic
 
             action.verdict = verdict_obj
 
