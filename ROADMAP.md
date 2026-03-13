@@ -161,6 +161,10 @@
     - Fix: Normalize "HINT" → "HINT_1"/"HINT_2" based on hint_level before calling v7.3 transition(). Both endpoints.
     - Bonus: Fixed missed asked_ids verdict filter in streaming inline eval path.
     - Production smoke test confirmed: ANSWER in HINT state now returns verdict (was None).
+  - [x] v10.6.3: Fix double-answer bug + Devanagari chapter + TTS dash ✅ 2026-03-14
+    - CRITICAL: Students answered every question TWICE. Inline eval saved state as "EVALUATING" (transient, no v7.3 handler) instead of WAITING_ANSWER/HINT_1. Next turn fell through to ask_repeat → re-read same question.
+    - Fix: After inline eval [CORRECT] → WAITING_ANSWER, [INCORRECT] → HINT_1. Also NEXT_QUESTION + ANSWER → evaluate_answer in v7.3 state machine.
+    - Devanagari meta-question responses for hinglish. Commas replace dashes in CHAPTER_NAMES (TTS reads "-" as "minus"). Global " - " → ", " in clean_for_tts().
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
