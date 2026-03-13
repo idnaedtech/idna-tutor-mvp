@@ -2,7 +2,7 @@
 
 > **Read by Claude Code at every session start (via CLAUDE.md protocol).**
 > **Updated by:** Claude Code (task status) + CEO (priorities/scope)
-> **Last updated:** 2026-03-12
+> **Last updated:** 2026-03-13
 
 ---
 
@@ -122,6 +122,12 @@
     - Fix 4 (MEDIUM): Meta-question text sent BEFORE audio (was after)
     - Fix 5 (LOW): "How was your day?" replaces "How was school?" in all 4 languages
     - 359 tests passing (5 new), verify.py 22/22
+  - [x] v10.5.3: 3 smoke test fixes ✅ 2026-03-13
+    - Fix 1 (CRITICAL): Anti-Priya rule — DIDI_BASE forbids using "Priya"/"प्रिय" as generic name, uses actual student_name
+    - Fix 2 (CRITICAL): Post-comfort acknowledgment — warm "Of course! I'm here to help" before jumping to question
+    - Fix 3 (HIGH): ACK classifier — "okay after that", "iske baad", "aage batao" etc. no longer misclassified as ANSWER
+    - Rule 11 added to DIDI_BASE: direct questions ("will you teach me?") get warm YES first
+    - 372 tests passing (13 new), verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
