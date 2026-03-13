@@ -691,7 +691,11 @@ async def process_message(
         logger.info(f"v8.0: Language set to '{session.language_pref}' BEFORE handler and COMMITTED")
 
     # Use old transition for Action object (for backward compat with answer eval)
-    new_state, action = transition(session.state, category, ctx)
+    # v10.6.1: Normalize v8 state "HINT" → v7.3 "HINT_1"/"HINT_2" based on hint_level
+    _v73_state = session.state
+    if _v73_state == "HINT":
+        _v73_state = "HINT_2" if (session.current_hint_level or 0) >= 2 else "HINT_1"
+    new_state, action = transition(_v73_state, category, ctx)
 
     # v8.0: Track empathy state based on new transition
     if transition_result.next_state == TutorState.TEACHING:
@@ -1472,7 +1476,11 @@ async def process_message_stream(
         logger.info(f"v8.0 (stream): Language set to '{session.language_pref}' BEFORE handler and COMMITTED")
 
     # Use old transition for Action object (backward compat with answer eval)
-    new_state, action = transition(session.state, category, ctx)
+    # v10.6.1: Normalize v8 state "HINT" → v7.3 "HINT_1"/"HINT_2" based on hint_level
+    _v73_state_s = session.state
+    if _v73_state_s == "HINT":
+        _v73_state_s = "HINT_2" if (session.current_hint_level or 0) >= 2 else "HINT_1"
+    new_state, action = transition(_v73_state_s, category, ctx)
 
     # P0 FIX: Save state IMMEDIATELY after transition, not inside generator
     # This ensures state persists even if generator doesn't fully execute
@@ -1518,7 +1526,7 @@ async def process_message_stream(
         # Pre-load next question for correct path
         asked_ids = [
             t.question_id for t in session.turns
-            if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
+            if t.question_id
         ]
         _inline_eval_next_q = memory.pick_next_question(
             db, session.student_id,
