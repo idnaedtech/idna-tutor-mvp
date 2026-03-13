@@ -93,10 +93,13 @@ def get_tts_language(session) -> str:
     """
     v7.3.19 Fix 1: Map language_pref to TTS language code.
     If student switched to English, use en-IN for TTS so numbers are spoken in English.
+    v10.5.3: Telugu support — map telugu/te-IN to te-IN for Sarvam TTS.
     """
     pref = getattr(session, 'language_pref', None) or 'hinglish'
     if pref == 'english':
         return 'en-IN'
+    if pref in ('telugu', 'te-IN'):
+        return 'te-IN'
     # For hindi and hinglish, use the session's default language (usually hi-IN)
     return session.language or 'hi-IN'
 

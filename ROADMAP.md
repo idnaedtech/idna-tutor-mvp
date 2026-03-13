@@ -128,6 +128,11 @@
     - Fix 3 (HIGH): ACK classifier — "okay after that", "iske baad", "aage batao" etc. no longer misclassified as ANSWER
     - Rule 11 added to DIDI_BASE: direct questions ("will you teach me?") get warm YES first
     - 372 tests passing (13 new), verify.py 22/22
+  - [x] v10.5.4: Telugu support + neutral ACK + pilot students ✅ 2026-03-13
+    - Fix 7 (CRITICAL): Telugu language detection — `_detect_language_preference()` + classifier LLM prompt + `get_tts_language()` te-IN mapping
+    - Fix 8 (HIGH): "ठीक था आज का दिन" misclassified as COMFORT — added "theek tha", "accha tha", "ठीक था", "अच्छा था" to FAST_ACK
+    - Pilot students: 10 accounts seeded (PINs 1001-1010) via `_seed_pilot_students()` in startup
+    - 381 tests passing (9 new), verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions

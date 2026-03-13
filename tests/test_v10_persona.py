@@ -535,5 +535,80 @@ class TestV1053Fixes:
         assert "teach me" in DIDI_BASE.lower()
 
 
+class TestV1054Fixes:
+    """v10.5.4: Neutral day descriptions as ACK, Telugu detection, pilot students."""
+
+    def test_theek_tha_classified_as_ack(self):
+        """'theek tha' should be ACK in GREETING state, not COMFORT."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("theek tha", current_state="GREETING")
+        assert result == "ACK"
+
+    def test_okay_tha_classified_as_ack(self):
+        """'okay tha' should be ACK."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("okay tha", current_state="GREETING")
+        assert result == "ACK"
+
+    def test_accha_tha_classified_as_ack(self):
+        """'accha tha' should be ACK."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("accha tha", current_state="GREETING")
+        assert result == "ACK"
+
+    def test_theek_tha_aaj_ka_din_classified_as_ack(self):
+        """'theek tha aaj ka din' (my day was fine) should be ACK, not COMFORT."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("theek tha aaj ka din", current_state="GREETING")
+        assert result == "ACK"
+
+    def test_fine_tha_classified_as_ack(self):
+        """'fine tha' should be ACK."""
+        from app.tutor.input_classifier import classify_student_input
+        result = classify_student_input("fine tha", current_state="GREETING")
+        assert result == "ACK"
+
+    def test_neutral_day_batch(self):
+        """Batch test: neutral day descriptions should all be ACK in GREETING."""
+        from app.tutor.input_classifier import classify_student_input
+        neutral_phrases = [
+            "theek tha", "thik tha", "okay tha", "accha tha", "fine tha",
+            "theek tha aaj ka din",
+        ]
+        for phrase in neutral_phrases:
+            result = classify_student_input(phrase, current_state="GREETING")
+            assert result == "ACK", f"'{phrase}' classified as {result}, expected ACK"
+
+    def test_telugu_language_detection(self):
+        """Telugu indicators should be detected in _detect_language_preference."""
+        from app.tutor.input_classifier import _detect_language_preference
+        assert _detect_language_preference("telugu lo batao") == "telugu"
+        assert _detect_language_preference("telugu mein bolo") == "telugu"
+
+    def test_pilot_students_seeder(self):
+        """_seed_pilot_students creates 10 students with PINs 1001-1010."""
+        from app.main import _seed_pilot_students
+        from unittest.mock import MagicMock
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None  # No existing
+        added = _seed_pilot_students(mock_db)
+        assert added == 10
+        assert mock_db.add.call_count == 10
+        mock_db.commit.assert_called_once()
+
+    def test_pilot_students_idempotent(self):
+        """_seed_pilot_students skips existing students."""
+        from app.main import _seed_pilot_students
+        from unittest.mock import MagicMock
+
+        mock_db = MagicMock()
+        # All students already exist
+        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock()
+        added = _seed_pilot_students(mock_db)
+        assert added == 0
+        assert mock_db.add.call_count == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

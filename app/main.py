@@ -66,6 +66,11 @@ async def lifespan(app: FastAPI):
             logger.info("Seeding test student...")
             _seed_test_student(db)
             logger.info("Test student created (PIN: 1234)")
+
+        # Seed pilot students (PINs 1001-1010) — safe to run repeatedly
+        pilot_added = _seed_pilot_students(db)
+        if pilot_added:
+            logger.info(f"Seeded {pilot_added} pilot students (PINs 1001-1010)")
     finally:
         db.close()
 
@@ -116,7 +121,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v10.5.3 ready")
+    logger.info("IDNA Didi v10.5.4 ready")
     yield
     logger.info("Shutting down")
 
@@ -271,12 +276,44 @@ def _seed_test_student(db):
     db.commit()
 
 
+def _seed_pilot_students(db):
+    """Create 10 pilot student accounts (PINs 1001-1010). Safe to run repeatedly."""
+    import uuid
+    pilot_students = [
+        {"pin": "1001", "name": "Student 1", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1002", "name": "Student 2", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1003", "name": "Student 3", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1004", "name": "Student 4", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1005", "name": "Student 5", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1006", "name": "Student 6", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1007", "name": "Student 7", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1008", "name": "Student 8", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1009", "name": "Student 9", "class_level": 8, "preferred_language": "hi-IN"},
+        {"pin": "1010", "name": "Student 10", "class_level": 8, "preferred_language": "hi-IN"},
+    ]
+    added = 0
+    for s in pilot_students:
+        existing = db.query(Student).filter(Student.pin == s["pin"]).first()
+        if not existing:
+            db.add(Student(
+                id=str(uuid.uuid4()),
+                name=s["name"],
+                pin=s["pin"],
+                class_level=s["class_level"],
+                preferred_language=s["preferred_language"],
+            ))
+            added += 1
+    if added:
+        db.commit()
+    return added
+
+
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v10.5.3",
+    title="IDNA Didi v10.5.4",
     description="AI Voice Tutor for Class 8 NCERT — Inline Eval",
-    version="10.5.3",
+    version="10.5.4",
     lifespan=lifespan,
 )
 
@@ -323,7 +360,7 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "10.5.3"}
+    return {"status": "ok", "version": "10.5.4"}
 
 
 @app.get("/health/detail")
@@ -336,7 +373,7 @@ async def health_detail():
         levels = {str(lvl): cnt for lvl, cnt in level_rows}
     finally:
         db.close()
-    return {"status": "ok", "version": "10.5.3", "questions": q_count, "levels": levels}
+    return {"status": "ok", "version": "10.5.4", "questions": q_count, "levels": levels}
 
 
 # Keep-alive endpoint for UptimeRobot (prevents Railway sleep)

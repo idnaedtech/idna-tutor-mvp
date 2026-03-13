@@ -68,17 +68,19 @@ FAST_ACK = {
     "haan", "ha", "yes", "ok", "okay", "hmm", "yep", "yeah", "sure",
     "ready", "start", "alright",
     # English - short phrases
-    "let's start", "lets start", "please start", "yes please",
-    "yes please start", "i'm ready", "im ready", "lets go", "let's go",
-    "go ahead", "yes start", "start please",
+    "let's start", "lets start", "please start",
+    "i'm ready", "im ready", "lets go", "let's go",
+    "go ahead", "start please",
     # Hindi - Devanagari
     "हां", "हाँ", "ठीक है", "अच्छा", "जी", "जी हां", "जी हाँ",
     "समझ गया", "समझ गयी", "समझ आ गया", "समझ आ गयी",
     "शुरू करो", "शुरू करें", "शुरू करते हैं", "शुरू कीजिए",
     "चलो", "चलो शुरू करते हैं", "चलिए", "चलो शुरू करो",
-    "हां शुरू करो", "हां शुरू करते हैं",
-    "जी शुरू करते हैं", "जी शुरू करो", "जी हां शुरू करते हैं",
+    "हां शुरू करते हैं",
+    "जी शुरू करते हैं", "जी शुरू करो",
     "जी शुरू कीजिए",
+    # v10.5.4: Devanagari neutral day responses — ACK, not COMFORT
+    "ठीक था", "अच्छा था",
     # Hindi - Romanized
     "samajh gaya", "samajh gayi", "samajh aa gaya",
     "theek hai", "thik hai", "accha", "acha",
@@ -88,9 +90,12 @@ FAST_ACK = {
     "haan shuru karo", "haan shuru karte hain",
     "ji shuru karte hain", "ji shuru karo", "ji shuru kijiye",
     # v10.5.3: "okay after that" / "next" patterns — ACK, not ANSWER
-    "okay after that", "next question",
-    "iske baad", "uske baad", "aage batao", "aage",
+    # Note: "okay after that" and "aage batao" removed (substring-matched by "ok" and "aage")
+    "next question",
+    "iske baad", "uske baad", "aage",
     "agla sawaal", "aur batao",
+    # v10.5.4: Neutral day descriptions — ACK in GREETING, not COMFORT
+    "theek tha", "thik tha", "okay tha", "accha tha", "fine tha",
 }
 
 FAST_IDK = {
@@ -145,7 +150,7 @@ Categories (pick EXACTLY ONE):
 
 IMPORTANT: Hindi/Devanagari input is common. "जी शुरू करते हैं" = ACK. "समझ नहीं आया" = IDK. "कौन सा चैप्टर" = META_QUESTION. Classify these correctly.
 
-For LANGUAGE_SWITCH also return preferred_language: "english"|"hindi"|"hinglish"
+For LANGUAGE_SWITCH also return preferred_language: "english"|"hindi"|"hinglish"|"telugu"
 For META_QUESTION also return question_type: "examples"|"chapter_info"|"relevance"|"other"
 For ANSWER also return raw_answer with just the answer portion extracted
 
@@ -285,11 +290,16 @@ async def classify(
 
 
 def _detect_language_preference(text: str) -> str:
-    """Detect which language the student wants. Returns 'english', 'hindi', or 'hinglish'."""
+    """Detect which language the student wants. Returns 'english', 'hindi', 'telugu', or 'hinglish'."""
     text_lower = text.lower().strip()
     english_indicators = ["english", "इंग्लिश", "अंग्रेजी", "angrez"]
     hindi_indicators = ["hindi", "हिंदी", "हिन्दी"]
+    # v10.5.3: Telugu detection for LANGUAGE_SWITCH
+    telugu_indicators = ["telugu", "తెలుగు", "తెలుగులో", "telugu lo", "telugu mein"]
 
+    for indicator in telugu_indicators:
+        if indicator in text_lower:
+            return "telugu"
     for indicator in english_indicators:
         if indicator in text_lower:
             return "english"
