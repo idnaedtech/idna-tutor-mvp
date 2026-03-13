@@ -133,6 +133,16 @@
     - Fix 8 (HIGH): "ठीक था आज का दिन" misclassified as COMFORT — added "theek tha", "accha tha", "ठीक था", "अच्छा था" to FAST_ACK
     - Pilot students: 10 accounts seeded (PINs 1001-1010) via `_seed_pilot_students()` in startup
     - 381 tests passing (9 new), verify.py 22/22
+  - [x] v10.5.5: 8 critical teaching quality fixes ✅ 2026-03-13
+    - Fix 1 (BLOCKER): Telugu instruction strengthened — strict Telugu-only with example, "CRITICAL: Telugu ONLY"
+    - Fix 2 (BLOCKER): Level filtering strict — exhausted level re-uses same-level questions, no fall-through
+    - Fix 3 (BLOCKER): TTS full text — verified v10.5.2 fix active (final_tts_text, not first sentence)
+    - Fix 4 (HIGH): Same question — verified asked_ids exclusion active in both endpoints
+    - Fix 5 (HIGH): Hindi Devanagari — LANG_INSTRUCTIONS requires Devanagari, forbids Roman Hindi with examples
+    - Fix 6 (MEDIUM): Anti-Priya — verified v10.5.3 fix active in DIDI_BASE
+    - Fix 7 (MEDIUM): Greeting ACK — verified v10.5.4 fix active (theek tha, accha tha in FAST_ACK)
+    - Fix 8 (MEDIUM): Chapter number — CHAPTER_NAMES includes "Chapter 6", meta handler includes number
+    - 389 tests passing (8 new), verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions

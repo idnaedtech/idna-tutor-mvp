@@ -155,23 +155,36 @@ def pick_next_question(
     if asked_question_ids:
         base_q = base_q.filter(Question.id.notin_(asked_question_ids))
 
-    # v10.4.0: Level-aware selection
+    # v10.4.0: Level-aware selection — strict level filtering
     if current_level is not None:
         level_q = base_q.filter(Question.level == current_level)
         available = level_q.all()
         if available:
             return _question_to_dict(_random.choice(available))
 
-        # No questions at current level — try next level up
-        for next_level in range(current_level + 1, 6):
-            level_q = base_q.filter(Question.level == next_level)
+        # v10.5.5: No fall-through to other levels — stay at current level
+        # Re-query WITHOUT excluding asked_ids (allow re-asking at same level)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"LEVEL_EXHAUSTED: No unanswered questions at level {current_level}, re-using from same level")
+        all_at_level = db.query(Question).filter(
+            Question.subject == subject,
+            Question.chapter == chapter,
+            Question.active == True,
+            Question.level == current_level,
+        ).all()
+        if all_at_level:
+            return _question_to_dict(_random.choice(all_at_level))
+
+        # Truly no questions at this level in the DB — fall back to adjacent
+        logger.warning(f"LEVEL_EMPTY: No questions exist at level {current_level} in DB, falling to adjacent")
+        for adj_level in range(current_level - 1, 0, -1):
+            level_q = base_q.filter(Question.level == adj_level)
             available = level_q.all()
             if available:
                 return _question_to_dict(_random.choice(available))
-
-        # Try lower levels as last resort
-        for prev_level in range(current_level - 1, 0, -1):
-            level_q = base_q.filter(Question.level == prev_level)
+        for adj_level in range(current_level + 1, 6):
+            level_q = base_q.filter(Question.level == adj_level)
             available = level_q.all()
             if available:
                 return _question_to_dict(_random.choice(available))

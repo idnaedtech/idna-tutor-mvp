@@ -610,5 +610,96 @@ class TestV1054Fixes:
         assert mock_db.add.call_count == 0
 
 
+class TestV1055CriticalFixes:
+    """v10.5.5: 8 critical teaching quality fixes."""
+
+    def test_telugu_instruction_is_strict(self):
+        """Telugu LANG_INSTRUCTIONS must require Telugu script, not just 'Telugu-English mix'."""
+        from app.tutor.instruction_builder import LANG_INSTRUCTIONS
+        telugu = LANG_INSTRUCTIONS["telugu"]
+        assert "MUST" in telugu
+        assert "Telugu ONLY" in telugu or "Telugu script" in telugu
+        assert "NEVER" in telugu or "Do NOT" in telugu
+
+    def test_telugu_instruction_has_example(self):
+        """Telugu instruction should include an example sentence."""
+        from app.tutor.instruction_builder import LANG_INSTRUCTIONS
+        telugu = LANG_INSTRUCTIONS["telugu"]
+        assert "బాగా" in telugu or "తెలుగు" in telugu
+
+    def test_hindi_instruction_requires_devanagari(self):
+        """Hindi LANG_INSTRUCTIONS must require Devanagari script, not Roman Hindi."""
+        from app.tutor.instruction_builder import LANG_INSTRUCTIONS
+        hindi = LANG_INSTRUCTIONS["hindi"]
+        assert "Devanagari" in hindi or "देवनागरी" in hindi
+        assert "NEVER write Hindi in Roman" in hindi
+
+    def test_hindi_instruction_has_wrong_right_example(self):
+        """Hindi instruction shows wrong (Roman) vs right (Devanagari) example."""
+        from app.tutor.instruction_builder import LANG_INSTRUCTIONS
+        hindi = LANG_INSTRUCTIONS["hindi"]
+        assert "Wrong:" in hindi
+        assert "Right:" in hindi
+
+    def test_chapter_name_includes_number(self):
+        """CHAPTER_NAMES for ch1_square_and_cube must include chapter number."""
+        from app.tutor.instruction_builder import CHAPTER_NAMES
+        ch = CHAPTER_NAMES["ch1_square_and_cube"]
+        assert "Chapter 6" in ch
+
+    def test_meta_question_chapter_number(self):
+        """Meta-question for 'which chapter number' includes chapter number in response."""
+        from app.tutor.state_machine import Action
+        from app.tutor.instruction_builder import build_prompt
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Test", "board_name": "CBSE", "class_level": 8,
+               "confusion_count": 0, "state": "TEACHING", "current_level": 2}
+        q = {"question_voice": "What is 5 squared?", "answer": "25",
+             "answer_variants": [], "hints": [], "id": "sq_b01",
+             "target_skill": "perfect_square_identification"}
+        action = Action("answer_meta_question", student_text="which chapter number is this?",
+                        extra={"meta_type": "chapter_info", "return_to": ""})
+        msgs = build_prompt(action, ctx, question_data=q)
+        user_msg = msgs[-1]["content"]
+        assert "Chapter 6" in user_msg
+
+    def test_level_filtering_strict(self):
+        """pick_next_question with level should query for that level.
+        When all questions at that level are asked, it re-queries without exclusions."""
+        from app.tutor.memory import pick_next_question
+        from app.database import SessionLocal
+        from app.models import Question
+
+        db = SessionLocal()
+        try:
+            # Get all level 2 question IDs
+            l2_questions = db.query(Question).filter(
+                Question.level == 2,
+                Question.chapter == "ch1_square_and_cube",
+                Question.active == True,
+            ).all()
+            assert len(l2_questions) > 0, "Must have level 2 questions"
+
+            # Ask for level 2 with all L2 IDs excluded — should still return L2 (re-query)
+            all_l2_ids = [q.id for q in l2_questions]
+            result = pick_next_question(
+                db, "test_student", "math", "ch1_square_and_cube",
+                asked_question_ids=all_l2_ids,
+                current_level=2,
+            )
+            assert result is not None, "Should re-use L2 questions when exhausted"
+            assert result["level"] == 2, f"Expected level 2, got {result['level']}"
+        finally:
+            db.close()
+
+    def test_tts_uses_full_text(self):
+        """Streaming endpoint uses final_tts_text (full response), not first sentence."""
+        import inspect
+        from app.routers.student import process_message_stream
+        source = inspect.getsource(process_message_stream)
+        assert "TTS_FULL" in source
+        assert "final_tts_text" in source
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

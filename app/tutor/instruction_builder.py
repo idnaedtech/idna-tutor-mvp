@@ -70,8 +70,8 @@ CURRENT SESSION: {chapter_name} — {current_topic}
 # v7.3.22 Fix 1: Chapter name mapping for metadata injection
 CHAPTER_NAMES = {
     "ch1_rational_numbers": "Chapter 1 - Rational Numbers",
-    # v10.2.0 Fix 4: More accurate name covering both squares AND cubes
-    "ch1_square_and_cube": "Squares, Cubes and their Roots",
+    # v10.5.5: Include chapter number — students ask "which chapter number?"
+    "ch1_square_and_cube": "Chapter 6 - Squares and Square Roots (and Chapter 7 - Cubes and Cube Roots)",
     "ch2_linear_equations": "Chapter 2 - Linear Equations",
     "ch3_understanding_quadrilaterals": "Chapter 3 - Understanding Quadrilaterals",
     "ch4_practical_geometry": "Chapter 4 - Practical Geometry",
@@ -84,16 +84,19 @@ LANG_INSTRUCTIONS = {
     "english": "LANGUAGE: Respond ENTIRELY in English. No Hindi words. No Hinglish. If teaching content below is in Hindi, translate it to English first.",
     "hindi": """LANGUAGE: Respond in STANDARD Hindi (Modern Standard Hindi / Khari Boli) mixed with English for technical terms.
 Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
-Use Devanagari script mixed with English. Use 'aap' form respectfully. Use digits for math: "5 times 5 equals 25".
-CRITICAL: Every Hindi word MUST have complete vowel marks (matras). "ठीक" not "ठक". "है" not "ह". "हिंदी" not "हद".
-If you cannot write proper Devanagari with all matras, write in Roman Hindi instead.""",
+CRITICAL: Always write Hindi in Devanagari script (देवनागरी). NEVER write Hindi in Roman/Latin script.
+Wrong: "Theek hai, squares ka matlab hota hai". Right: "ठीक है, squares का मतलब होता है".
+Use 'aap' form respectfully. Use digits for math: "5 times 5 equals 25".
+Every Hindi word MUST have complete vowel marks (matras). "ठीक" not "ठक". "है" not "ह".""",
     "hinglish": """LANGUAGE: Respond in Hinglish — natural mix of STANDARD Hindi (Khari Boli) and English.
 Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
 Use Roman script with Hindi words. Use digits for math. Use 'aap' form respectfully.""",
-    "telugu": """LANGUAGE: Respond in Telugu-English mix (Tenglish).
-Use Telugu script for common words, English for math terms (square root, cube, etc.).
-Translate any Hindi content to Telugu. Do NOT use Hindi or Hinglish.
-Be warm and encouraging like a Telugu elder sister. Use మీరు (meeru) form respectfully.""",
+    "telugu": """LANGUAGE: You MUST respond in Telugu script (తెలుగు). Every sentence must be in Telugu.
+If you cannot express a math term in Telugu, use the English term but keep ALL other words in Telugu.
+Do NOT use Hindi, Hinglish, or Devanagari script. Translate any Hindi content to Telugu first.
+Be warm and encouraging like a Telugu elder sister (అక్క). Use మీరు (meeru) form respectfully.
+Example: "బాగా చెప్పారు! 5 times 5 అంటే 25 అవుతుంది. ఇది square అంటారు."
+CRITICAL: If you write even one Hindi word, the student cannot understand. Telugu ONLY.""",
 }
 
 
@@ -696,10 +699,10 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
 
     # v7.3.28 Fix 1: Check chapter/topic FIRST since meta_type is always "more_examples"
     student_lower = a.student_text.lower()
-    if "chapter" in student_lower or "topic" in student_lower or "kaunsa" in student_lower or "कौन" in a.student_text:
-        # v7.3.28 Fix 1: Use proper chapter name from CHAPTER_NAMES
+    if "chapter" in student_lower or "topic" in student_lower or "kaunsa" in student_lower or "कौन" in a.student_text or "number" in student_lower:
+        # v10.5.5: Include chapter number in response
         chapter_response = f"We're learning {ch}." if use_english else f"Hum {ch} padh rahe hain."
-        msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}"{steer_back}'
+        msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}" Include the chapter NUMBER.{steer_back}'
     elif "correct" in student_lower or "right" in student_lower or "sahi" in student_lower or "galat" in student_lower:
         # v10.3.0: Student asking about their answer status
         msg = f'Student asked: "{a.student_text}". Answer their question directly about whether their answer was right or wrong.{steer_back} 2 sentences.'
