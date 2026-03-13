@@ -1552,7 +1552,7 @@ async def process_message_stream(
                 # Pick new question
                 asked_ids = [
                     t.question_id for t in session.turns
-                    if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
+                    if t.question_id
                 ]
                 logger.info(f"PICK_NEXT (stream): current_q={session.current_question_id}, asked_ids={asked_ids}, level={session.current_level}")
                 q = memory.pick_next_question(
@@ -1869,6 +1869,11 @@ async def process_message_stream(
                                 fresh_session.current_hint_level = 0
                             elif _inline_eval_is_session_end:
                                 new_state = "SESSION_COMPLETE"
+                            # v10.6.3: CORRECT → WAITING_ANSWER (next question loaded)
+                            # Without this, state stays "EVALUATING" and next turn falls through
+                            if new_state != "SESSION_COMPLETE":
+                                new_state = "WAITING_ANSWER"
+                                logger.info(f"INLINE_EVAL_STATE: CORRECT → WAITING_ANSWER (next_q={_inline_eval_next_q_id})")
                         else:
                             fresh_session.current_hint_level = (fresh_session.current_hint_level or 0) + 1
                             fresh_session.total_hints_used = (fresh_session.total_hints_used or 0) + 1
@@ -1878,6 +1883,9 @@ async def process_message_stream(
                                 fresh_session.current_level = (fresh_session.current_level or 2) - 1
                                 fresh_session.consecutive_wrong = 0
                                 logger.info(f"LEVEL_DOWN (inline_eval): student dropped to Level {fresh_session.current_level}")
+                            # v10.6.3: INCORRECT → HINT_1 (hint was given in inline response)
+                            new_state = "HINT_1"
+                            logger.info(f"INLINE_EVAL_STATE: INCORRECT → HINT_1")
 
                     fresh_session.state = new_state
                     fresh_db.commit()

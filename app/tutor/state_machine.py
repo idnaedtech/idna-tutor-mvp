@@ -350,6 +350,12 @@ def transition(
             return "SESSION_COMPLETE", Action(
                 "end_session", student_text=text,
             )
+        # v10.6.3: Student answered during NEXT_QUESTION (Didi asked question in previous response)
+        # Evaluate the answer instead of re-reading the question
+        if category == "ANSWER":
+            return "EVALUATING", Action(
+                "evaluate_answer", question_id=q_id, student_text=text,
+            )
         return "WAITING_ANSWER", Action(
             "read_question", student_text=text,
         )
