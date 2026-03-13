@@ -107,7 +107,14 @@
     - Logging: TTS_PARALLEL_HIT/MISS with overlap_ms for production monitoring
   - **Expected results:** LLM 557-683ms ✅ | TTS ~3000ms (first sentence, parallel) | Total ~3500-4000ms
   - **Remaining blocker:** Sarvam WebSocket streaming TTS (`wss://api.sarvam.ai/text-to-speech/stream`) returns HTTP 403 — endpoint not available on current API plan
-  - [ ] **Next:** Deploy v10.5.0, measure production TTS_PARALLEL_HIT rate and actual latency improvement
+  - [x] v10.5.0 deployed, production latency measured ✅ 2026-03-13
+    - LLM: 608-787ms, TTS: 2626-4007ms, Eval: 1336-1404ms, Total: 4638-4804ms
+  - [x] v10.5.1: Inline eval — combined answer eval + response in single LLM call ✅ 2026-03-13
+    - Eliminates separate gpt-4.1-mini eval call (~1.3s) on answer turns
+    - gpt-4.1 evaluates answer AND responds in one call using [CORRECT]/[INCORRECT] prefix
+    - Fallback to regex check_math_answer() if LLM doesn't output prefix tag
+    - Session counters updated in generator's finally block with fresh DB session
+    - 354 tests passing (8 new inline eval tests)
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions

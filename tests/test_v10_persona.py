@@ -261,5 +261,104 @@ class TestV103MetaQuestionInHintStates:
         assert "back to our question" in user_msg.lower() or "wapas" in user_msg.lower()
 
 
+class TestInlineEval:
+    """v10.5.1: Inline eval — combined answer eval + response in single LLM call."""
+
+    def test_inline_eval_prompt_correct_path(self):
+        """Inline eval prompt includes [CORRECT] instruction with next question."""
+        from app.tutor.instruction_builder import build_inline_eval_prompt
+        ctx = {"language_pref": "hinglish", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "WAITING_ANSWER", "current_level": 2}
+        q = {"question_voice": "5 ka square kitna hai?", "answer": "25",
+             "answer_variants": ["twenty five"], "hints": ["5 times 5"],
+             "id": "sq_b01", "target_skill": "perfect_square_identification"}
+        next_q = {"question_voice": "7 ka square kitna hai?", "id": "sq_b02"}
+        msgs, is_end = build_inline_eval_prompt(ctx, q, "25", 0, next_q, 3)
+        assert msgs is not None
+        user_msg = msgs[-1]["content"]
+        assert "[CORRECT]" in user_msg
+        assert "[INCORRECT]" in user_msg
+        assert "25" in user_msg  # Expected answer
+        assert "7 ka square" in user_msg  # Next question
+        assert not is_end
+
+    def test_inline_eval_prompt_incorrect_hint(self):
+        """Inline eval prompt includes hint for incorrect path."""
+        from app.tutor.instruction_builder import build_inline_eval_prompt
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "WAITING_ANSWER", "current_level": 2}
+        q = {"question_voice": "What is 5 squared?", "answer": "25",
+             "answer_variants": [], "hints": ["5 times 5 = ?"],
+             "id": "sq_b01", "target_skill": "perfect_square_identification"}
+        msgs, _ = build_inline_eval_prompt(ctx, q, "35", 0, None, 3)
+        user_msg = msgs[-1]["content"]
+        assert "5 times 5" in user_msg  # Hint text
+
+    def test_inline_eval_prompt_show_solution(self):
+        """Inline eval prompt shows solution when hint_level >= 2."""
+        from app.tutor.instruction_builder import build_inline_eval_prompt
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "HINT_2", "current_level": 2}
+        q = {"question_voice": "What is 5 squared?", "answer": "25",
+             "answer_variants": [], "hints": ["5 times 5"],
+             "solution": "5 squared = 5 × 5 = 25",
+             "id": "sq_b01", "target_skill": "perfect_square_identification"}
+        msgs, _ = build_inline_eval_prompt(ctx, q, "35", 2, None, 3)
+        user_msg = msgs[-1]["content"]
+        assert "solution" in user_msg.lower() or "25" in user_msg
+
+    def test_inline_eval_prompt_session_end(self):
+        """Inline eval prompt handles session end (max questions reached)."""
+        from app.tutor.instruction_builder import build_inline_eval_prompt
+        from app.config import MAX_QUESTIONS_PER_SESSION
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "WAITING_ANSWER", "current_level": 2}
+        q = {"question_voice": "What is 5 squared?", "answer": "25",
+             "answer_variants": [], "hints": [], "id": "sq_b01",
+             "target_skill": "perfect_square_identification"}
+        msgs, is_end = build_inline_eval_prompt(
+            ctx, q, "25", 0, None, MAX_QUESTIONS_PER_SESSION - 1)
+        assert is_end
+
+    def test_inline_eval_prompt_no_next_question(self):
+        """Inline eval prompt handles no next question available."""
+        from app.tutor.instruction_builder import build_inline_eval_prompt
+        ctx = {"language_pref": "hinglish", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "WAITING_ANSWER", "current_level": 2}
+        q = {"question_voice": "5 ka square?", "answer": "25",
+             "answer_variants": [], "hints": [], "id": "sq_b01",
+             "target_skill": "perfect_square_identification"}
+        msgs, is_end = build_inline_eval_prompt(ctx, q, "25", 0, None, 3)
+        assert is_end  # No next question = session end
+        user_msg = msgs[-1]["content"]
+        assert "done" in user_msg.lower() or "ho gaye" in user_msg.lower()
+
+    def test_inline_eval_prompt_returns_none_without_question(self):
+        """Inline eval returns None if no question data provided."""
+        from app.tutor.instruction_builder import build_inline_eval_prompt
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube"}
+        msgs, is_end = build_inline_eval_prompt(ctx, None, "25", 0, None, 3)
+        assert msgs is None
+
+    def test_inline_eval_sys_prompt_has_session_context(self):
+        """Inline eval system prompt uses _sys() with session_context (rule #7)."""
+        from app.tutor.instruction_builder import build_inline_eval_prompt
+        ctx = {"language_pref": "english", "chapter": "ch1_square_and_cube",
+               "student_name": "Priya", "board_name": "NCERT", "class_level": 8,
+               "confusion_count": 0, "state": "WAITING_ANSWER", "current_level": 3}
+        q = {"question_voice": "What is 5 squared?", "answer": "25",
+             "answer_variants": [], "hints": [], "id": "sq_b01",
+             "target_skill": "perfect_square_identification"}
+        msgs, _ = build_inline_eval_prompt(ctx, q, "25", 0, None, 3)
+        sys_msg = msgs[0]["content"]
+        assert "Priya" in sys_msg
+        assert "LANGUAGE:" in sys_msg
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

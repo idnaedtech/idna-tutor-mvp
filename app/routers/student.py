@@ -46,7 +46,7 @@ from app.fsm.handlers import handle_state
 from app.tutor.state_machine import transition, route_after_evaluation, Action
 from app.tutor.answer_checker import check_math_answer, Verdict
 from app.tutor.answer_evaluator import evaluate_answer
-from app.tutor.instruction_builder import build_prompt, CHAPTER_NAMES
+from app.tutor.instruction_builder import build_prompt, build_inline_eval_prompt, CHAPTER_NAMES
 # instruction_builder_v9 removed — both endpoints now use build_prompt() from instruction_builder.py
 from app.tutor.preprocessing import preprocess_student_message, detect_input_language, check_language_auto_switch
 from content_bank.loader import get_content_bank
@@ -1455,134 +1455,74 @@ async def process_message_stream(
     verdict = None
     verdict_str = None
     eval_ms = 0
+    _use_inline_eval = False
+    _inline_eval_next_q = None
+    _inline_eval_is_session_end = False
+    _inline_eval_hint_level = 0
+    _inline_eval_correct_display = ""
     if action.action_type == "evaluate_answer" and session.current_question_id:
-        question = await run_in_threadpool(
-            lambda: db.query(Question).filter(
-                Question.id == session.current_question_id
-            ).first()
+        # v10.5.1: Inline eval — skip separate eval LLM call, combine into teaching call
+        _use_inline_eval = True
+        _inline_eval_hint_level = session.current_hint_level
+        _inline_eval_correct_display = question_data.get("answer", "") if question_data else ""
+
+        # Pre-load next question for correct path
+        asked_ids = [
+            t.question_id for t in session.turns
+            if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
+        ]
+        if session.current_question_id and session.current_question_id not in asked_ids:
+            asked_ids.append(session.current_question_id)
+        _inline_eval_next_q = memory.pick_next_question(
+            db, session.student_id,
+            session.subject or "math",
+            session.chapter or "ch1_square_and_cube",
+            asked_ids,
+            difficulty_preference=action.extra.get("difficulty"),
+            current_level=session.current_level,
         )
-        if question:
-            # v7.5.0: Use LLM-based answer evaluation (streaming endpoint)
-            try:
-                cb = get_content_bank()
-                misconceptions = []
-                if question.target_skill:
-                    misconceptions = cb.get_misconceptions(question.target_skill)
-
-                t_eval = time.perf_counter()
-                eval_result = await evaluate_answer(
-                    question_text=question.question_voice or question.question_text,
-                    expected_answer=question.answer,
-                    acceptable_alternates=question.answer_variants or [],
-                    misconceptions=misconceptions,
-                    student_response=student_text,
-                    llm_call_func=llm_call_for_eval,
-                )
-                eval_ms = int((time.perf_counter() - t_eval) * 1000)
-
-                verdict_map = {
-                    "correct": ("CORRECT", True),
-                    "incorrect": ("INCORRECT", False),
-                    "partial": ("PARTIAL", False),
-                    "idk": ("INCORRECT", False),
-                    "unclear": ("INCORRECT", False),
-                }
-                v_str, v_correct = verdict_map.get(eval_result["verdict"], ("INCORRECT", False))
-
-                verdict = Verdict(
-                    correct=v_correct,
-                    verdict=v_str,
-                    student_parsed=eval_result.get("student_answer_extracted", ""),
-                    correct_display=question.answer,
-                    diagnostic=eval_result.get("feedback_hi", ""),
-                )
-                verdict_str = v_str
-                logger.info(f"v7.5.0 LLM eval (stream): '{student_text[:30]}' -> {v_str} ({eval_ms}ms)")
-
-            except Exception as e:
-                logger.warning(f"v7.5.0 LLM eval failed (stream), using fallback: {e}")
-                verdict = check_math_answer(
-                    student_text,
-                    question.answer,
-                    question.answer_variants or [],
-                )
-                verdict_str = verdict.verdict
-
-            # Route based on verdict
-            new_state, action.action_type = route_after_evaluation(
-                verdict,
-                session.current_hint_level,
-                session.questions_attempted + 1,
-            )
-            action.verdict = verdict
-
-            # DEBUG: Answer evaluation routing (P0 debug 2026-03-07)
-            logger.info(f"ANSWER_EVAL (stream): student=[{student_text[:50]}], correct={verdict.correct}, "
-                       f"state_before={state_before}, hint_level={session.current_hint_level}, "
-                       f"new_state={new_state}, action={action.action_type}")
-
-            # v7.3.26: Update session counters (same as non-streaming)
-            session.questions_attempted += 1
-            if verdict.correct:
-                session.questions_correct += 1
-                session.current_hint_level = 0
-                # v8.1.0: Reset confusion_count on correct answer
-                session.confusion_count = 0
-                # v10.4.0: Level advancement — 3 correct in a row → advance
-                session.consecutive_correct += 1
-                session.consecutive_wrong = 0
-                if session.consecutive_correct >= 3 and session.current_level < 5:
-                    session.current_level += 1
-                    session.consecutive_correct = 0
-                    logger.info(f"LEVEL_UP (stream): student advanced to Level {session.current_level}")
-            else:
-                session.current_hint_level += 1
-                session.total_hints_used += 1
-                # v10.4.0: Level drop — 2 wrong in a row → drop back
-                session.consecutive_wrong += 1
-                session.consecutive_correct = 0
-                if session.consecutive_wrong >= 2 and session.current_level > 1:
-                    session.current_level -= 1
-                    session.consecutive_wrong = 0
-                    logger.info(f"LEVEL_DOWN (stream): student dropped to Level {session.current_level}")
-
-    # v7.3.26: Pick next question (if needed) — CRITICAL FIX
-    # This was missing, causing correct answers to not advance to next question
-    if action.action_type in ("read_question", "pick_next_question"):
-        if session.current_question_id and action.action_type != "pick_next_question":
-            # Re-read current question
-            question_data = _load_question(db, session.current_question_id)
+        if _inline_eval_next_q:
+            logger.info(f"INLINE_EVAL_PRELOAD: next_q={_inline_eval_next_q['id']} for correct path")
         else:
-            # Add current question to asked_ids to avoid repeating it
-            asked_ids = [
-                t.question_id for t in session.turns
-                if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
-            ]
-            if session.current_question_id and session.current_question_id not in asked_ids:
-                asked_ids.append(session.current_question_id)
-            # Pick new question
-            logger.info(f"PICK_NEXT (stream): current_q={session.current_question_id}, asked_ids={asked_ids}, level={session.current_level}")
-            q = memory.pick_next_question(
-                db, session.student_id,
-                session.subject or "math",
-                session.chapter or "ch1_square_and_cube",
-                asked_ids,
-                difficulty_preference=action.extra.get("difficulty"),
-                current_level=session.current_level,
-            )
-            if q:
-                question_data = q
-                logger.info(f"PICK_NEXT (stream): selected new q={q['id']} (was {session.current_question_id})")
-                session.current_question_id = q["id"]
-                session.current_hint_level = 0
+            logger.info("INLINE_EVAL_PRELOAD: no next question available")
+
+    # v7.3.26: Pick next question (if needed) — for non-eval actions
+    if not _use_inline_eval:
+        if action.action_type in ("read_question", "pick_next_question"):
+            if session.current_question_id and action.action_type != "pick_next_question":
+                # Re-read current question
+                question_data = _load_question(db, session.current_question_id)
             else:
-                # No more questions → end session
-                new_state = "SESSION_COMPLETE"
-                action = Action("end_session", student_text=student_text)
-    elif action.action_type in ("give_hint", "show_solution", "teach_concept", "answer_meta_question"):
-        # Load question for hints, solutions, teaching, and meta-questions
-        if session.current_question_id:
-            question_data = _load_question(db, session.current_question_id)
+                # Add current question to asked_ids to avoid repeating it
+                asked_ids = [
+                    t.question_id for t in session.turns
+                    if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
+                ]
+                if session.current_question_id and session.current_question_id not in asked_ids:
+                    asked_ids.append(session.current_question_id)
+                # Pick new question
+                logger.info(f"PICK_NEXT (stream): current_q={session.current_question_id}, asked_ids={asked_ids}, level={session.current_level}")
+                q = memory.pick_next_question(
+                    db, session.student_id,
+                    session.subject or "math",
+                    session.chapter or "ch1_square_and_cube",
+                    asked_ids,
+                    difficulty_preference=action.extra.get("difficulty"),
+                    current_level=session.current_level,
+                )
+                if q:
+                    question_data = q
+                    logger.info(f"PICK_NEXT (stream): selected new q={q['id']} (was {session.current_question_id})")
+                    session.current_question_id = q["id"]
+                    session.current_hint_level = 0
+                else:
+                    # No more questions → end session
+                    new_state = "SESSION_COMPLETE"
+                    action = Action("end_session", student_text=student_text)
+        elif action.action_type in ("give_hint", "show_solution", "teach_concept", "answer_meta_question"):
+            # Load question for hints, solutions, teaching, and meta-questions
+            if session.current_question_id:
+                question_data = _load_question(db, session.current_question_id)
 
     # v10.3.1: Persist all session field updates (counters, question_id, hint_level)
     # BEFORE the generator starts. The generator uses fresh_db which would overwrite.
@@ -1632,7 +1572,23 @@ async def process_message_stream(
     session.conversation_history.append({"role": "user", "content": student_text})
     flag_modified(session, "conversation_history")
 
-    messages = build_prompt(action, session_ctx, question_data, None, prev_response, session.conversation_history)
+    # v10.5.1: Use inline eval prompt if answer is being evaluated
+    if _use_inline_eval:
+        inline_messages, _inline_eval_is_session_end = build_inline_eval_prompt(
+            session_ctx, question_data, student_text,
+            session.current_hint_level,
+            _inline_eval_next_q,
+            session.questions_attempted,
+        )
+        if inline_messages:
+            messages = inline_messages
+            logger.info(f"INLINE_EVAL: using combined eval+respond prompt (hint_level={session.current_hint_level})")
+        else:
+            # Fallback if inline eval can't build prompt
+            _use_inline_eval = False
+            messages = build_prompt(action, session_ctx, question_data, None, prev_response, session.conversation_history)
+    else:
+        messages = build_prompt(action, session_ctx, question_data, None, prev_response, session.conversation_history)
 
     # ── Streaming LLM + TTS ──
     llm = get_llm()
@@ -1647,11 +1603,14 @@ async def process_message_stream(
     _session_current_question_id = session.current_question_id
     _session_turns_count = len(session.turns) if session.turns else 0
     _session_conversation_history = list(session.conversation_history) if session.conversation_history else []
+    # v10.5.1: Pre-load inline eval data for generator
+    _inline_eval_next_q_id = _inline_eval_next_q["id"] if _inline_eval_next_q else None
+    _session_questions_attempted = session.questions_attempted or 0
     # === END Pre-load ===
 
     async def stream_response():
         """SSE: collect LLM response with parallel TTS, stream to frontend."""
-        nonlocal new_state  # v7.5.2: Fix UnboundLocalError - new_state is modified in finally block
+        nonlocal new_state, verdict, verdict_str  # v7.5.2 + v10.5.1
         full_text = ""  # TTS-cleaned text (for turn logging)
         display_text_raw = ""  # v10.1 FIX Issue 3: Original LLM text (for display with digits)
         cancelled = False
@@ -1674,7 +1633,15 @@ async def process_message_stream(
 
                 # Start TTS on first sentence immediately (overlaps with remaining LLM)
                 if first_tts_task is None and sentence.strip():
-                    first_tts_text = prepare_for_tts(sentence.strip(), session)
+                    tts_sentence = sentence.strip()
+                    # v10.5.1: Strip inline eval verdict tag before TTS
+                    if _use_inline_eval:
+                        for tag in ("[CORRECT]", "[INCORRECT]"):
+                            if tts_sentence.startswith(tag):
+                                tts_sentence = tts_sentence[len(tag):].strip()
+                    if not tts_sentence:
+                        continue  # Tag-only sentence, wait for real content
+                    first_tts_text = prepare_for_tts(tts_sentence, session)
                     if len(first_tts_text) > MAX_TTS_CHARS:
                         trunc = first_tts_text[:MAX_TTS_CHARS]
                         last_end = max(
@@ -1692,6 +1659,41 @@ async def process_message_stream(
 
             display_text_raw = display_text_raw.strip()
             logger.info(f"RAW_LLM_OUTPUT: [{display_text_raw[:200] if display_text_raw else 'EMPTY'}]")
+
+            # v10.5.1: Parse verdict from inline eval LLM output
+            if _use_inline_eval:
+                _parsed_correct = None
+                if display_text_raw.startswith("[CORRECT]"):
+                    _parsed_correct = True
+                    display_text_raw = display_text_raw[len("[CORRECT]"):].strip()
+                elif display_text_raw.startswith("[INCORRECT]"):
+                    _parsed_correct = False
+                    display_text_raw = display_text_raw[len("[INCORRECT]"):].strip()
+                else:
+                    # LLM didn't follow prefix instruction — fallback to regex checker
+                    fallback_verdict = check_math_answer(
+                        student_text, _inline_eval_correct_display,
+                        question_data.get("answer_variants", []) if question_data else [],
+                    )
+                    _parsed_correct = fallback_verdict.correct
+                    logger.warning(f"INLINE_EVAL_FALLBACK: no tag found, regex says {'CORRECT' if _parsed_correct else 'INCORRECT'}")
+
+                verdict_str = "CORRECT" if _parsed_correct else "INCORRECT"
+                verdict = Verdict(
+                    correct=_parsed_correct,
+                    verdict=verdict_str,
+                    student_parsed=student_text,
+                    correct_display=_inline_eval_correct_display,
+                    diagnostic="",
+                )
+
+                # Route state based on parsed verdict
+                new_state, _ = route_after_evaluation(
+                    verdict, _inline_eval_hint_level,
+                    _session_questions_attempted + 1,
+                )
+                logger.info(f"INLINE_EVAL_PARSED: verdict={verdict_str}, new_state={new_state}, "
+                           f"hint_level={_inline_eval_hint_level}")
 
             # Enforce on display text (keeps digits for frontend)
             enforce_result = enforce(
@@ -1808,6 +1810,36 @@ async def process_message_stream(
                             didi_response=full_text,
                         )
                         fresh_db.add(didi_turn)
+
+                    # v10.5.1: Update session counters for inline eval
+                    # These were deferred because verdict wasn't known until LLM output was parsed
+                    if _use_inline_eval and verdict is not None:
+                        fresh_session.questions_attempted = (fresh_session.questions_attempted or 0) + 1
+                        if verdict.correct:
+                            fresh_session.questions_correct = (fresh_session.questions_correct or 0) + 1
+                            fresh_session.current_hint_level = 0
+                            fresh_session.confusion_count = 0
+                            fresh_session.consecutive_correct = (fresh_session.consecutive_correct or 0) + 1
+                            fresh_session.consecutive_wrong = 0
+                            if fresh_session.consecutive_correct >= 3 and (fresh_session.current_level or 2) < 5:
+                                fresh_session.current_level = (fresh_session.current_level or 2) + 1
+                                fresh_session.consecutive_correct = 0
+                                logger.info(f"LEVEL_UP (inline_eval): student advanced to Level {fresh_session.current_level}")
+                            # Update question to next question
+                            if _inline_eval_next_q_id:
+                                fresh_session.current_question_id = _inline_eval_next_q_id
+                                fresh_session.current_hint_level = 0
+                            elif _inline_eval_is_session_end:
+                                new_state = "SESSION_COMPLETE"
+                        else:
+                            fresh_session.current_hint_level = (fresh_session.current_hint_level or 0) + 1
+                            fresh_session.total_hints_used = (fresh_session.total_hints_used or 0) + 1
+                            fresh_session.consecutive_wrong = (fresh_session.consecutive_wrong or 0) + 1
+                            fresh_session.consecutive_correct = 0
+                            if fresh_session.consecutive_wrong >= 2 and (fresh_session.current_level or 2) > 1:
+                                fresh_session.current_level = (fresh_session.current_level or 2) - 1
+                                fresh_session.consecutive_wrong = 0
+                                logger.info(f"LEVEL_DOWN (inline_eval): student dropped to Level {fresh_session.current_level}")
 
                     fresh_session.state = new_state
                     fresh_db.commit()

@@ -715,6 +715,109 @@ def _build_re_greet(a, ctx, q, sk, prev):
             {"role": "user", "content": msg}]
 
 
+def build_inline_eval_prompt(session_context, question_data, student_text,
+                             hint_level, next_question_data, questions_attempted):
+    """v10.5.1: Combined eval + response in one LLM call.
+    Eliminates separate eval LLM call (~1.3s savings).
+    gpt-4.1 evaluates the answer AND responds in a single call.
+    Returns (messages, is_session_end) tuple.
+    """
+    from app.config import MAX_QUESTIONS_PER_SESSION
+
+    if not question_data:
+        return None, False
+
+    lang_pref = session_context.get("language_pref", "hinglish")
+    use_english = lang_pref == "english"
+
+    q_text = question_data.get("question_voice") or question_data.get("question_text", "")
+    expected = question_data.get("answer", "")
+    variants = question_data.get("answer_variants", [])
+
+    # Build hint text for incorrect path
+    question_id = question_data.get("question_id") or question_data.get("id")
+    cb_hints = []
+    if _content_bank and question_id:
+        cb_hints = _content_bank.get_hints(question_id)
+    q_hints = question_data.get("hints") or []
+
+    if hint_level >= 2:
+        # Show solution path
+        sol = None
+        if _content_bank and question_id:
+            sol = _content_bank.get_full_solution_tts(question_id)
+        if not sol:
+            sol = question_data.get("solution", "Solution not available.")
+        incorrect_instruction = (
+            f'Show the full solution: "{sol}". Walk through in 2 sentences. '
+            f'Be encouraging: "It\'s okay, now you understand."'
+            if use_english else
+            f'Full solution dikhao: "{sol}". 2 sentences mein samjhao. '
+            f'Encouraging bolo: "Koi baat nahi, ab samajh aa gaya hoga."'
+        )
+    else:
+        # Hint path
+        target_hint_level = hint_level + 1  # hint_level 0 → hint 1, hint_level 1 → hint 2
+        if cb_hints and target_hint_level <= len(cb_hints):
+            h = cb_hints[target_hint_level - 1]
+        elif target_hint_level <= len(q_hints):
+            h = q_hints[target_hint_level - 1]
+        else:
+            skill = question_data.get("target_skill", "")
+            if "perfect_square" in skill:
+                h = "Think: which number multiplied by itself gives this answer?" if use_english else "Sochiye: kaunsa number khud se multiply karke yeh answer dega?"
+            elif "cube" in skill:
+                h = "Think: which number multiplied three times gives this answer?" if use_english else "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?"
+            else:
+                h = "The answer is a number. Think step by step." if use_english else "Is sawaal ka jawab ek number hai. Sochiye step by step."
+
+        ack = '"That\'s okay, let me help." ' if use_english else '"Koi baat nahi, hint deti hoon." '
+        incorrect_instruction = f'Start with {ack} Then give hint: "{h}". Ask to try again.'
+
+    # Build correct path instruction
+    is_session_end = (questions_attempted + 1) >= MAX_QUESTIONS_PER_SESSION
+    if is_session_end:
+        correct_instruction = (
+            'Say brief praise, then end the session warmly. "Great practice today!"'
+            if use_english else
+            'Brief praise do, phir session end karo. "Bahut achhi practice hui aaj!"'
+        )
+    elif next_question_data:
+        next_q_voice = next_question_data.get("question_voice") or next_question_data.get("question_text", "")
+        q_lang = "Present question in English (translate any Hindi)." if use_english else ""
+        correct_instruction = (
+            f'Say brief praise like "Well done!" (1 sentence), '
+            f'then read the NEXT question: "{next_q_voice}". {q_lang}'
+        )
+    else:
+        done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke saare questions ho gaye! Bahut achhi practice hui."
+        correct_instruction = f'Say brief praise, then: "{done_msg}"'
+        is_session_end = True
+
+    variants_str = ", ".join(variants) if variants else "none"
+    lang_instruction = "Respond in English." if use_english else "Respond in Hinglish."
+
+    user_msg = (
+        f'Student was asked: "{q_text}"\n'
+        f'Expected answer: {expected}\n'
+        f'Acceptable alternate forms: {variants_str}\n'
+        f'Student said: "{student_text}"\n\n'
+        f'STEP 1: Evaluate if the student\'s answer is correct. '
+        f'Numbers in any language count (Hindi words, Devanagari, English). '
+        f'If the correct number appears in their response as their answer, it IS correct.\n\n'
+        f'STEP 2: Start your response with EXACTLY [CORRECT] or [INCORRECT] on the first line.\n\n'
+        f'If [CORRECT]:\n{correct_instruction}\n\n'
+        f'If [INCORRECT]:\n{incorrect_instruction}\n\n'
+        f'{lang_instruction} 2 sentences maximum after the tag line.'
+    )
+
+    messages = [
+        {"role": "system", "content": _sys(session_context=session_context, question_data=question_data)},
+        {"role": "user", "content": user_msg},
+    ]
+    return messages, is_session_end
+
+
 _BUILDERS = {
     "ask_topic": _build_ask_topic, "apologize_no_subject": _build_apologize_no_subject,
     "probe_understanding": _build_probe_understanding, "teach_concept": _build_teach_concept,

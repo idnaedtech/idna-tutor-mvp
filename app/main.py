@@ -274,9 +274,9 @@ def _seed_test_student(db):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v10.5",
-    description="AI Voice Tutor for Class 8 NCERT — Parallel TTS",
-    version="10.5.0",
+    title="IDNA Didi v10.5.1",
+    description="AI Voice Tutor for Class 8 NCERT — Inline Eval",
+    version="10.5.1",
     lifespan=lifespan,
 )
 
@@ -323,7 +323,7 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "10.5.0"}
+    return {"status": "ok", "version": "10.5.1"}
 
 
 @app.get("/health/detail")
@@ -336,7 +336,7 @@ async def health_detail():
         levels = {str(lvl): cnt for lvl, cnt in level_rows}
     finally:
         db.close()
-    return {"status": "ok", "version": "10.5.0", "questions": q_count, "levels": levels}
+    return {"status": "ok", "version": "10.5.1", "questions": q_count, "levels": levels}
 
 
 # Keep-alive endpoint for UptimeRobot (prevents Railway sleep)
