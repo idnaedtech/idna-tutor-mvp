@@ -580,7 +580,7 @@ QUESTIONS = [
         "accept_patterns": ["haan", "yes", "ha", "sahi", "true", "7 ka square"],
         "common_mistakes": ["Student says no because 49 is odd"],
         "target_skill": "perfect_square_concept",
-        "level": 2,
+        "level": 4,
     },
     {
         "id": "sq_e02",

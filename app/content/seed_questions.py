@@ -33,6 +33,7 @@ QUESTIONS = [
         "solution": "Denominator same hai (9), toh numerators add karo: -3 + (-2) = -5. Answer: -5/9",
         "target_skill": "fraction_addition_same_denom",
         "difficulty": 1,
+        "active": False,
     },
     {
         "id": "ch1_q2",
@@ -53,6 +54,7 @@ QUESTIONS = [
         "solution": "2/7 + 3/7 = (2+3)/7 = 5/7",
         "target_skill": "fraction_addition_same_denom",
         "difficulty": 1,
+        "active": False,
     },
     {
         "id": "ch1_q3",
@@ -73,6 +75,7 @@ QUESTIONS = [
         "solution": "1/2 = 2/4 (multiply top and bottom by 2). 2/4 + 1/4 = 3/4",
         "target_skill": "fraction_addition_diff_denom",
         "difficulty": 2,
+        "active": False,
     },
 
     # ─── Fraction Subtraction ───────────────────────────────────────────────────
@@ -95,6 +98,7 @@ QUESTIONS = [
         "solution": "5/8 - 3/8 = (5-3)/8 = 2/8 = 1/4",
         "target_skill": "fraction_subtraction_same_denom",
         "difficulty": 1,
+        "active": False,
     },
     {
         "id": "ch1_q5",
@@ -115,6 +119,7 @@ QUESTIONS = [
         "solution": "-1/3 - 1/3 = (-1-1)/3 = -2/3",
         "target_skill": "fraction_subtraction_same_denom",
         "difficulty": 2,
+        "active": False,
     },
 
     # ─── Fraction Multiplication ────────────────────────────────────────────────
@@ -137,6 +142,7 @@ QUESTIONS = [
         "solution": "2/3 × 3/4 = (2×3)/(3×4) = 6/12 = 1/2",
         "target_skill": "fraction_multiplication",
         "difficulty": 2,
+        "active": False,
     },
 
     # ─── Fraction Division ──────────────────────────────────────────────────────
@@ -159,6 +165,7 @@ QUESTIONS = [
         "solution": "2/3 ÷ 1/2 = 2/3 × 2/1 = 4/3",
         "target_skill": "fraction_division",
         "difficulty": 3,
+        "active": False,
     },
 
     # ─── Number Line ────────────────────────────────────────────────────────────
@@ -181,6 +188,7 @@ QUESTIONS = [
         "solution": "-3/4 = -0.75, jo -1 aur 0 ke beech mein hai",
         "target_skill": "number_line_rational",
         "difficulty": 2,
+        "active": False,
     },
 
     # ─── Properties ─────────────────────────────────────────────────────────────
@@ -203,6 +211,7 @@ QUESTIONS = [
         "solution": "a + b = b + a is the Commutative Property of Addition",
         "target_skill": "properties_rational",
         "difficulty": 1,
+        "active": False,
     },
     {
         "id": "ch1_q10",
@@ -223,6 +232,7 @@ QUESTIONS = [
         "solution": "Do kisi bhi do rational numbers ke beech hamesha anant (infinite) rational numbers hote hain. Isko dense property kehte hain.",
         "target_skill": "dense_property",
         "difficulty": 2,
+        "active": False,
     },
 ]
 

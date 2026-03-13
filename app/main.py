@@ -215,7 +215,7 @@ def _seed_questions(db):
             target_skill=q_data["target_skill"],
             difficulty=difficulty,
             level=q_data.get("level", 3),
-            active=True,
+            active=q_data.get("active", True),
         )
         db.add(q)
     db.commit()
@@ -254,16 +254,21 @@ def _upsert_questions(db):
                 target_skill=q_data["target_skill"],
                 difficulty=difficulty,
                 level=seed_level,
-                active=True,
+                active=q_data.get("active", True),
             )
             db.add(q)
             added += 1
         else:
-            # Update level if it changed from default
+            # Update level and active status if changed
             existing = db.query(Question).filter(Question.id == q_data["id"]).first()
-            if existing and existing.level != seed_level:
-                existing.level = seed_level
-                updated += 1
+            if existing:
+                seed_active = q_data.get("active", True)
+                if existing.level != seed_level:
+                    existing.level = seed_level
+                    updated += 1
+                if existing.active != seed_active:
+                    existing.active = seed_active
+                    updated += 1
 
     db.commit()
     return added, updated

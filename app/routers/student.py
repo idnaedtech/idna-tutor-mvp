@@ -240,15 +240,15 @@ def start_session(
     db.commit()
     db.refresh(session)
 
-    # P1 fix: Get questions already answered by this student (across ALL sessions)
+    # P1 fix: Get questions already asked of this student (across ALL sessions)
     # This prevents serving the same question on page refresh
+    # v10.6.1: Include ALL questions ever presented, not just verdicted ones
     prev_answered = (
         db.query(SessionTurn.question_id)
         .join(Session)
         .filter(
             Session.student_id == student_id,
             SessionTurn.question_id.isnot(None),
-            SessionTurn.verdict.in_(("CORRECT", "INCORRECT")),
         )
         .distinct()
         .all()
@@ -657,7 +657,7 @@ async def process_message(
     # Build asked questions list for this session
     asked_ids = [
         t.question_id for t in session.turns
-        if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
+        if t.question_id
     ]
 
     # v8.0: Build context for old state machine (backward compat)

@@ -126,6 +126,16 @@ def _get_language_instruction(session_context: dict) -> str:
     return LANG_INSTRUCTIONS.get(pref, LANG_INSTRUCTIONS["hinglish"])
 
 
+def _lang(ctx, english, hinglish, telugu=None):
+    """v10.6.1: Pick text by language. Telugu falls back to English if not provided."""
+    pref = ctx.get("language_pref", "hinglish") if isinstance(ctx, dict) else "hinglish"
+    if pref in ("telugu", "te-IN"):
+        return telugu if telugu else english
+    if pref == "english":
+        return english
+    return hinglish
+
+
 def _get_chapter_context(session_context: dict, question_data: dict = None) -> str:
     """v7.3.22 Fix 1: Build chapter metadata for system prompt.
     v7.3.28: Enhanced with explicit chapter response instruction."""
@@ -154,11 +164,11 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
     if session_context and session_context.get("student_emotional"):
         student_text = getattr(action, 'student_text', None) or session_context.get('student_text', '')
         lang_pref = session_context.get("language_pref", "hinglish")
-        use_english = lang_pref == "english"
-        if use_english:
-            emotion_msg = f'Student said: "{student_text}". They sound sad or tired. Your FIRST priority is acknowledging their emotion — NOT teaching math. Say something warm like "I can hear you\'re not having a great day" and then gently ask if they want to continue or take a break. 2 sentences max.'
-        else:
-            emotion_msg = f'Student ne kaha: "{student_text}". Woh udaas ya thaka hua lag raha hai. PEHLE emotion acknowledge karo — math BAAD mein. Warmly bolo "Lagta hai aaj din thoda tough raha" aur pucho ki continue karna hai ya break lena hai. 2 sentences max.'
+        emotion_msg = _lang(session_context,
+            f'Student said: "{student_text}". They sound sad or tired. Your FIRST priority is acknowledging their emotion — NOT teaching math. Say something warm like "I can hear you\'re not having a great day" and then gently ask if they want to continue or take a break. 2 sentences max.',
+            f'Student ne kaha: "{student_text}". Woh udaas ya thaka hua lag raha hai. PEHLE emotion acknowledge karo — math BAAD mein. Warmly bolo "Lagta hai aaj din thoda tough raha" aur pucho ki continue karna hai ya break lena hai. 2 sentences max.',
+            f'Student said: "{student_text}". వాళ్ళు బాధగా లేదా అలసిపోయినట్లు ఉన్నారు. FIRST emotion acknowledge చేయండి — math LATER. Telugu లో warmly respond చేయండి. "మీరు బాగా feel అవ్వట్లేదని తెలుస్తోంది" అని చెప్పి continue చేయాలా break తీసుకోవాలా అని అడగండి. 2 sentences max.'
+        )
         return [
             {"role": "system", "content": _sys(session_context=session_context, question_data=question_data)},
             {"role": "user", "content": emotion_msg}
@@ -169,11 +179,11 @@ def build_prompt(action, session_context, question_data=None, skill_data=None, p
         # Force acknowledgment regardless of what FSM decided
         student_text = getattr(action, 'student_text', None) or session_context.get('student_text', '')
         lang_pref = session_context.get("language_pref", "hinglish")
-        use_english = lang_pref == "english"
-        if use_english:
-            correction_msg = f'Student corrected your math: "{student_text}". You MUST acknowledge: "You\'re right, thank you for catching that!" Then give the correct fact. Do NOT ignore the correction. Do NOT continue with a different topic. 2 sentences max.'
-        else:
-            correction_msg = f'Student ne tumhari math correct ki: "{student_text}". Tum ZAROOR acknowledge karo: "Haan, sahi pakda! Thank you!" Phir correct fact batao. Correction ignore MAT karo. 2 sentences max.'
+        correction_msg = _lang(session_context,
+            f'Student corrected your math: "{student_text}". You MUST acknowledge: "You\'re right, thank you for catching that!" Then give the correct fact. Do NOT ignore the correction. Do NOT continue with a different topic. 2 sentences max.',
+            f'Student ne tumhari math correct ki: "{student_text}". Tum ZAROOR acknowledge karo: "Haan, sahi pakda! Thank you!" Phir correct fact batao. Correction ignore MAT karo. 2 sentences max.',
+            f'Student corrected your math: "{student_text}". మీరు MUST acknowledge చేయాలి: "మీరు correct గా చెప్పారు, thanks!" అని Telugu లో చెప్పండి. Correct fact ఇవ్వండి. Correction ignore చేయకండి. 2 sentences max.'
+        )
         return [
             {"role": "system", "content": _sys(session_context=session_context, question_data=question_data)},
             {"role": "user", "content": correction_msg}
@@ -257,9 +267,11 @@ def _sys(extra="", session_context: dict = None, question_data: dict = None):
 def _build_ask_topic(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware topic asking
     lang_pref = ctx.get("language_pref", "hinglish")
-    use_english = lang_pref == "english"
     if a.extra.get("retry"):
-        retry_ask = "What subject did you study in school today? Math, Science, or Hindi?" if use_english else "Aaj school mein kaunsa subject padha? Math, Science, ya Hindi?"
+        retry_ask = _lang(ctx,
+            "What subject did you study in school today? Math, Science, or Hindi?",
+            "Aaj school mein kaunsa subject padha? Math, Science, ya Hindi?",
+            "ఈ రోజు school లో ఏ subject చదివారు? Math, Science, లేదా Hindi?")
         msg = f'Student said: "{a.student_text}". Couldn\'t identify subject. Ask specifically: "{retry_ask}"'
     else:
         msg = "Student just logged in. Ask warmly what they studied in school today. Ask about their day first, then the subject."
@@ -270,10 +282,10 @@ def _build_apologize_no_subject(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware apology
     lang_pref = ctx.get("language_pref", "hinglish")
     s = a.detected_subject or "that subject"
-    if lang_pref == "english":
-        apology = f"Right now I only have Math, but {s} is coming soon! Want to practice math?"
-    else:
-        apology = f"Abhi mere paas sirf Math hai, lekin jaldi {s} bhi aa jayega! Chalo math practice karte hain?"
+    apology = _lang(ctx,
+        f"Right now I only have Math, but {s} is coming soon! Want to practice math?",
+        f"Abhi mere paas sirf Math hai, lekin jaldi {s} bhi aa jayega! Chalo math practice karte hain?",
+        f"ప్రస్తుతం నా దగ్గర Math మాత్రమే ఉంది, కానీ {s} త్వరలో వస్తుంది! Math practice చేద్దామా?")
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student wants {s}, but only Math available. Say warmly: "{apology}"'}]
 
 
@@ -281,7 +293,10 @@ def _build_probe_understanding(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware probing
     lang_pref = ctx.get("language_pref", "hinglish")
     ch = ctx.get("chapter", "rational numbers")
-    example = "If the denominator is the same, how do you add?" if lang_pref == "english" else "Agar denominator same hai, toh add kaise karte hain?"
+    example = _lang(ctx,
+        "If the denominator is the same, how do you add?",
+        "Agar denominator same hai, toh add kaise karte hain?",
+        "Denominator same అయితే, add ఎలా చేస్తారు?")
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student studied {ch}. Ask ONE simple concept-check question (not calculation). Example for fractions: "{example}"'}]
 
 
@@ -292,19 +307,22 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware teaching
     lang_pref = ctx.get("language_pref", "hinglish")
     use_english = lang_pref == "english"
+    use_telugu = lang_pref in ("telugu", "te-IN")
 
     # v10.5.2: Chapter intro — brief explanation before first question
     if a.extra.get("chapter_intro"):
         ch_key = ctx.get("chapter", "")
         ch_name = CHAPTER_NAMES.get(ch_key, ch_key.replace("_", " ").title())
-        if use_english:
-            msg = (f'Student just responded to greeting. Give a brief 2-3 sentence chapter introduction about "{ch_name}". '
-                   f'Explain what the topic is about in simple terms with one relatable example. '
-                   f'Then say "Let\'s try a question!" to transition. Do NOT ask a math question yet.')
-        else:
-            msg = (f'Student ne greeting ka jawab diya. "{ch_name}" ka brief 2-3 sentence introduction do. '
-                   f'Simple example ke saath topic samjhao. '
-                   f'Phir bolo "Chalo ek question try karte hain!" Math question MAT poocho abhi.')
+        msg = _lang(ctx,
+            f'Student just responded to greeting. Give a brief 2-3 sentence chapter introduction about "{ch_name}". '
+            f'Explain what the topic is about in simple terms with one relatable example. '
+            f'Then say "Let\'s try a question!" to transition. Do NOT ask a math question yet.',
+            f'Student ne greeting ka jawab diya. "{ch_name}" ka brief 2-3 sentence introduction do. '
+            f'Simple example ke saath topic samjhao. '
+            f'Phir bolo "Chalo ek question try karte hain!" Math question MAT poocho abhi.',
+            f'Student greeting కి respond చేశారు. "{ch_name}" గురించి brief 2-3 sentence introduction ఇవ్వండి Telugu లో. '
+            f'Simple example తో topic explain చేయండి. '
+            f'తర్వాత "ఒక question try చేద్దామా!" అని transition చేయండి. Math question అడగకండి ఇంకా.')
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
     # v7.2.0: Phase-based teaching with teaching_turn (BUG 1/3 fix)
@@ -406,15 +424,20 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     approach = a.extra.get("approach", "fresh")
 
     # v7.3.24: Language-aware phrases
-    transition_phrase = "No problem, let's try a question." if use_english else "Koi baat nahi, chaliye ek sawaal try karte hain."
-    understand_check = "Does that make sense?" if use_english else "Ab samajh aaya?"
-    understand_short = "Make sense?" if use_english else "Samajh aaya?"
-    lang_mode = "English" if use_english else "Hinglish"
+    transition_phrase = _lang(ctx, "No problem, let's try a question.", "Koi baat nahi, chaliye ek sawaal try karte hain.", "పరవాలేదు, ఒక question try చేద్దాం.")
+    understand_check = _lang(ctx, "Does that make sense?", "Ab samajh aaya?", "అర్థమైందా?")
+    understand_short = _lang(ctx, "Make sense?", "Samajh aaya?", "అర్థమైందా?")
+    lang_mode = _lang(ctx, "English", "Hinglish", "Telugu")
 
     # v7.4.2: Phase-based prompts with progressive reteach
     # Only force transition after Turn 3 (exhausted CB teaching material)
     # v8.1.0: Add translation instruction for Content Bank material when English mode
-    translate_instruction = "TRANSLATE TO ENGLISH if the content below is in Hindi/Hinglish. " if use_english else ""
+    if use_telugu:
+        translate_instruction = "TRANSLATE TO TELUGU (తెలుగు) if the content below is in Hindi/Hinglish/English. "
+    elif use_english:
+        translate_instruction = "TRANSLATE TO ENGLISH if the content below is in Hindi/Hinglish. "
+    else:
+        translate_instruction = ""
 
     if a.extra.get("forced_transition") and teaching_turn >= 3:
         # Turn 3+: Force to question with gentle transition
@@ -434,16 +457,16 @@ def _build_teach_concept(a, ctx, q, sk, prev):
             msg = f'{translate_instruction}Student still confused. Try this simpler approach: "{teach_content}". 2 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
         elif teaching_turn >= 4:
             # P0 FIX: OFFER BREAK - Student has been struggling too long
-            if use_english:
-                msg = 'The student has been struggling with this topic for a while now. Do NOT explain again. Say EXACTLY: "This is a tough topic, and you are doing great by trying. Would you like to take a short break, or try a different easier topic?" 2 sentences max.'
-            else:
-                msg = 'Student bahut der se is topic pe stuck hai. Phir se explain MAT karo. EXACTLY yeh bolo: "Yeh mushkil topic hai, aur aap try kar rahe ho yeh bahut acchi baat hai. Break lena chahoge ya koi aasan topic try karein?" 2 sentences max.'
+            msg = _lang(ctx,
+                'The student has been struggling with this topic for a while now. Do NOT explain again. Say EXACTLY: "This is a tough topic, and you are doing great by trying. Would you like to take a short break, or try a different easier topic?" 2 sentences max.',
+                'Student bahut der se is topic pe stuck hai. Phir se explain MAT karo. EXACTLY yeh bolo: "Yeh mushkil topic hai, aur aap try kar rahe ho yeh bahut acchi baat hai. Break lena chahoge ya koi aasan topic try karein?" 2 sentences max.',
+                'Student చాలా సేపటి నుండి ఈ topic లో stuck అయ్యారు. మళ్ళీ explain చేయకండి. Telugu లో ఇలా చెప్పండి: "ఇది కష్టమైన topic, మీరు try చేస్తున్నారు అది చాలా బాగుంది. Break తీసుకుందామా, లేదా easy topic try చేద్దామా?" 2 sentences max.')
         elif teaching_turn == 3:
             # P0 FIX: STRATEGY SHIFT - Stop explaining, start asking guided question
-            if use_english:
-                msg = 'STOP EXPLAINING. The student has heard 3 explanations and still does not understand. Do NOT give another explanation or example. Instead, ask ONE simple guided question: "Let me ask you something simple - what is 2 times 2?" Wait for their answer. 1 sentence only.'
-            else:
-                msg = 'EXPLAINING BAND KARO. Student ne 3 baar sun liya, samajh nahi aaya. Aur explanation MAT do. Ek simple sawaal pucho: "Chalo ek simple sawaal - 2 into 2 kitna hota hai?" Jawab ka intezaar karo. 1 sentence only.'
+            msg = _lang(ctx,
+                'STOP EXPLAINING. The student has heard 3 explanations and still does not understand. Do NOT give another explanation or example. Instead, ask ONE simple guided question: "Let me ask you something simple - what is 2 times 2?" Wait for their answer. 1 sentence only.',
+                'EXPLAINING BAND KARO. Student ne 3 baar sun liya, samajh nahi aaya. Aur explanation MAT do. Ek simple sawaal pucho: "Chalo ek simple sawaal - 2 into 2 kitna hota hai?" Jawab ka intezaar karo. 1 sentence only.',
+                'EXPLAIN చేయడం ఆపండి. Student 3 సార్లు విన్నారు, అర్థం కాలేదు. మరో explanation ఇవ్వకండి. ఒక simple question అడగండి: "ఒక simple question — 2 times 2 ఎంత?" Answer కోసం wait చేయండి. 1 sentence only.')
         else:
             msg = f"{translate_instruction}Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"{understand_check}\""
     else:
@@ -468,25 +491,29 @@ def _build_teach_concept(a, ctx, q, sk, prev):
 def _build_read_question(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware question reading
     lang_pref = ctx.get("language_pref", "hinglish")
-    use_english = lang_pref == "english"
     if not q:
-        done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke saare questions ho gaye! Bahut achhi practice hui."
+        done_msg = _lang(ctx, "All questions for this topic are done! Great practice.", "Is topic ke saare questions ho gaye! Bahut achhi practice hui.", "ఈ topic questions అయిపోయాయి! చాలా బాగా practice చేశారు.")
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'No more questions. Say: "{done_msg}"'}]
     if a.extra.get("nudge"):
-        nudge_lang = "Present in English." if use_english else ""
+        nudge_lang = _lang(ctx, "Present in English.", "", "Present in Telugu (తెలుగు).")
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". {nudge_lang} Gently nudge them to try.'}]
     # v10.5.3: Post-comfort transition — acknowledge student's willingness before question
     post_comfort_prefix = ""
     if a.extra.get("post_comfort"):
         student_said = a.student_text or ""
-        if use_english:
-            post_comfort_prefix = f'Student said: "{student_said}" after being comforted. First warmly acknowledge: "Of course! I\'m here to help. Let\'s try together." Then read the question. '
-        else:
-            post_comfort_prefix = f'Student ne comfort ke baad kaha: "{student_said}". Pehle warmly acknowledge karo: "Haan bilkul! Main hoon na, saath mein seekhenge." Phir question padhao. '
+        post_comfort_prefix = _lang(ctx,
+            f'Student said: "{student_said}" after being comforted. First warmly acknowledge: "Of course! I\'m here to help. Let\'s try together." Then read the question. ',
+            f'Student ne comfort ke baad kaha: "{student_said}". Pehle warmly acknowledge karo: "Haan bilkul! Main hoon na, saath mein seekhenge." Phir question padhao. ',
+            f'Student comfort తర్వాత చెప్పారు: "{student_said}". Telugu లో warmly acknowledge చేయండి: "అవును! నేను ఉన్నాను, కలిసి నేర్చుకుందాం." తర్వాత question చదవండి. ')
     d = "This is an easier question. " if a.extra.get("difficulty") == "easy" else ""
-    ask_prompt = 'End: "Tell me, what is the answer?"' if use_english else 'End: "Batao, kya answer hai?"'
-    # v7.3.25: Tell LLM to present question in session language
-    lang_instruction = "Present this question in English (translate any Hindi)." if use_english else "Read this question naturally."
+    ask_prompt = _lang(ctx,
+        'End: "Tell me, what is the answer?"',
+        'End: "Batao, kya answer hai?"',
+        'End: "చెప్పండి, answer ఏమిటి?"')
+    lang_instruction = _lang(ctx,
+        "Present this question in English (translate any Hindi).",
+        "Read this question naturally.",
+        "Present this question in Telugu (తెలుగు). Translate any Hindi to Telugu.")
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'{post_comfort_prefix}{d}{lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
 
 
@@ -496,6 +523,7 @@ def _build_evaluate_answer(a, ctx, q, sk, prev):
     if not v:
         return _build_fallback(a, ctx, q, sk, prev)
 
+    lang_note = _lang(ctx, "Respond in English.", "", "Respond in Telugu (తెలుగు). Every word in Telugu script.")
     if v.correct:
         return [
             {"role": "system", "content": _sys(session_context=ctx, question_data=q)},
@@ -506,7 +534,7 @@ def _build_evaluate_answer(a, ctx, q, sk, prev):
              f'Acknowledge their specific answer with brief praise: '
              f'"{v.student_parsed or a.student_text} — that\'s right!" or "Correct, {v.correct_display}!" '
              f'Then say "Let\'s try the next one." '
-             f'2 sentences maximum.'}
+             f'{lang_note} 2 sentences maximum.'}
         ]
     else:
         return [
@@ -518,7 +546,7 @@ def _build_evaluate_answer(a, ctx, q, sk, prev):
              f'First acknowledge their answer: "{v.student_parsed or a.student_text} — not quite." '
              f'Then give ONE specific hint about what went wrong. '
              f'Do NOT reveal the correct answer. '
-             f'2 sentences maximum.'}
+             f'{lang_note} 2 sentences maximum.'}
         ]
 
 
@@ -546,20 +574,20 @@ def _build_give_hint(a, ctx, q, sk, prev):
         # No more hints — build contextual hint from question and answer
         skill = q.get("target_skill", "")
         if "perfect_square" in skill:
-            h = "Think: which number multiplied by itself gives this answer?" if use_english else "Sochiye: kaunsa number khud se multiply karke yeh answer dega?"
+            h = _lang(ctx, "Think: which number multiplied by itself gives this answer?", "Sochiye: kaunsa number khud se multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని దాని తోనే multiply చేస్తే ఈ answer వస్తుంది?")
         elif "cube" in skill:
-            h = "Think: which number multiplied three times gives this answer?" if use_english else "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?"
+            h = _lang(ctx, "Think: which number multiplied three times gives this answer?", "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని మూడు సార్లు multiply చేస్తే ఈ answer వస్తుంది?")
         elif "fraction" in skill.lower():
-            h = "First look at the numerators, then the denominators." if use_english else "Pehle numerators ko dekho, phir denominators ko."
+            h = _lang(ctx, "First look at the numerators, then the denominators.", "Pehle numerators ko dekho, phir denominators ko.", "ముందు numerators చూడండి, తర్వాత denominators చూడండి.")
         else:
             # Generic hint based on answer type
-            h = "The answer is a number. Think step by step." if use_english else "Is sawaal ka jawab ek number hai. Sochiye step by step."
+            h = _lang(ctx, "The answer is a number. Think step by step.", "Is sawaal ka jawab ek number hai. Sochiye step by step.", "Answer ఒక number. Step by step ఆలోచించండి.")
 
-    # v7.3.24: Use appropriate language instruction
-    lang_instruction = "Say naturally in English." if use_english else "Say naturally in Hinglish."
-    # V10: DIDI_NO_PRAISE deleted — persona handles hint tone naturally
-    # v10.3.0: Acknowledge student's struggle before giving hint
-    ack = '"That\'s okay, let me help." ' if use_english else '"Koi baat nahi, hint deti hoon." '
+    lang_instruction = _lang(ctx, "Say naturally in English.", "Say naturally in Hinglish.", "Say naturally in Telugu (తెలుగు).")
+    ack = _lang(ctx,
+        '"That\'s okay, let me help." ',
+        '"Koi baat nahi, hint deti hoon." ',
+        '"పరవాలేదు, hint ఇస్తాను." ')
     return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Start with {ack} Then give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
 
 
@@ -577,18 +605,18 @@ def _build_show_solution(a, ctx, q, sk, prev):
 
     # v7.3.24: Language-aware encouragement
     lang_pref = ctx.get("language_pref", "hinglish")
-    encouragement = "It's okay, now you understand." if lang_pref == "english" else "Koi baat nahi, ab samajh aa gaya hoga."
-    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'3rd wrong. Show solution: "{sol}". Walk through in 2-3 sentences. Be encouraging: "{encouragement}" No new question.'}]
+    encouragement = _lang(ctx, "It's okay, now you understand.", "Koi baat nahi, ab samajh aa gaya hoga.", "పరవాలేదు, ఇప్పుడు అర్థమైంది.")
+    lang_note = _lang(ctx, "Present in English.", "", "Present in Telugu (తెలుగు).")
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'3rd wrong. Show solution: "{sol}". {lang_note} Walk through in 2-3 sentences. Be encouraging: "{encouragement}" No new question.'}]
 
 
 def _build_pick_next_question(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware transitions
     lang_pref = ctx.get("language_pref", "hinglish")
-    use_english = lang_pref == "english"
-    transition = "Let's try another one." if use_english else "Chalo, ek aur try karte hain."
-    done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke questions ho gaye! Bahut achhi practice hui."
+    transition = _lang(ctx, "Let's try another one.", "Chalo, ek aur try karte hain.", "మరొకటి try చేద్దాం.")
+    done_msg = _lang(ctx, "All questions for this topic are done! Great practice.", "Is topic ke questions ho gaye! Bahut achhi practice hui.", "ఈ topic questions అయిపోయాయి! చాలా బాగా practice చేశారు.")
     # v7.3.25: Tell LLM to present question in session language
-    q_lang = "Present question in English (translate any Hindi)." if use_english else ""
+    q_lang = _lang(ctx, "Present question in English (translate any Hindi).", "", "Present question in Telugu (తెలుగు). Translate any Hindi to Telugu.")
 
     if a.extra.get("follow_up"):
         if q:
@@ -606,25 +634,26 @@ def _build_comfort_student(a, ctx, q, sk, prev):
     lang_pref = ctx.get("language_pref", "hinglish")
     # v10.1 FIX: Read comfort_count from action.extra (where state_machine puts it) first
     comfort_count = a.extra.get("comfort_count", ctx.get("comfort_count", 0))
-    use_english = lang_pref == "english"
 
     if comfort_count >= 2:
         # v10.1: Exit comfort loop — offer to continue
-        if use_english:
-            msg = ('Student has been comforted. Now gently offer to continue: '
-                   '"Would you like to try an easy question? No pressure at all." '
-                   '1 sentence only.')
-        else:
-            msg = ('Student ko comfort mil chuka hai. Ab gently offer karo: '
-                   '"Ek aasan sawaal try karein? Bilkul koi pressure nahi." '
-                   '1 sentence only.')
+        msg = _lang(ctx,
+            'Student has been comforted. Now gently offer to continue: '
+            '"Would you like to try an easy question? No pressure at all." '
+            '1 sentence only.',
+            'Student ko comfort mil chuka hai. Ab gently offer karo: '
+            '"Ek aasan sawaal try karein? Bilkul koi pressure nahi." '
+            '1 sentence only.',
+            'Student కి comfort అయింది. ఇప్పుడు gently offer చేయండి Telugu లో: '
+            '"ఒక easy question try చేద్దామా? ఏ pressure లేదు." '
+            '1 sentence only.')
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)},
                 {"role": "user", "content": msg}]
 
-    if use_english:
-        comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "It\'s okay", "This is difficult, isn\'t it?". End: "Let me know when you\'re ready."\n'
-    else:
-        comfort_mode = '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "Koi baat nahi", "Mushkil lag raha hai na?". End: "Jab ready ho, batana."\n'
+    comfort_mode = _lang(ctx,
+        '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "It\'s okay", "This is difficult, isn\'t it?". End: "Let me know when you\'re ready."\n',
+        '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings. Use: "Koi baat nahi", "Mushkil lag raha hai na?". End: "Jab ready ho, batana."\n',
+        '\nCOMFORT MODE: Do NOT teach. Do NOT ask questions. Just acknowledge feelings in Telugu. Use: "పరవాలేదు", "కష్టంగా ఉంది కదా?". End: "మీరు ready అయినప్పుడు చెప్పండి."\n')
     return [{"role": "system", "content": _sys(comfort_mode, session_context=ctx, question_data=q)},
             {"role": "user", "content": f'Student said: "{a.student_text}". They are frustrated. Comfort. 2 sentences.'}]
 
@@ -634,31 +663,31 @@ def _build_end_session(a, ctx, q, sk, prev):
     qa = ctx.get("questions_attempted", 0)
     # v7.3.24: Language-aware session ending
     lang_pref = ctx.get("language_pref", "hinglish")
-    goodbye = "See you tomorrow!" if lang_pref == "english" else "Kal phir milte hain!"
+    goodbye = _lang(ctx, "See you tomorrow!", "Kal phir milte hain!", "రేపు మళ్ళీ కలుద్దాం!")
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Session ending. {qc}/{qa} correct. Summarize warmly. Encourage return tomorrow. "{goodbye}" 3 sentences max.'}]
 
 
 def _build_acknowledge_homework(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware homework acknowledgment
     lang_pref = ctx.get("language_pref", "hinglish")
-    msg = "Oh, you have homework? Send a photo or read me the question." if lang_pref == "english" else "Achha, homework hai? Photo bhejo ya question padh ke batao."
+    msg = _lang(ctx, "Oh, you have homework? Send a photo or read me the question.", "Achha, homework hai? Photo bhejo ya question padh ke batao.", "Homework ఉందా? Photo పంపండి లేదా question చదివి చెప్పండి.")
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
 
 
 def _build_replay_heard(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware replay message
     lang_pref = ctx.get("language_pref", "hinglish")
-    if lang_pref == "english":
-        msg = f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "I heard: [heard]. If I misheard, please try again." Be apologetic.'
-    else:
-        msg = f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "Mujhe aisa suna: [heard]. Agar galat suna toh phir try karo." Be apologetic.'
+    msg = _lang(ctx,
+        f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "I heard: [heard]. If I misheard, please try again." Be apologetic.',
+        f'Student disputes verdict. Didi heard: "{a.student_text}". Say: "Mujhe aisa suna: [heard]. Agar galat suna toh phir try karo." Be apologetic.',
+        f'Student disputes verdict. Didi heard: "{a.student_text}". Say in Telugu: "నాకు ఇలా వినిపించింది: [heard]. తప్పు అయితే, మళ్ళీ try చేయండి." Be apologetic.')
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
 
 def _build_ask_repeat(a, ctx, q, sk, prev):
     # v7.3.24: Language-aware repeat request
     lang_pref = ctx.get("language_pref", "hinglish")
-    msg = "Sorry, I didn't understand. Could you please say that again?" if lang_pref == "english" else "Sorry, samajh nahi aaya. Ek baar phir boliye?"
+    msg = _lang(ctx, "Sorry, I didn't understand. Could you please say that again?", "Sorry, samajh nahi aaya. Ek baar phir boliye?", "Sorry, అర్థం కాలేదు. మళ్ళీ చెప్పగలరా?")
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'"{msg}" 1 sentence.'}]
 
 
@@ -668,7 +697,9 @@ def _build_acknowledge_language_switch(a, ctx, q, sk, prev):
     """Acknowledge language switch and CONTINUE teaching in new language."""
     new_lang = a.extra.get("new_language", "hinglish")
     # v7.3.21 Fix 1: Continue teaching instead of asking "what would you like to know"
-    if new_lang == "english":
+    if new_lang in ("telugu", "te-IN"):
+        msg = 'Student switched to Telugu. Acknowledge briefly ("అలాగే, తెలుగులో చెప్తాను.") and CONTINUE teaching the current topic in Telugu script. Do NOT ask what they want to learn. 2 sentences max.'
+    elif new_lang == "english":
         msg = 'Student switched to English. Acknowledge briefly ("Sure, English it is.") and CONTINUE teaching the current topic in English. Do NOT ask what they want to learn. 2 sentences max.'
     elif new_lang == "hindi":
         msg = 'Student switched to Hindi. Acknowledge briefly ("ठीक है, हिंदी में") and CONTINUE teaching the current topic in Hindi. Do NOT ask what they want. 2 sentences max.'
@@ -695,7 +726,10 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
 
     # v10.3.0: After answering, steer back to the question if in answer/hint states
     if return_to in ("WAITING_ANSWER", "HINT_1", "HINT_2"):
-        steer_back = ' Then gently steer back: "Now, back to our question..."' if use_english else ' Phir wapas laao: "Ab, apne sawaal pe wapas aate hain..."'
+        steer_back = _lang(ctx,
+            ' Then gently steer back: "Now, back to our question..."',
+            ' Phir wapas laao: "Ab, apne sawaal pe wapas aate hain..."',
+            ' తర్వాత question వైపు తీసుకెళ్ళండి: "ఇప్పుడు, మన question కి వద్దాం..."')
     else:
         steer_back = ""
 
@@ -703,7 +737,7 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
     student_lower = a.student_text.lower()
     if "chapter" in student_lower or "topic" in student_lower or "kaunsa" in student_lower or "कौन" in a.student_text or "number" in student_lower:
         # v10.5.5: Include chapter number in response
-        chapter_response = f"We're learning {ch}." if use_english else f"Hum {ch} padh rahe hain."
+        chapter_response = _lang(ctx, f"We're learning {ch}.", f"Hum {ch} padh rahe hain.", f"మనం {ch} నేర్చుకుంటున్నాం.")
         msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}" Include the chapter NUMBER.{steer_back}'
     elif "correct" in student_lower or "right" in student_lower or "sahi" in student_lower or "galat" in student_lower:
         # v10.3.0: Student asking about their answer status
@@ -733,14 +767,13 @@ def _build_fallback(a, ctx, q, sk, prev):
 def _build_re_greet(a, ctx, q, sk, prev):
     """P0 FIX: Handle non-ACK inputs during GREETING state."""
     lang_pref = ctx.get("language_pref", "hinglish")
-    use_english = lang_pref == "english"
     ch_key = ctx.get("chapter", "")
     ch = CHAPTER_NAMES.get(ch_key, ch_key.replace("_", " ").title())
 
-    if use_english:
-        msg = f'Student is in greeting phase but hasn\'t started. Warmly re-invite: "No worries! Ready to start learning {ch}?" 1 sentence max.'
-    else:
-        msg = f'Student greeting phase mein hai, start nahi kiya. Warmly re-invite karo: "Koi baat nahi! {ch} shuru karein?" 1 sentence max.'
+    msg = _lang(ctx,
+        f'Student is in greeting phase but hasn\'t started. Warmly re-invite: "No worries! Ready to start learning {ch}?" 1 sentence max.',
+        f'Student greeting phase mein hai, start nahi kiya. Warmly re-invite karo: "Koi baat nahi! {ch} shuru karein?" 1 sentence max.',
+        f'Student greeting phase లో ఉన్నారు, start చేయలేదు. Warmly re-invite చేయండి Telugu లో: "పరవాలేదు! {ch} start చేద్దామా?" 1 sentence max.')
     return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)},
             {"role": "user", "content": msg}]
 
@@ -778,12 +811,13 @@ def build_inline_eval_prompt(session_context, question_data, student_text,
             sol = _content_bank.get_full_solution_tts(question_id)
         if not sol:
             sol = question_data.get("solution", "Solution not available.")
-        incorrect_instruction = (
+        incorrect_instruction = _lang(session_context,
             f'Show the full solution: "{sol}". Walk through in 2 sentences. '
-            f'Be encouraging: "It\'s okay, now you understand."'
-            if use_english else
+            f'Be encouraging: "It\'s okay, now you understand."',
             f'Full solution dikhao: "{sol}". 2 sentences mein samjhao. '
-            f'Encouraging bolo: "Koi baat nahi, ab samajh aa gaya hoga."'
+            f'Encouraging bolo: "Koi baat nahi, ab samajh aa gaya hoga."',
+            f'Full solution చూపించు: "{sol}". 2 sentences లో explain చేయి. '
+            f'Encouraging గా: "పరవాలేదు, ఇప్పుడు అర్థమైంది."'
         )
     else:
         # Hint path
@@ -795,37 +829,36 @@ def build_inline_eval_prompt(session_context, question_data, student_text,
         else:
             skill = question_data.get("target_skill", "")
             if "perfect_square" in skill:
-                h = "Think: which number multiplied by itself gives this answer?" if use_english else "Sochiye: kaunsa number khud se multiply karke yeh answer dega?"
+                h = _lang(session_context, "Think: which number multiplied by itself gives this answer?", "Sochiye: kaunsa number khud se multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని దాని తోనే multiply చేస్తే ఈ answer వస్తుంది?")
             elif "cube" in skill:
-                h = "Think: which number multiplied three times gives this answer?" if use_english else "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?"
+                h = _lang(session_context, "Think: which number multiplied three times gives this answer?", "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని మూడు సార్లు multiply చేస్తే ఈ answer వస్తుంది?")
             else:
-                h = "The answer is a number. Think step by step." if use_english else "Is sawaal ka jawab ek number hai. Sochiye step by step."
+                h = _lang(session_context, "The answer is a number. Think step by step.", "Is sawaal ka jawab ek number hai. Sochiye step by step.", "Answer ఒక number. Step by step ఆలోచించండి.")
 
-        ack = '"That\'s okay, let me help." ' if use_english else '"Koi baat nahi, hint deti hoon." '
+        ack = _lang(session_context, '"That\'s okay, let me help." ', '"Koi baat nahi, hint deti hoon." ', '"పరవాలేదు, hint ఇస్తాను." ')
         incorrect_instruction = f'Start with {ack} Then give hint: "{h}". Ask to try again.'
 
     # Build correct path instruction
     is_session_end = (questions_attempted + 1) >= MAX_QUESTIONS_PER_SESSION
     if is_session_end:
-        correct_instruction = (
-            'Say brief praise, then end the session warmly. "Great practice today!"'
-            if use_english else
-            'Brief praise do, phir session end karo. "Bahut achhi practice hui aaj!"'
-        )
+        correct_instruction = _lang(session_context,
+            'Say brief praise, then end the session warmly. "Great practice today!"',
+            'Brief praise do, phir session end karo. "Bahut achhi practice hui aaj!"',
+            'Brief praise చెప్పండి, తర్వాత session end చేయండి Telugu లో. "చాలా బాగా practice చేశారు!"')
     elif next_question_data:
         next_q_voice = next_question_data.get("question_voice") or next_question_data.get("question_text", "")
-        q_lang = "Present question in English (translate any Hindi)." if use_english else ""
+        q_lang = _lang(session_context, "Present question in English (translate any Hindi).", "", "Present question in Telugu (తెలుగు). Translate any Hindi to Telugu.")
         correct_instruction = (
             f'Say brief praise like "Well done!" (1 sentence), '
             f'then read the NEXT question: "{next_q_voice}". {q_lang}'
         )
     else:
-        done_msg = "All questions for this topic are done! Great practice." if use_english else "Is topic ke saare questions ho gaye! Bahut achhi practice hui."
+        done_msg = _lang(session_context, "All questions for this topic are done! Great practice.", "Is topic ke saare questions ho gaye! Bahut achhi practice hui.", "ఈ topic questions అయిపోయాయి! చాలా బాగా practice చేశారు.")
         correct_instruction = f'Say brief praise, then: "{done_msg}"'
         is_session_end = True
 
     variants_str = ", ".join(variants) if variants else "none"
-    lang_instruction = "Respond in English." if use_english else "Respond in Hinglish."
+    lang_instruction = _lang(session_context, "Respond in English.", "Respond in Hinglish.", "Respond in Telugu (తెలుగు). Every word in Telugu script.")
 
     user_msg = (
         f'Student was asked: "{q_text}"\n'
