@@ -67,6 +67,13 @@ async def lifespan(app: FastAPI):
             _seed_test_student(db)
             logger.info("Test student created (PIN: 1234)")
 
+        # v10.6.1: Fix test student name (was "Priya" which conflicts with anti-Priya rule)
+        test_student = db.query(Student).filter(Student.pin == "1234").first()
+        if test_student and test_student.name == "Priya":
+            test_student.name = "Test Student"
+            db.commit()
+            logger.info("Fixed test student name: Priya → Test Student")
+
         # Seed pilot students (PINs 1001-1010) — safe to run repeatedly
         pilot_added = _seed_pilot_students(db)
         if pilot_added:
@@ -267,7 +274,7 @@ def _seed_test_student(db):
     import uuid
     student = Student(
         id=str(uuid.uuid4()),
-        name="Priya",
+        name="Test Student",
         pin="1234",
         class_level=8,
         preferred_language="hi-IN",

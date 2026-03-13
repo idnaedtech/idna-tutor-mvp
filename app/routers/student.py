@@ -582,28 +582,31 @@ async def process_message(
 
     # === CORRECTION DETECTION (runs on every message) ===
     # Detects when student corrects Didi's math error.
-    # Sets a flag so instruction builder acknowledges the correction.
+    # v10.6.1: State-aware — "nahi"/"galat" are legitimate answers in WAITING_ANSWER states
     _correction_triggers = [
         "that's wrong", "thats wrong", "that is wrong",
         "you're wrong", "youre wrong", "you are wrong",
-        "wrong answer", "galat", "गलत",
-        "that's not right", "not right", "not correct",
+        "wrong answer",
+        "that's not right", "not correct",
         "check again", "check karo", "check kijiye",
-        "चेक कीजिए", "चेक करो", "गलत है",
-        "nahi", "74 nahi", "that's not",
+        "चेक कीजिए", "चेक करो",
     ]
-    # Pattern: student says "[X] nahi, [Y] hota hai" = correction
+    # Only add "galat"/"nahi" triggers when NOT in answer-expecting states
+    _in_answer_state = session.state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION")
+    if not _in_answer_state:
+        _correction_triggers.extend(["galat", "गलत", "गलत है", "nahi", "not right", "that's not"])
     _is_correction = False
     for trigger in _correction_triggers:
         if trigger in _text_lower:
             _is_correction = True
             break
-    # Also detect pattern: "X nahi" or "X नहीं" followed by a number
+    # Pattern: "X nahi Y hota hai" = correction (only outside answer states)
     import re as _re
-    if not _is_correction and _re.search(r'\d+\s*(nahi|नहीं|nhi|wrong|galat)', _text_lower):
-        _is_correction = True
-    if not _is_correction and _re.search(r'(nahi|नहीं|nhi|wrong|galat)\s*.*\d+', _text_lower):
-        _is_correction = True
+    if not _is_correction and not _in_answer_state:
+        if _re.search(r'\d+\s*(nahi|नहीं|nhi|wrong|galat)', _text_lower):
+            _is_correction = True
+        elif _re.search(r'(nahi|नहीं|nhi|wrong|galat)\s*.*\d+', _text_lower):
+            _is_correction = True
 
     if _is_correction:
         logger.info(f"CORRECTION DETECTED: student correcting Didi's math")
@@ -1343,28 +1346,31 @@ async def process_message_stream(
 
     # === CORRECTION DETECTION (runs on every message) ===
     # Detects when student corrects Didi's math error.
-    # Sets a flag so instruction builder acknowledges the correction.
+    # v10.6.1: State-aware — "nahi"/"galat" are legitimate answers in WAITING_ANSWER states
     _correction_triggers = [
         "that's wrong", "thats wrong", "that is wrong",
         "you're wrong", "youre wrong", "you are wrong",
-        "wrong answer", "galat", "गलत",
-        "that's not right", "not right", "not correct",
+        "wrong answer",
+        "that's not right", "not correct",
         "check again", "check karo", "check kijiye",
-        "चेक कीजिए", "चेक करो", "गलत है",
-        "nahi", "74 nahi", "that's not",
+        "चेक कीजिए", "चेक करो",
     ]
-    # Pattern: student says "[X] nahi, [Y] hota hai" = correction
+    # Only add "galat"/"nahi" triggers when NOT in answer-expecting states
+    _in_answer_state = session.state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION")
+    if not _in_answer_state:
+        _correction_triggers.extend(["galat", "गलत", "गलत है", "nahi", "not right", "that's not"])
     _is_correction = False
     for trigger in _correction_triggers:
         if trigger in _text_lower:
             _is_correction = True
             break
-    # Also detect pattern: "X nahi" or "X नहीं" followed by a number
+    # Pattern: "X nahi Y hota hai" = correction (only outside answer states)
     import re as _re
-    if not _is_correction and _re.search(r'\d+\s*(nahi|नहीं|nhi|wrong|galat)', _text_lower):
-        _is_correction = True
-    if not _is_correction and _re.search(r'(nahi|नहीं|nhi|wrong|galat)\s*.*\d+', _text_lower):
-        _is_correction = True
+    if not _is_correction and not _in_answer_state:
+        if _re.search(r'\d+\s*(nahi|नहीं|nhi|wrong|galat)', _text_lower):
+            _is_correction = True
+        elif _re.search(r'(nahi|नहीं|nhi|wrong|galat)\s*.*\d+', _text_lower):
+            _is_correction = True
 
     if _is_correction:
         logger.info(f"CORRECTION DETECTED (stream): student correcting Didi's math")
@@ -1745,16 +1751,21 @@ async def process_message_stream(
             logger.info(f"TTS_TEXT: [{full_text[:200] if full_text else 'EMPTY'}]")
 
             # v10.5.2: Always TTS the full enforced response (not first sentence only)
-            try:
-                t_tts = time.perf_counter()
-                tts_result = await tts_inst.synthesize_async(final_tts_text, tts_lang)
-                tts_ms = int((time.perf_counter() - t_tts) * 1000)
-                logger.info(f"TTS_FULL: {tts_ms}ms, {len(final_tts_text)} chars")
-                if tts_result.audio_bytes:
-                    audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
-                    yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
-            except Exception as e:
-                logger.error(f"TTS error: {e}")
+            if final_tts_text and final_tts_text.strip():
+                try:
+                    t_tts = time.perf_counter()
+                    tts_result = await tts_inst.synthesize_async(final_tts_text, tts_lang)
+                    tts_ms = int((time.perf_counter() - t_tts) * 1000)
+                    logger.info(f"TTS_FULL: {tts_ms}ms, {len(final_tts_text)} chars, lang={tts_lang}")
+                    if tts_result.audio_bytes:
+                        audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()
+                        yield f"data: {json.dumps({'type': 'audio_chunk', 'index': 0, 'audio': audio_chunk, 'is_last': True})}\n\n"
+                    else:
+                        logger.error(f"TTS_EMPTY_AUDIO: synthesize returned no audio_bytes for {len(final_tts_text)} chars")
+                except Exception as e:
+                    logger.error(f"TTS_ERROR: {e}, text_len={len(final_tts_text)}, lang={tts_lang}")
+            else:
+                logger.error(f"TTS_SKIPPED: final_tts_text is empty, display_text_final=[{display_text_final[:100] if display_text_final else 'EMPTY'}]")
 
             # Send metadata
             yield f"data: {json.dumps({'type': 'transcript', 'content': student_text})}\n\n"

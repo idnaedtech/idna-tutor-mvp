@@ -616,7 +616,7 @@ QUESTIONS = [
         "accept_patterns": ["nahi", "no", "nah", "galat", "false", "nahi ho sakta"],
         "common_mistakes": ["Student thinks 2048 is a square because 2^11 = 2048"],
         "target_skill": "square_units_digit",
-        "level": 2,
+        "level": 3,
     },
     {
         "id": "sq_e04",
@@ -634,7 +634,7 @@ QUESTIONS = [
         "accept_patterns": ["2032", "2048", "1027", "2032 2048 1027", "pehle teen"],
         "common_mistakes": ["Student includes 1089 (it IS a square: 33²)"],
         "target_skill": "square_units_digit",
-        "level": 2,
+        "level": 3,
     },
     {
         "id": "sq_e05",
@@ -652,7 +652,7 @@ QUESTIONS = [
         "accept_patterns": ["32", "battis", "thirty two"],
         "common_mistakes": ["Says 33 (forgets to subtract 1)", "Says 256 or 289"],
         "target_skill": "perfect_square_concept",
-        "level": 2,
+        "level": 3,
     },
     {
         "id": "sq_e06",
@@ -1262,7 +1262,7 @@ QUESTIONS = [
         ],
         "accept_patterns": ["1 4 9 16 25 36 49 64 81 100", "perfect squares", "square numbers"],
         "target_skill": "perfect_square_concept",
-        "level": 2,
+        "level": 4,
     },
     {
         "id": "cn_02",
@@ -1366,7 +1366,7 @@ QUESTIONS = [
         "accept_patterns": ["625", "chheh sau pachchees"],
         "common_mistakes": ["Says 50 (25×2)"],
         "target_skill": "squares_table_1_to_30",
-        "level": 2,
+        "level": 3,
     },
     {
         "id": "sq_m07",
@@ -1420,7 +1420,7 @@ QUESTIONS = [
         "accept_patterns": ["198", "ek sau anthaanavve"],
         "common_mistakes": ["Says 199 (forgets -1)"],
         "target_skill": "perfect_square_concept",
-        "level": 2,
+        "level": 4,
     },
     {
         "id": "sq_h06",
