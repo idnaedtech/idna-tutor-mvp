@@ -592,7 +592,7 @@ async def process_message(
         "चेक कीजिए", "चेक करो",
     ]
     # Only add "galat"/"nahi" triggers when NOT in answer-expecting states
-    _in_answer_state = session.state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION")
+    _in_answer_state = session.state in ("WAITING_ANSWER", "HINT", "HINT_1", "HINT_2", "FULL_SOLUTION")
     if not _in_answer_state:
         _correction_triggers.extend(["galat", "गलत", "गलत है", "nahi", "not right", "that's not"])
     _is_correction = False
@@ -1356,7 +1356,7 @@ async def process_message_stream(
         "चेक कीजिए", "चेक करो",
     ]
     # Only add "galat"/"nahi" triggers when NOT in answer-expecting states
-    _in_answer_state = session.state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION")
+    _in_answer_state = session.state in ("WAITING_ANSWER", "HINT", "HINT_1", "HINT_2", "FULL_SOLUTION")
     if not _in_answer_state:
         _correction_triggers.extend(["galat", "गलत", "गलत है", "nahi", "not right", "that's not"])
     _is_correction = False
