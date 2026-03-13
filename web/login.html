@@ -86,6 +86,55 @@
             margin-top: 12px;
         }
         
+        /* PIN Login Form */
+        .pin-form {
+            background: white;
+            border-radius: 24px;
+            padding: 32px 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .pin-form .card-icon { font-size: 48px; margin-bottom: 12px; }
+        .pin-form .card-title { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+        .pin-form .card-subtitle { font-size: 14px; color: #666; margin-bottom: 20px; }
+        .pin-input {
+            width: 160px;
+            text-align: center;
+            font-size: 28px;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            letter-spacing: 8px;
+            padding: 12px 16px;
+            border: 2px solid #ddd;
+            border-radius: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .pin-input:focus { border-color: #667eea; }
+        .pin-btn {
+            display: block;
+            width: 160px;
+            margin: 16px auto 0;
+            padding: 12px;
+            font-size: 16px;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .pin-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.4); }
+        .pin-btn:active { transform: translateY(0); }
+        .pin-error {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 10px;
+            min-height: 20px;
+        }
+
         .student-card {
             border-bottom: 5px solid #10B981;
         }
@@ -116,12 +165,14 @@
         </div>
         
         <div class="cards">
-            <a href="/student" class="card student-card">
+            <div class="pin-form" id="pinForm">
                 <div class="card-icon">&#128218;</div>
                 <div class="card-title">पढ़ाई करें</div>
-                <div class="card-subtitle">Start Learning</div>
-                <div class="card-desc">Math practice with voice tutor</div>
-            </a>
+                <div class="card-subtitle">Enter your PIN to start</div>
+                <input type="tel" class="pin-input" id="pinInput" maxlength="4" placeholder="••••" autocomplete="off">
+                <button class="pin-btn" id="pinBtn" onclick="loginWithPin()">Start →</button>
+                <div class="pin-error" id="pinError"></div>
+            </div>
             
             <a href="/parent" class="card parent-card">
                 <div class="card-icon">&#128104;&#8205;&#128105;&#8205;&#128102;</div>
@@ -135,5 +186,58 @@
             Made with ❤️ for Indian Students
         </div>
     </div>
+    <script>
+        const pinInput = document.getElementById('pinInput');
+        const pinError = document.getElementById('pinError');
+        const pinBtn = document.getElementById('pinBtn');
+
+        // Auto-submit on 4 digits
+        pinInput.addEventListener('input', function() {
+            this.value = this.value.replace(/\D/g, '');
+            if (this.value.length === 4) loginWithPin();
+        });
+
+        // Enter key
+        pinInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && this.value.length === 4) loginWithPin();
+        });
+
+        async function loginWithPin() {
+            const pin = pinInput.value.trim();
+            if (pin.length !== 4) {
+                pinError.textContent = '4-digit PIN required';
+                return;
+            }
+            pinBtn.disabled = true;
+            pinBtn.textContent = 'Logging in...';
+            pinError.textContent = '';
+
+            try {
+                const resp = await fetch('/api/auth/student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin })
+                });
+                if (!resp.ok) {
+                    pinError.textContent = 'Invalid PIN. Try again.';
+                    pinInput.value = '';
+                    pinInput.focus();
+                    return;
+                }
+                const data = await resp.json();
+                localStorage.setItem('idna_token', data.token);
+                localStorage.setItem('idna_name', data.name);
+                window.location.href = '/student';
+            } catch (err) {
+                pinError.textContent = 'Connection error. Try again.';
+            } finally {
+                pinBtn.disabled = false;
+                pinBtn.textContent = 'Start →';
+            }
+        }
+
+        // Focus PIN input on load
+        pinInput.focus();
+    </script>
 </body>
 </html>
