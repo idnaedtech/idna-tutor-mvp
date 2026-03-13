@@ -143,6 +143,12 @@
     - Fix 7 (MEDIUM): Greeting ACK — verified v10.5.4 fix active (theek tha, accha tha in FAST_ACK)
     - Fix 8 (MEDIUM): Chapter number — CHAPTER_NAMES includes "Chapter 6", meta handler includes number
     - 389 tests passing (8 new), verify.py 22/22
+  - [x] v10.6.0: 4 critical student experience fixes ✅ 2026-03-13
+    - Fix 1 (BLOCKER): Question picker rewrite — `current_question_id` param excludes current question, QUESTION_PICKED logging, no repeat after correct
+    - Fix 2 (BLOCKER): TTS cutoff fixed — pre-load TTS language before generator (session ORM detached inside generator caused silent failures)
+    - Fix 3 (HIGH): Telugu language pre-scan — added Telugu triggers to both streaming and non-streaming endpoints (was only in classifier LLM path)
+    - Fix 4 (HIGH): Roman Hindi → Devanagari — hinglish LANG_INSTRUCTIONS now requires Devanagari for Hindi words (Roman Hindi sounds garbled in TTS)
+    - 398 tests passing (9 new), verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions

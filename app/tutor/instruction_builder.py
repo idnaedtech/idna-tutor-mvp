@@ -90,7 +90,9 @@ Use 'aap' form respectfully. Use digits for math: "5 times 5 equals 25".
 Every Hindi word MUST have complete vowel marks (matras). "ठीक" not "ठक". "है" not "ह".""",
     "hinglish": """LANGUAGE: Respond in Hinglish — natural mix of STANDARD Hindi (Khari Boli) and English.
 Do NOT use Bhojpuri, Maithili, Awadhi, Marwari, Rajasthani, or any regional dialect.
-Use Roman script with Hindi words. Use digits for math. Use 'aap' form respectfully.""",
+CRITICAL: Write Hindi words in Devanagari script, English words in Roman. Example: "बहुत अच्छा! 5 times 5 equals 25 होता है।"
+Wrong: "Bahut accha! 5 times 5 equals 25 hota hai." (Roman Hindi sounds garbled in voice)
+Use digits for math. Use 'aap' form respectfully.""",
     "telugu": """LANGUAGE: You MUST respond in Telugu script (తెలుగు). Every sentence must be in Telugu.
 If you cannot express a math term in Telugu, use the English term but keep ALL other words in Telugu.
 Do NOT use Hindi, Hinglish, or Devanagari script. Translate any Hindi content to Telugu first.

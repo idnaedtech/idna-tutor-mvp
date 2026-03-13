@@ -121,7 +121,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v10.5.5 ready")
+    logger.info("IDNA Didi v10.6.0 ready")
     yield
     logger.info("Shutting down")
 
@@ -311,9 +311,9 @@ def _seed_pilot_students(db):
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="IDNA Didi v10.5.5",
+    title="IDNA Didi v10.6.0",
     description="AI Voice Tutor for Class 8 NCERT — Inline Eval",
-    version="10.5.5",
+    version="10.6.0",
     lifespan=lifespan,
 )
 
@@ -360,7 +360,7 @@ if web_dir.exists():
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "version": "10.5.5"}
+    return {"status": "ok", "version": "10.6.0"}
 
 
 @app.get("/health/detail")
@@ -373,7 +373,7 @@ async def health_detail():
         levels = {str(lvl): cnt for lvl, cnt in level_rows}
     finally:
         db.close()
-    return {"status": "ok", "version": "10.5.5", "questions": q_count, "levels": levels}
+    return {"status": "ok", "version": "10.6.0", "questions": q_count, "levels": levels}
 
 
 # Keep-alive endpoint for UptimeRobot (prevents Railway sleep)

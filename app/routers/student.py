@@ -552,13 +552,30 @@ async def process_message(
                 _switched = True
                 break
 
-    # Check Hindi intent triggers LAST (requires explicit intent)
+    # Check Hindi intent triggers
     if not _switched:
         for trigger in _hindi_intent_triggers:
             if trigger in _text_lower:
                 session.language_pref = "hindi"
                 db.commit()
                 logger.info(f"LANGUAGE PRE-SCAN: switched to hindi (trigger: {trigger})")
+                _switched = True
+                break
+
+    # v10.6.0: Telugu triggers
+    if not _switched:
+        _telugu_triggers = [
+            "in telugu", "speak telugu", "telugu mein", "telugu me",
+            "telugu lo", "telugu please", "teach telugu", "talk telugu",
+            "switch to telugu", "change to telugu", "telugu mein bolo",
+            "telugu mein samjhao", "telugu mein baat karo",
+            "తెలుగు", "తెలుగులో", "తెలుగులో చెప్పు", "తెలుగులో మాట్లాడు",
+        ]
+        for trigger in _telugu_triggers:
+            if trigger in _text_lower:
+                session.language_pref = "telugu"
+                db.commit()
+                logger.info(f"LANGUAGE PRE-SCAN: switched to telugu (trigger: {trigger})")
                 _switched = True
                 break
     # === END LANGUAGE PRE-SCAN ===
@@ -800,9 +817,6 @@ async def process_message(
             # Re-read current question
             question_data = _load_question(db, session.current_question_id)
         else:
-            # Add current question to asked_ids to avoid repeating it
-            if session.current_question_id and session.current_question_id not in asked_ids:
-                asked_ids.append(session.current_question_id)
             # Pick new question
             logger.info(f"PICK_NEXT: current_q={session.current_question_id}, asked_ids={asked_ids}, level={session.current_level}")
             q = memory.pick_next_question(
@@ -812,6 +826,7 @@ async def process_message(
                 asked_ids,
                 difficulty_preference=action.extra.get("difficulty"),
                 current_level=session.current_level,
+                current_question_id=session.current_question_id,
             )
             if q:
                 question_data = q
@@ -1298,13 +1313,30 @@ async def process_message_stream(
                 _switched = True
                 break
 
-    # Check Hindi intent triggers LAST (requires explicit intent)
+    # Check Hindi intent triggers
     if not _switched:
         for trigger in _hindi_intent_triggers:
             if trigger in _text_lower:
                 session.language_pref = "hindi"
                 await run_in_threadpool(lambda: db.commit())
                 logger.info(f"LANGUAGE PRE-SCAN (stream): switched to hindi (trigger: {trigger})")
+                _switched = True
+                break
+
+    # v10.6.0: Telugu triggers
+    if not _switched:
+        _telugu_triggers = [
+            "in telugu", "speak telugu", "telugu mein", "telugu me",
+            "telugu lo", "telugu please", "teach telugu", "talk telugu",
+            "switch to telugu", "change to telugu", "telugu mein bolo",
+            "telugu mein samjhao", "telugu mein baat karo",
+            "తెలుగు", "తెలుగులో", "తెలుగులో చెప్పు", "తెలుగులో మాట్లాడు",
+        ]
+        for trigger in _telugu_triggers:
+            if trigger in _text_lower:
+                session.language_pref = "telugu"
+                await run_in_threadpool(lambda: db.commit())
+                logger.info(f"LANGUAGE PRE-SCAN (stream): switched to telugu (trigger: {trigger})")
                 _switched = True
                 break
     # === END LANGUAGE PRE-SCAN ===
@@ -1469,8 +1501,6 @@ async def process_message_stream(
             t.question_id for t in session.turns
             if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
         ]
-        if session.current_question_id and session.current_question_id not in asked_ids:
-            asked_ids.append(session.current_question_id)
         _inline_eval_next_q = memory.pick_next_question(
             db, session.student_id,
             session.subject or "math",
@@ -1478,6 +1508,7 @@ async def process_message_stream(
             asked_ids,
             difficulty_preference=action.extra.get("difficulty"),
             current_level=session.current_level,
+            current_question_id=session.current_question_id,
         )
         if _inline_eval_next_q:
             logger.info(f"INLINE_EVAL_PRELOAD: next_q={_inline_eval_next_q['id']} for correct path")
@@ -1491,14 +1522,11 @@ async def process_message_stream(
                 # Re-read current question
                 question_data = _load_question(db, session.current_question_id)
             else:
-                # Add current question to asked_ids to avoid repeating it
+                # Pick new question
                 asked_ids = [
                     t.question_id for t in session.turns
                     if t.question_id and t.verdict in ("CORRECT", "INCORRECT")
                 ]
-                if session.current_question_id and session.current_question_id not in asked_ids:
-                    asked_ids.append(session.current_question_id)
-                # Pick new question
                 logger.info(f"PICK_NEXT (stream): current_q={session.current_question_id}, asked_ids={asked_ids}, level={session.current_level}")
                 q = memory.pick_next_question(
                     db, session.student_id,
@@ -1507,6 +1535,7 @@ async def process_message_stream(
                     asked_ids,
                     difficulty_preference=action.extra.get("difficulty"),
                     current_level=session.current_level,
+                    current_question_id=session.current_question_id,
                 )
                 if q:
                     question_data = q
@@ -1604,6 +1633,9 @@ async def process_message_stream(
     # v10.5.1: Pre-load inline eval data for generator
     _inline_eval_next_q_id = _inline_eval_next_q["id"] if _inline_eval_next_q else None
     _session_questions_attempted = session.questions_attempted or 0
+    _tts_language = get_tts_language(session)
+    _session_language_for_tts = session.language_pref or 'hinglish'
+    _session_language_obj = session.language or 'hi-IN'
     # === END Pre-load ===
 
     async def stream_response():
@@ -1618,7 +1650,7 @@ async def process_message_stream(
         tts_ms = 0
         try:
             t_llm = time.perf_counter()
-            tts_lang = get_tts_language(session)
+            tts_lang = _tts_language  # Pre-loaded — avoids DetachedInstanceError
             tts_inst = get_tts()
 
             # v10.5.2: State-dependent TTS char limits
@@ -1689,7 +1721,16 @@ async def process_message_stream(
             yield f"data: {json.dumps({'type': 'text', 'content': display_text})}\n\n"
 
             # Prepare final TTS text from enforced output
-            final_tts_text = prepare_for_tts(display_text_final, session)
+            # Use pre-loaded language pref to avoid DetachedInstanceError on session object
+            final_tts_text = clean_for_tts(display_text_final)
+            if _session_language_for_tts == 'english':
+                final_tts_text = digits_to_english_words(final_tts_text)
+            # Apply 500 char TTS truncation (same logic as prepare_for_tts)
+            if len(final_tts_text) > 500:
+                _trunc = final_tts_text[:500]
+                _last_p = max(_trunc.rfind('. '), _trunc.rfind('। '), _trunc.rfind('? '), _trunc.rfind('! '))
+                if _last_p > 250:
+                    final_tts_text = _trunc[:_last_p + 1].strip()
             if len(final_tts_text) > MAX_TTS_CHARS:
                 trunc = final_tts_text[:MAX_TTS_CHARS]
                 last_end = max(

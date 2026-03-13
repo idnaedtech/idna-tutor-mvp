@@ -132,103 +132,107 @@ def pick_next_question(
     asked_question_ids: list[str],
     difficulty_preference: Optional[str] = None,
     current_level: int = None,
+    current_question_id: str = None,
 ) -> Optional[dict]:
     """
-    v10.4.0: Level-aware question picker.
+    v10.6.0: Strict question picker with HARD RULES.
 
-    Strategy:
-    1. If current_level is set, pick from that level only
-    2. Exclude already-asked questions
-    3. If no questions at current level, advance to next level
-    4. Falls back to old behavior if current_level is None
+    HARD RULES:
+    1. MUST filter by current_level (WHERE level = current_level)
+    2. MUST exclude current question (WHERE id != current_question_id)
+    3. MUST exclude all questions already answered (WHERE id NOT IN asked_question_ids)
+    4. If no questions left at current level → advance level up, then down
+    5. Log: QUESTION_PICKED with id, level, excluded count
     """
     import random as _random
+    import logging
+    logger = logging.getLogger(__name__)
 
-    # Build base query — active questions for this chapter
-    base_q = db.query(Question).filter(
-        Question.subject == subject,
-        Question.chapter == chapter,
-        Question.active == True,
-    )
+    # Build full exclusion list: asked + current
+    exclude_ids = list(set(asked_question_ids or []))
+    if current_question_id and current_question_id not in exclude_ids:
+        exclude_ids.append(current_question_id)
 
-    # Exclude already-asked questions
-    if asked_question_ids:
-        base_q = base_q.filter(Question.id.notin_(asked_question_ids))
+    logger.info(f"QUESTION_PICKER: level={current_level}, excluding={len(exclude_ids)} ids: {exclude_ids}")
 
-    # v10.4.0: Level-aware selection — strict level filtering
+    # HARD RULE: Level-aware selection
     if current_level is not None:
-        level_q = base_q.filter(Question.level == current_level)
-        available = level_q.all()
+        # Step 1: Try unanswered questions at current level
+        q_at_level = db.query(Question).filter(
+            Question.subject == subject,
+            Question.chapter == chapter,
+            Question.active == True,
+            Question.level == current_level,
+        )
+        if exclude_ids:
+            q_at_level = q_at_level.filter(Question.id.notin_(exclude_ids))
+        available = q_at_level.all()
         if available:
-            return _question_to_dict(_random.choice(available))
+            picked = _random.choice(available)
+            logger.info(f"QUESTION_PICKED: id={picked.id}, level={picked.level}, excluded={len(exclude_ids)}, pool={len(available)}")
+            return _question_to_dict(picked)
 
-        # v10.5.5: No fall-through to other levels — stay at current level
-        # Re-query WITHOUT excluding asked_ids (allow re-asking at same level)
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"LEVEL_EXHAUSTED: No unanswered questions at level {current_level}, re-using from same level")
+        # Step 2: All unanswered exhausted at this level — re-use from same level
+        # but still exclude current question to avoid immediate repeat
         all_at_level = db.query(Question).filter(
             Question.subject == subject,
             Question.chapter == chapter,
             Question.active == True,
             Question.level == current_level,
-        ).all()
-        if all_at_level:
-            return _question_to_dict(_random.choice(all_at_level))
+        )
+        if current_question_id:
+            all_at_level = all_at_level.filter(Question.id != current_question_id)
+        reuse_pool = all_at_level.all()
+        if reuse_pool:
+            picked = _random.choice(reuse_pool)
+            logger.info(f"QUESTION_PICKED (reuse): id={picked.id}, level={picked.level}, excluded_current={current_question_id}, pool={len(reuse_pool)}")
+            return _question_to_dict(picked)
 
-        # Truly no questions at this level in the DB — fall back to adjacent
-        logger.warning(f"LEVEL_EMPTY: No questions exist at level {current_level} in DB, falling to adjacent")
-        for adj_level in range(current_level - 1, 0, -1):
-            level_q = base_q.filter(Question.level == adj_level)
-            available = level_q.all()
-            if available:
-                return _question_to_dict(_random.choice(available))
+        # Step 3: No questions at this level at all — try adjacent levels
+        logger.warning(f"LEVEL_EMPTY: No questions at level {current_level}, trying adjacent")
         for adj_level in range(current_level + 1, 6):
-            level_q = base_q.filter(Question.level == adj_level)
-            available = level_q.all()
-            if available:
-                return _question_to_dict(_random.choice(available))
+            adj_q = db.query(Question).filter(
+                Question.subject == subject,
+                Question.chapter == chapter,
+                Question.active == True,
+                Question.level == adj_level,
+            )
+            if exclude_ids:
+                adj_q = adj_q.filter(Question.id.notin_(exclude_ids))
+            adj_available = adj_q.all()
+            if adj_available:
+                picked = _random.choice(adj_available)
+                logger.info(f"QUESTION_PICKED (adj_up): id={picked.id}, level={picked.level}")
+                return _question_to_dict(picked)
+        for adj_level in range(current_level - 1, 0, -1):
+            adj_q = db.query(Question).filter(
+                Question.subject == subject,
+                Question.chapter == chapter,
+                Question.active == True,
+                Question.level == adj_level,
+            )
+            if exclude_ids:
+                adj_q = adj_q.filter(Question.id.notin_(exclude_ids))
+            adj_available = adj_q.all()
+            if adj_available:
+                picked = _random.choice(adj_available)
+                logger.info(f"QUESTION_PICKED (adj_down): id={picked.id}, level={picked.level}")
+                return _question_to_dict(picked)
 
         return None  # All questions exhausted
 
-    # Legacy fallback: Check parent instructions, then weakest skill
-    parent_instruction = (
-        db.query(ParentInstruction)
-        .filter(
-            ParentInstruction.student_id == student_id,
-            ParentInstruction.fulfilled == False,
-        )
-        .order_by(ParentInstruction.created_at.desc())
-        .first()
+    # Legacy fallback (no level set)
+    base_q = db.query(Question).filter(
+        Question.subject == subject,
+        Question.chapter == chapter,
+        Question.active == True,
     )
-
-    if parent_instruction and parent_instruction.instruction:
-        instruction_text = parent_instruction.instruction.lower().strip()
-        matching = None
-        if instruction_text:
-            words = instruction_text.split()
-            if words:
-                matching = base_q.filter(
-                    Question.target_skill.ilike(f"%{words[0]}%")
-                ).first()
-        if matching:
-            parent_instruction.fulfilled = True
-            db.commit()
-            return _question_to_dict(matching)
-
-    weakest = get_weakest_skill(db, student_id, subject)
-    if weakest:
-        q = base_q.filter(Question.target_skill == weakest).first()
-        if q:
-            return _question_to_dict(q)
-
-    if difficulty_preference == "easy":
-        q = base_q.filter(Question.difficulty <= 2).first()
-        if q:
-            return _question_to_dict(q)
+    if exclude_ids:
+        base_q = base_q.filter(Question.id.notin_(exclude_ids))
 
     q = base_q.order_by(Question.difficulty.asc()).first()
     if q:
+        logger.info(f"QUESTION_PICKED (legacy): id={q.id}, level={q.level}")
         return _question_to_dict(q)
 
     return None

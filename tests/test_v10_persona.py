@@ -701,5 +701,96 @@ class TestV1055CriticalFixes:
         assert "final_tts_text" in source
 
 
+class TestV1060CriticalFixes:
+    """v10.6.0: Fix question picker, TTS cutoff, Telugu, Roman Hindi."""
+
+    def test_question_picker_excludes_current(self):
+        """pick_next_question must accept current_question_id and exclude it."""
+        import inspect
+        from app.tutor.memory import pick_next_question
+        sig = inspect.signature(pick_next_question)
+        assert "current_question_id" in sig.parameters
+
+    def test_question_picker_real_db_exclusion(self):
+        """pick_next_question returns different question when current is excluded."""
+        from app.database import SessionLocal
+        from app.tutor.memory import pick_next_question
+        db = SessionLocal()
+        try:
+            # Pick first question
+            q1 = pick_next_question(db, "test", "math", "ch1_square_and_cube", [], current_level=2)
+            if q1 is None:
+                pytest.skip("No questions in DB")
+            # Pick second question excluding first
+            q2 = pick_next_question(db, "test", "math", "ch1_square_and_cube", [],
+                                     current_level=2, current_question_id=q1["id"])
+            if q2 is not None:
+                assert q2["id"] != q1["id"], "Picker returned same question as current"
+        finally:
+            db.close()
+
+    def test_question_picker_logs_picked(self):
+        """pick_next_question must log QUESTION_PICKED."""
+        import inspect
+        from app.tutor import memory
+        source = inspect.getsource(memory.pick_next_question)
+        assert "QUESTION_PICKED" in source
+
+    def test_tts_uses_preloaded_language(self):
+        """Streaming endpoint must use pre-loaded TTS language, not session ORM object."""
+        import inspect
+        from app.routers import student
+        source = inspect.getsource(student)
+        # Should have _tts_language pre-loaded before generator
+        assert "_tts_language = get_tts_language(session)" in source
+        # Inside generator, should use _tts_language not get_tts_language(session)
+        assert "tts_lang = _tts_language" in source
+
+    def test_tts_prepare_avoids_session_in_generator(self):
+        """Generator must not call prepare_for_tts(text, session) — session may be detached."""
+        import inspect
+        from app.routers import student
+        source = inspect.getsource(student)
+        # The generator should use _session_language_for_tts (pre-loaded value)
+        assert "_session_language_for_tts" in source
+
+    def test_telugu_triggers_in_prescan(self):
+        """Language pre-scan must include Telugu triggers in both endpoints."""
+        import inspect
+        from app.routers import student
+        source = inspect.getsource(student)
+        # Telugu triggers should appear in both streaming and non-streaming pre-scan
+        assert source.count("_telugu_triggers") >= 2
+        assert "telugu mein" in source
+        assert "speak telugu" in source
+
+    def test_hinglish_devanagari_instruction(self):
+        """Hinglish LANG_INSTRUCTIONS must require Devanagari for Hindi words."""
+        from app.tutor.instruction_builder import LANG_INSTRUCTIONS
+        hinglish = LANG_INSTRUCTIONS["hinglish"]
+        assert "Devanagari" in hinglish or "देवनागरी" in hinglish
+        assert "Roman Hindi" in hinglish or "garbled" in hinglish
+
+    def test_telugu_lang_instruction_strict(self):
+        """Telugu LANG_INSTRUCTIONS must be strict Telugu-only."""
+        from app.tutor.instruction_builder import LANG_INSTRUCTIONS
+        telugu = LANG_INSTRUCTIONS["telugu"]
+        assert "Telugu ONLY" in telugu
+        assert "MUST" in telugu
+        assert "Hindi" in telugu  # Must mention not to use Hindi
+
+    def test_picker_all_callers_pass_current_question_id(self):
+        """Mid-session pick_next_question calls must pass current_question_id."""
+        import inspect
+        from app.routers import student
+        source = inspect.getsource(student)
+        import re
+        # 4 total calls: 1 at session start (no current_question_id needed), 3 mid-session (must have it)
+        calls = re.findall(r'memory\.pick_next_question\(', source)
+        current_q_args = re.findall(r'current_question_id=', source)
+        assert len(calls) == 4, f"Expected 4 pick_next_question calls, found {len(calls)}"
+        assert len(current_q_args) >= 3, f"Expected >= 3 calls with current_question_id, found {len(current_q_args)}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
