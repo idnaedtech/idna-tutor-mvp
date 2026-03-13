@@ -2,7 +2,7 @@
 
 > **Read by Claude Code at every session start (via CLAUDE.md protocol).**
 > **Updated by:** Claude Code (task status) + CEO (priorities/scope)
-> **Last updated:** 2026-03-13
+> **Last updated:** 2026-03-14
 
 ---
 
@@ -156,6 +156,11 @@
     - Bonus: Test student name "Priya"→"Test Student" auto-fix on startup
     - Production: L1:10, L2:11, L3:27, L4:16, L5:20 (74 active of 84 total)
     - 398 tests passing, verify.py 22/22
+  - [x] v10.6.2: Fix HINT state mismatch — answer eval in hint states ✅ 2026-03-14
+    - Root cause: v8 FSM saves state as "HINT" but v7.3 transition() only has "HINT_1"/"HINT_2" handlers. State fell through to fallback (ask_repeat), so answer eval never ran.
+    - Fix: Normalize "HINT" → "HINT_1"/"HINT_2" based on hint_level before calling v7.3 transition(). Both endpoints.
+    - Bonus: Fixed missed asked_ids verdict filter in streaming inline eval path.
+    - Production smoke test confirmed: ANSWER in HINT state now returns verdict (was None).
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
