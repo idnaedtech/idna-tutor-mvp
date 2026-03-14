@@ -4,7 +4,7 @@
 > **Last updated:** 2026-03-14
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://idna-tutor-mvp-production.up.railway.app
-> **Current version:** v10.6.6
+> **Current version:** v10.6.7
 > **Can be modified by CEO only.**
 
 ---
