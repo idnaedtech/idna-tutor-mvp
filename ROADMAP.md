@@ -207,6 +207,13 @@
     - BUG 2: "Solution not available" text leaked to students when question had no solution/explanation field (29 of 74 questions). Fix: auto-generate from answer + last hint.
     - BUG 3: "Aapne poocha"/"You asked" framing appeared ~20% of the time despite DIDI_BASE rule. Fix: post-processing regex strip in clean_for_tts().
     - 398 tests passing, verify.py 22/22, wiring check 0 breaks
+  - [x] v10.6.8: Update all reference docs to v10.6.x reality ✅ 2026-03-14
+    - SKILL.md v3.0.0 rewrite: GPT-4.1, 398 tests, 84 questions, 5-level scaffold, Telugu, inline eval, didi.idnaedtech.com
+    - MEMORY.md (root): full rewrite from v8.1.5 to v10.6.7
+    - .claude/MEMORY.md: full rewrite with v10.6.7 architecture, lessons, bug patterns
+    - CLAUDE.md: 7 patches — domain URL, test count, P0 status, GPT-5-mini removal, anti-patterns 24-26
+    - kanban SKILL.md: test count 152→398, v8→v10.6.x refs, content bank template
+    - All stale references eliminated (GPT-5-mini, GPT-4o-mini, v8.1.5, old Railway URL)
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
