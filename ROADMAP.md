@@ -184,6 +184,12 @@
     - FIX 4: Hint ack Devanagari — "कोई बात नहीं" replaces "Koi baat nahi" in _build_give_hint and build_inline_eval_prompt. Solution path also Devanagari.
     - FIX 5: Removed duplicate "Didi soch rahi hai..." typing bubble (status dot already shows processing).
     - 398 tests passing, verify.py 22/22, wiring check 9/9
+    - **Production smoke test PASSED** (5-turn session):
+      - Turn 1: ACK → GREETING→TEACHING, chapter intro
+      - Turn 2: ACK → TEACHING→WAITING_ANSWER, "Batao, kya answer hai?" (no "aapne poocha")
+      - Turn 3: INCORRECT (12) → HINT_1, "कोई बात नहीं, hint देती हूँ।" (Devanagari confirmed)
+      - Turn 4: CORRECT (36) after hint → NEXT_QUESTION saved as WAITING_ANSWER, new question (cb_e01)
+      - Turn 5: INCORRECT (100) → HINT_1, state_before=WAITING_ANSWER (transient fix working), Devanagari hint
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
