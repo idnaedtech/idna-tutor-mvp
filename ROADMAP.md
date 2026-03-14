@@ -226,6 +226,13 @@
     - Only fires when questions_attempted == 0 AND teaching_turn <= 1
     - Returning students (questions_attempted > 0) get normal Content Bank reteach flow
     - 414 tests passing (9 new), verify.py 22/22
+  - [x] v10.7.0: Fix 5 smoke test bugs ✅ 2026-03-15
+    - BUG 1 (HIGH): Hindi greeting "ठीक था" (7 words) classified UNCLEAR — FAST_ACK now checked regardless of word count in GREETING state
+    - BUG 2 (HIGH): LLM dropped tile analogy — "SAY THIS" instruction replaces "rephrase naturally"
+    - BUG 3 (MEDIUM): "You asked" leaked to display text — compiled regex strips from both streaming + non-streaming endpoints
+    - BUG 4 (MEDIUM): "What is square" classified IDK — concept question guard runs before FAST_IDK in both classifiers
+    - BUG 5 (MEDIUM): Extended intro to 3 teaching turns (turn_0 intro, turn_1 intro, turn_2 CB teaching) before first question
+    - 419 tests passing, verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
