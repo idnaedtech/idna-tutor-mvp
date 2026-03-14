@@ -528,6 +528,8 @@ If you catch yourself doing any of these, stop immediately:
 21. **Passing content bank material verbatim to LLM for voice** — if teach_content > 200 chars, add "summarize in 2 sentences" instruction
 22. **Setting session fields without db.commit()** — teaching_turn, language_pref, confusion_count MUST be followed by db.commit() or value is lost between requests (P0 Bug #1 root cause in v10.0.2)
 23. **Ignoring student's input language** — if student speaks English 2x consecutively, language_pref must auto-switch via `check_language_auto_switch()`. Don't rely solely on explicit "speak in English" commands.
+24. **Setting inline eval state to HINT_1 without checking hint_level** — after INCORRECT, check `current_hint_level`: >=3→FULL_SOLUTION, >=2→HINT_2, else→HINT_1. Blindly resetting to HINT_1 causes infinite hint loops (v10.6.7 Bug #1).
+25. **Letting "Solution not available" reach students** — never use `"Solution not available."` as a default. Auto-generate from `answer` + last `hints[]` entry when `solution` and `explanation` fields are both missing.
 
 ---
 
