@@ -2,7 +2,7 @@
 
 > **Read by Claude Code at every session start (via CLAUDE.md protocol).**
 > **Updated by:** Claude Code (task status) + CEO (priorities/scope)
-> **Last updated:** 2026-03-14
+> **Last updated:** 2026-03-15
 
 ---
 
@@ -214,6 +214,11 @@
     - CLAUDE.md: 7 patches — domain URL, test count, P0 status, GPT-5-mini removal, anti-patterns 24-26
     - kanban SKILL.md: test count 152→398, v8→v10.6.x refs, content bank template
     - All stale references eliminated (GPT-5-mini, GPT-4o-mini, v8.1.5, old Railway URL)
+  - [x] v10.6.9: Fix Telugu meta-Q, HINT escape, help-request false CORRECT ✅ 2026-03-15
+    - BUG 1 (HIGH): Telugu meta-question ("ఏ చాప్టర్?") ignored — Telugu Unicode keywords added to preprocessing.py META_QUESTION_PATTERNS and instruction_builder.py _build_answer_meta_question()
+    - BUG 2 (HIGH): CONCEPT_REQUEST at HINT_1/HINT_2 escaped to TEACHING, breaking hint chain. Fix: HINT_1+CONCEPT_REQUEST→HINT_2, HINT_2+CONCEPT_REQUEST→FULL_SOLUTION in state_machine.py
+    - BUG 3 (MEDIUM): "help me find cube root of 729" marked CORRECT — digits triggered ANSWER fast-path. Fix: help-request guard runs BEFORE FAST_IDK/digit check in input_classifier.py
+    - 405 tests passing (7 new), verify.py 22/22, wiring check clean
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
