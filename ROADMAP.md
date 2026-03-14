@@ -165,6 +165,11 @@
     - CRITICAL: Students answered every question TWICE. Inline eval saved state as "EVALUATING" (transient, no v7.3 handler) instead of WAITING_ANSWER/HINT_1. Next turn fell through to ask_repeat → re-read same question.
     - Fix: After inline eval [CORRECT] → WAITING_ANSWER, [INCORRECT] → HINT_1. Also NEXT_QUESTION + ANSWER → evaluate_answer in v7.3 state machine.
     - Devanagari meta-question responses for hinglish. Commas replace dashes in CHAPTER_NAMES (TTS reads "-" as "minus"). Global " - " → ", " in clean_for_tts().
+  - [x] v10.6.4: Fix remaining double-answer + chapter name cleanup ✅ 2026-03-14
+    - Bug 1 (double-answer): Removed `action.action_type == "pick_next_question"` check from NEXT_QUESTION transient fix. NEXT_QUESTION is ALWAYS transient regardless of how we got there (evaluate_answer or pick_next_question). Fixed in both streaming (line 1811) and non-streaming (line 1076).
+    - Bug 2 (question levels): Verified seed data correct (sq_e01=L4, sq_e08=L4, cn_01=L4). _upsert_questions() syncs on deploy.
+    - Bug 3 (chapter name): Removed parentheses from CHAPTER_NAMES — "(and Chapter 7...)" → ", and Chapter 7...". TTS reads parens literally.
+    - 398 tests passing, verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
