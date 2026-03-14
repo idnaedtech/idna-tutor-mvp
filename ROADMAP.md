@@ -170,6 +170,13 @@
     - Bug 2 (question levels): Verified seed data correct (sq_e01=L4, sq_e08=L4, cn_01=L4). _upsert_questions() syncs on deploy.
     - Bug 3 (chapter name): Removed parentheses from CHAPTER_NAMES — "(and Chapter 7...)" → ", and Chapter 7...". TTS reads parens literally.
     - 398 tests passing, verify.py 22/22
+    - **Production smoke test PASSED** (5-turn session):
+      - Turn 1: ACK → TEACHING→WAITING_ANSWER, question asked (sq_b01)
+      - Turn 2: CORRECT (9) → NEXT_QUESTION saved as WAITING_ANSWER, new question (sq_b04)
+      - Turn 3: CORRECT (64) → new question (sq_b03), no re-read
+      - Turn 4: INCORRECT (20) → HINT_1, hint given ("which number times itself gives 16?")
+      - Turn 5: CORRECT after hint → NEXT_QUESTION saved as WAITING_ANSWER, new question
+      - Zero double-answers, HINT flow works, state_before always correct
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
