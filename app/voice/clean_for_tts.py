@@ -73,6 +73,11 @@ def clean_for_tts(text: str) -> str:
 
     result = text
 
+    # ─── v10.6.7: Strip "You asked" / "Aapne poocha" framing ─────────────
+    result = re.sub(r'(?i)you asked[,:]?\s*', '', result)
+    result = re.sub(r'(?i)aapne poocha[,:]?\s*', '', result)
+    result = re.sub(r'आपने पूछा[,:]?\s*', '', result)
+
     # ─── Dashes: " - " → ", " (TTS reads "-" as "minus") ─────────────────
     # v10.6.3: "Chapter 6 - Squares" → "Chapter 6, Squares"
     # v10.6.5: Also handle em dash and long dash

@@ -1885,9 +1885,18 @@ async def process_message_stream(
                                 fresh_session.current_level = (fresh_session.current_level or 2) - 1
                                 fresh_session.consecutive_wrong = 0
                                 logger.info(f"LEVEL_DOWN (inline_eval): student dropped to Level {fresh_session.current_level}")
-                            # v10.6.3: INCORRECT → HINT_1 (hint was given in inline response)
-                            new_state = "HINT_1"
-                            logger.info(f"INLINE_EVAL_STATE: INCORRECT → HINT_1")
+                            # v10.6.7: Respect FSM hint progression — don't blindly reset to HINT_1
+                            hint_lvl = fresh_session.current_hint_level or 0
+                            if hint_lvl >= 3:
+                                new_state = "FULL_SOLUTION"
+                                fresh_session.current_hint_level = 0
+                                logger.info(f"INLINE_EVAL_STATE: INCORRECT → FULL_SOLUTION (hint_level={hint_lvl})")
+                            elif hint_lvl >= 2:
+                                new_state = "HINT_2"
+                                logger.info(f"INLINE_EVAL_STATE: INCORRECT → HINT_2 (hint_level={hint_lvl})")
+                            else:
+                                new_state = "HINT_1"
+                                logger.info(f"INLINE_EVAL_STATE: INCORRECT → HINT_1 (hint_level={hint_lvl})")
 
                     fresh_session.state = new_state
                     fresh_db.commit()
