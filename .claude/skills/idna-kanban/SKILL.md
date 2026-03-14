@@ -9,7 +9,7 @@ description: >
   Trigger on: "/kanban", "create task", "run pipeline", "sprint", "backlog",
   "plan feature", "fix bug", "add chapter content", "schema migration",
   "board expansion work". Every agent enforces IDNA's non-negotiable rules:
-  FSM=skeleton, bench_score gates, verify.py 22/22, 152+ tests passing.
+  FSM=skeleton, bench_score gates, verify.py 22/22, 398+ tests passing.
   Do NOT trigger for general project management discussions or non-IDNA work.
 ---
 
@@ -27,7 +27,7 @@ schema migration — and type `/kanban run <ID>`. Six AI agents handle the rest:
 Req → Plan → Review Plan → Impl → Review Impl → Test → Done
 ```
 
-Every agent reads `IDNA_v8_ARCHITECTURE.md` and enforces the non-negotiable
+Every agent reads `CLAUDE.md` and enforces the non-negotiable
 rules before writing a single line of code.
 
 ## 2. The Pipeline
@@ -56,7 +56,7 @@ rules before writing a single line of code.
 
 | Nickname | Role | Model | Reads | Writes |
 |----------|------|-------|-------|--------|
-| `Planner` | Plan Agent | opus | description, IDNA_v8_ARCHITECTURE.md | plan |
+| `Planner` | Plan Agent | opus | description, CLAUDE.md | plan |
 | `Critic` | Plan Review | sonnet | description, plan, SKILL.md rules | plan_review_comments |
 | `Builder` | Worker | opus | description, plan, review comments | implementation_notes |
 | `Shield` | TDD Tester | sonnet | description, implementation_notes | test code (appended) |
@@ -65,13 +65,13 @@ rules before writing a single line of code.
 
 **Signature rule** — every agent prepends:
 ```
-> **Planner** `opus` · 2026-02-25T10:00:00Z · IDNA v8.0.1
+> **Planner** `opus` · 2026-02-25T10:00:00Z · IDNA v10.6.x
 ```
 
 ## 5. IDNA-Specific Agent Rules
 
 ### ALL agents MUST:
-1. Read `IDNA_v8_ARCHITECTURE.md` before any work
+1. Read `CLAUDE.md` before any work
 2. Never create `app/models/` directory (shadows `app/models.py`)
 3. Never change TTS voice (Sarvam simran only)
 4. Never rewrite DIDI_PROMPT (append rules only)
@@ -97,7 +97,7 @@ rules before writing a single line of code.
 - Never edit MEMORY.md mid-session
 
 ### Shield MUST:
-- Write tests that integrate with existing 152-test suite
+- Write tests that integrate with existing 398-test suite
 - Test Hindi-English mixed inputs for any user-facing change
 - Include edge cases from P1 backlog (empty TTS, Devanagari parsing)
 
@@ -169,7 +169,7 @@ When creating tasks, use these templates for common IDNA work:
 > Phase: P1
 > Files: app/content/ch2_linear_equations.py
 > Description: Create content bank following ch1_square_and_cube.py pattern.
-  50 questions, 20 skills, 3 teaching layers (definition, analogy, vedic_trick).
+  5-level question bank (L1-L5) with level field per question, skills, hints, accept_patterns.
   Indian examples only. Must integrate with FSM content injection.
 ```
 

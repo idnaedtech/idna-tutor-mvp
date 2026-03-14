@@ -3,7 +3,7 @@
 > **This file is read by Claude Code on every session start.**
 > **Last updated:** 2026-03-14
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
-> **Live:** https://idna-tutor-mvp-production.up.railway.app
+> **Live:** https://didi.idnaedtech.com
 > **Current version:** v10.6.7
 > **Can be modified by CEO only.**
 
@@ -35,7 +35,7 @@ Didi is an encouraging elder-sister figure who teaches through voice conversatio
 | Layer | Technology | Notes |
 |-------|-----------|-------|
 | Teaching LLM | gpt-4.1 | Better instruction following (38.3% MultiChallenge vs gpt-4o's 27.8%). 20% cheaper than gpt-4o. |
-| Classifier LLM | gpt-4.1-mini | Input classification. 10 categories. gpt-5-mini rejected temperature param (reasoning model). |
+| Classifier LLM | gpt-4.1-mini | Input classification. 10 categories. Also used for inline answer evaluation. |
 | STT | Sarvam Saarika v2.5 | Default language from STT_DEFAULT_LANGUAGE |
 | TTS | Sarvam Bulbul v3 | speaker=simran, language=hi-IN, pace=0.90 |
 | Backend | FastAPI (Python 3.11) | Async endpoints |
@@ -160,7 +160,7 @@ tests/
 ├── test_v750_features.py       # Sentence splitter, enforcer
 ├── test_p1_fixes.py            # Question picking, memory
 └── test_ch1_square_cube.py     # Question bank validation
-    # Total: 323 tests. ALL must pass before any commit.
+    # Total: 398 tests across 11 files. ALL must pass before any commit.
 
 alembic/                        # Database migrations
 ```
@@ -294,7 +294,7 @@ git add -A
 git commit -m "v9.0.X: description"
 git push origin main
 # Wait for Railway deploy
-curl https://idna-tutor-mvp-production.up.railway.app/health  # Confirm
+curl https://didi.idnaedtech.com/health  # Confirm
 ```
 
 ---
@@ -414,7 +414,7 @@ All fixed in v10.0.1–v10.0.3. Language auto-detection added in v10.0.3. See RO
 | 4 | **Emotional distress ignored at session start** | "मैं बहुत उदास हूं" gets classified as ACK. No COMFORT fast-path. GREETING sends all non-COMFORT to TEACHING. | `input_classifier.py`, `preprocessing.py` |
 | 5 | **Response too long for voice** | Content bank definition for prime factorization is full worked solution. LLM reproduces verbatim. No length guard in _build_teach_concept. | `instruction_builder.py` line 380 |
 
-### Post-P0 (Fix after live retest passes)
+### Post-P0 (Fix during pilot)
 
 | # | Issue | Impact | File(s) |
 |---|-------|--------|---------|
@@ -440,7 +440,7 @@ All fixed in v10.0.1–v10.0.3. Language auto-detection added in v10.0.3. See RO
 
 | Phase | Goal | Gate Criteria | Status |
 |-------|------|--------------|--------|
-| **P0** | Core tutoring loop works | Full session without crash/loop/language reset | **CODE COMPLETE — live retest pending** |
+| **P0** | Core tutoring loop works | Full session without crash/loop/language reset | ****PASSED** — real student test March 14, 2026** |
 | **P1** | Schema evolution | Multi-board DB, content migration, API v1 | Blocked on P0 |
 | **P2** | Multi-board MVP | CBSE + Telangana + Maharashtra + ICSE | Blocked on P1 |
 | **P3** | Platform | Content factory, IDNA-Bench, 22 languages | Blocked on P2 |
@@ -528,8 +528,9 @@ If you catch yourself doing any of these, stop immediately:
 21. **Passing content bank material verbatim to LLM for voice** — if teach_content > 200 chars, add "summarize in 2 sentences" instruction
 22. **Setting session fields without db.commit()** — teaching_turn, language_pref, confusion_count MUST be followed by db.commit() or value is lost between requests (P0 Bug #1 root cause in v10.0.2)
 23. **Ignoring student's input language** — if student speaks English 2x consecutively, language_pref must auto-switch via `check_language_auto_switch()`. Don't rely solely on explicit "speak in English" commands.
-24. **Setting inline eval state to HINT_1 without checking hint_level** — after INCORRECT, check `current_hint_level`: >=3→FULL_SOLUTION, >=2→HINT_2, else→HINT_1. Blindly resetting to HINT_1 causes infinite hint loops (v10.6.7 Bug #1).
-25. **Letting "Solution not available" reach students** — never use `"Solution not available."` as a default. Auto-generate from `answer` + last `hints[]` entry when `solution` and `explanation` fields are both missing.
+24. **Bumping version without updating content** — When updating reference docs, ALL stale facts must change (URLs, test counts, line counts, feature lists). Changing only the version string is a BLOCKING ERROR.
+25. **Setting inline eval state to HINT_1 blindly** — must check current_hint_level and set HINT_1/HINT_2/FULL_SOLUTION accordingly
+26. **Missing solution AND explanation fields on questions** — fallback generates "Solution not available" text that reaches student. Auto-generate from answer + hints.
 
 ---
 

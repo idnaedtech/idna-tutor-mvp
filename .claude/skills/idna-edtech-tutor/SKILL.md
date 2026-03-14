@@ -1,30 +1,27 @@
 ---
 name: idna-edtech-tutor
 description: >
-  IDNA EdTech AI voice tutor skill. Trigger when user mentions IDNA, Didi tutor,
-  voice tutoring, Learn IDNA, EdTech MVP, NCERT tutoring, Sarvam TTS/STT, agentic
-  tutor, session flow, parent reports, IDNA-Bench, multi-board tutoring, or building
-  AI tutors for Indian K-10 students. Also trigger for teaching flows, input
-  classification, question banks, voice pipeline, Hinglish code-switching, content
-  banks, board expansion, benchmark evaluation, NCERT/state board subjects. Covers
-  all boards (CBSE, ICSE, IB, 29+ state boards), 22 languages, Classes 6-10, 12
-  subjects. Activate for FastAPI debugging, LLM prompts for education, TTS/STT
-  pipelines, curriculum content, schema migrations, Alembic, benchmark design,
-  content factory, or IDNA-Bench layers. Also trigger for GPT-5-mini tutor prompts,
-  GPT-4o-mini classifier logic, SessionState dataclass, FSM transitions/handlers,
-  verify.py checks, Railway deployment issues, or any file in the app/ package.
-  Do NOT trigger for generic FastAPI tutorials, general PostgreSQL questions,
-  or Python coding tasks unrelated to the IDNA codebase or EdTech domain.
+  IDNA EdTech AI voice tutor skill. Trigger for IDNA, Didi tutor, voice tutoring,
+  Learn IDNA, EdTech MVP, NCERT tutoring, Sarvam TTS/STT, session flow, parent
+  reports, IDNA-Bench, multi-board tutoring, AI tutors for Indian K-10 students,
+  teaching flows, input classification, question banks, voice pipeline, Hinglish
+  code-switching, content banks, board expansion, benchmark evaluation. Covers CBSE,
+  ICSE, IB, 29+ state boards, 22 languages, Classes 6-10. Activate for FastAPI
+  debugging, LLM education prompts, TTS/STT pipelines, curriculum content, schema
+  migrations, Alembic, content factory, GPT-4.1 tutor prompts, GPT-4.1-mini
+  classifier, SessionState, FSM transitions/handlers, verify.py, Railway deployment,
+  or any app/ file. Do NOT trigger for generic FastAPI tutorials, general PostgreSQL
+  questions, or Python unrelated to IDNA.
 metadata:
   author: Hemant Ghosh
-  version: 2.1.0
+  version: 3.0.0
   category: edtech
-  stack: python-fastapi-gpt5mini-gpt4omini-sarvam-postgresql-railway
-  last_updated: 2026-02-27
-  app_version: 8.1.5
+  stack: python-fastapi-gpt41-gpt41mini-sarvam-postgresql-railway
+  last_updated: 2026-03-14
+  app_version: 10.6.7
 ---
 
-# IDNA EdTech — Voice Tutor Development Skill (v2.0.0)
+# IDNA EdTech — Voice Tutor Development Skill (v3.0.0)
 
 ## 1. What is IDNA
 
@@ -37,18 +34,20 @@ India's education system: 33+ examination boards, 22 scheduled languages, 10 cla
 levels, 8-12 subjects per class. Realistic content matrix: 10,000-15,000 active
 curriculum units.
 
-## 2. Current Status (v8.1.5)
+## 2. Current Status (v10.6.7)
 
 | Item | Status |
 |------|--------|
-| Version | **v8.1.5 LIVE on Railway** |
-| URL | https://idna-tutor-mvp-production.up.railway.app |
-| Health | /health → {"status":"ok","version":"8.1.5"} |
-| Tests | **218 passing** (including 27 integration + 5 P1 regression tests) |
+| Version | **v10.6.7 LIVE on Railway** |
+| URL | https://didi.idnaedtech.com |
+| Health | /health → {"status":"ok","version":"10.6.7"} |
+| Health Detail | /health/detail → question counts per level |
+| Tests | **398 test functions** across 11 test files |
 | Verify | **22/22 checks passing** via verify.py |
-| Content | Chapter 1: 50 questions, 20 skills (Squares & Cubes) |
-| P1 Bugs | **ALL 6 FIXED** (v8.1.1 - v8.1.5) |
-| Phase 0 | COMPLETE — ready for Phase 1 |
+| Content | Ch 5-6 (Squares & Cubes): 84 questions (74 active), 20 skills |
+| Question Levels | L1:10, L2:9, L3:14, L4:22, L5:19 |
+| Languages | Hindi, English, Hinglish, Telugu |
+| Phase | P0 smoke test PASSED. Pilot prep in progress. |
 
 ## 3. Architecture Principles (NON-NEGOTIABLE)
 
@@ -57,12 +56,12 @@ curriculum units.
 3. **Phase gates are strict.** P0=live test (GATE) → P1=schema evolve → P2=multi-board → P3=platform → P4=device.
 4. **One Didi, always.** Sarvam Bulbul v3, speaker simran, hi-IN. No TTS fallback.
 
-## 4. Tech Stack (v8.0.1 — Locked)
+## 4. Tech Stack (v10.6.x — Locked)
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Didi LLM | GPT-5-mini | Teaching responses, multi-turn reasoning |
-| Classifier LLM | GPT-4o-mini | Input classification (10 categories) |
+| Didi LLM | **GPT-4.1** | Teaching responses. 20% cheaper than GPT-4o. Better instruction following. |
+| Classifier LLM | **GPT-4.1-mini** | Input classification (10 categories). Also used for inline answer eval. |
 | STT | Sarvam Saarika v2.5 | Default language from STT_DEFAULT_LANGUAGE |
 | TTS | Sarvam Bulbul v3 | Speaker: simran, hi-IN, pace 0.90, temp 0.7 |
 | Backend | FastAPI (Python 3.11) | Async endpoints |
@@ -70,195 +69,180 @@ curriculum units.
 | Database | PostgreSQL (Railway managed) | Migrated from SQLite in v7.x |
 | TTS Cache | PostgreSQL | Moved from filesystem in v7.5.2 |
 | Hosting | Railway | Auto-deploy from GitHub main |
-
-For Phase 2-4 tech stack (PersonaPlex, Milvus, Memory-R1, etc.), consult `references/stack-future.md`.
+| Domain | didi.idnaedtech.com | GoDaddy → Railway |
 
 ## 5. Codebase Structure
 
 ```
 app/
-├── routers/student.py          # FastAPI endpoints (async, v8.0 FSM)
-├── state/session.py            # SessionState dataclass, TutorState enum
-├── fsm/transitions.py          # 60-combo transition matrix
-├── fsm/handlers.py             # Per-state handlers
-├── tutor/input_classifier.py   # GPT-4o-mini classifier: 10 categories
-├── tutor/llm.py                # GPT-5-mini Didi calls
-├── tutor/instruction_builder_v8.py # Language-aware prompt builder
-├── tutor/enforcer.py           # Response quality enforcement
-├── voice/stt.py                # Sarvam Saarika v2.5 STT
-├── voice/tts.py                # Sarvam Bulbul v3 TTS
-├── content/ch1_square_and_cube.py  # Chapter 1: 50 questions, 20 skills
-├── models.py                   # ORM models (Question, Student, Session)
-web/student.html                # Student-facing web UI
-tests/test_*.py                 # 152 tests
-verify.py                       # 22 automated checks
-CLAUDE.md                       # Claude Code operating rules
-IDNA_v8_ARCHITECTURE.md         # THE architecture spec
-alembic/                        # Database migrations
+├── routers/
+│   ├── student.py              # 2,028 lines. Main orchestrator. BOTH endpoints.
+│   ├── auth.py                 # Login/PIN authentication
+│   └── review.py               # Session review API (/review?key=idna2026)
+├── tutor/
+│   ├── instruction_builder.py  # 923 lines. V10 ACTIVE BRAIN — builds ALL LLM prompts.
+│   ├── state_machine.py        # 447 lines. v7.3 FSM — produces Action objects. ACTIVE.
+│   ├── preprocessing.py        # 494 lines. Meta-question, language switch, confusion, Telugu.
+│   ├── input_classifier.py     # 407 lines. GPT-4.1-mini classifier. 10 categories.
+│   ├── answer_checker.py       # 600 lines. Deterministic regex math checker (FALLBACK).
+│   ├── answer_evaluator.py     # 183 lines. LLM-based answer eval (PRIMARY). Inline eval.
+│   ├── memory.py               # 298 lines. Question picker (level-aware), skill tracking.
+│   ├── strings.py              # 88 lines. Centralized multilingual strings (4 languages).
+│   ├── enforcer.py             # 452 lines. Output safety — length, praise, repetition.
+│   ├── llm.py                  # 155 lines. OpenAI API wrapper (sync + streaming).
+│   ├── instruction_builder_v8.py # DEAD CODE — kept for reference only
+│   └── instruction_builder_v9.py # DEAD CODE — kept for reference only
+├── fsm/
+│   ├── transitions.py          # v8 FSM. SIDE EFFECTS ONLY (language, empathy).
+│   └── handlers.py             # v9 handlers. Side effects only.
+├── content/
+│   ├── ch1_square_and_cube.py  # 2,373 lines. 84 questions, 20 skills, ChapterGraph.
+│   ├── seed_questions.py       # 323 lines. Merges ch1 + 10 rational number Qs (inactive).
+│   └── curriculum.py           # 144 lines. Concept/ChapterGraph models.
+├── voice/
+│   ├── stt.py                  # Sarvam Saarika v2.5 STT                    [PROTECTED]
+│   ├── tts.py                  # Sarvam Bulbul v3 TTS (simran)              [PROTECTED]
+│   ├── clean_for_tts.py        # Math→words conversion, dash→comma, TTS cleanup
+│   └── tts_precache.py         # TTS caching in PostgreSQL
+├── state/session.py            # SessionState dataclass (v9 adapter)
+├── models.py                   # 265 lines. ORM: Question, Student, Session, SessionTurn
+├── database.py                 # SQLAlchemy + PostgreSQL
+├── config.py                   # LLM_MODEL=gpt-4.1, MAX_WORDS=40
+└── main.py                     # 394 lines. App setup, migrations, question upsert, pilot students.
+
+web/
+├── student.html                # 1,467 lines. Student UI with SSE streaming, debug output.
+├── login.html                  # PIN-based login
+├── parent.html                 # Parent dashboard
+└── index.html                  # Landing page
+
+tests/                          # 398 test functions across 11 files
+├── test_core.py                # 101 tests — answer checking, fractions
+├── test_preprocessing.py       # 84 tests — meta-Q, language, confusion
+├── test_v10_persona.py         # 75 tests — persona, strings, warm identity
+├── test_integration.py         # 37 tests — FSM transitions, language
+├── test_p0_language_persistence.py  # 21 tests — language detection, TTS
+├── test_v750_features.py       # 20 tests — sentence splitter, enforcer
+├── test_p0_teaching_flow.py    # 20 tests — teaching flow, level system
+├── test_ch1_square_cube.py     # 12 tests — question bank validation
+├── test_p0_regression.py       # 12 tests — P0 regression
+├── test_content_bank.py        # 11 tests — content bank loader
+└── test_p1_fixes.py            # 5 tests — question picking, memory
+
+verify.py                       # 22 automated checks — run before every commit
+CLAUDE.md                       # Claude Code operating rules (CEO-only)
+ROADMAP.md                      # Task tracker — read at session start
 ```
 
 **CRITICAL:** Do NOT create `app/models/` directory — it shadows `app/models.py`.
 
-## 6. FSM Architecture (60-Combination Matrix)
+## 6. Key Features (v10.4.0 — v10.6.7)
 
-### 6 States
-`GREETING`, `TEACHING`, `WAITING_ANSWER`, `HINT`, `NEXT_QUESTION`, `SESSION_END`
+### 5-Level Teaching Scaffold (v10.4.0)
+- **Level 1:** Multiplication recall ("What is 3 times 3?")
+- **Level 2:** Square/cube numbers ("What is the square of 4?")
+- **Level 3:** Square/cube roots ("What is √49?")
+- **Level 4:** Patterns & properties ("Is 50 a perfect square?", "Can a square end in 7?")
+- **Level 5:** Application & methods ("Find side of square with area 441", prime factorisation)
+- Assessment: First question is Level 2. 3 correct in a row → level up. 2 wrong → level down.
 
-### 10 Input Categories
-`ACK`, `IDK`, `REPEAT`, `ANSWER`, `LANGUAGE_SWITCH`, `CONCEPT_REQUEST`, `COMFORT`, `STOP`, `TROLL`, `GARBLED`
+### Inline Answer Evaluation (v10.5.1)
+- Streaming endpoint combines answer eval + response into ONE LLM call
+- LLM outputs `[CORRECT]` or `[INCORRECT]` prefix
+- Saves ~1.3s per answer evaluation
+- Fallback to regex checker if LLM doesn't follow prefix format
+
+### Telugu Support (v10.6.4)
+- `_lang()` helper for Telugu in instruction_builder (48 uses)
+- Telugu language pre-scan in both endpoints
+- TTS language mapping for Telugu (te-IN)
+- `LANG_INSTRUCTIONS["telugu"]` with full Telugu script enforcement
+
+### Question Picker (v10.6.0)
+- Strict level-aware: `WHERE level = current_level`
+- Excludes current question + all previously answered
+- Falls back to adjacent levels if current level exhausted
+- Reuses same-level questions (excluding current) before adjacent
+
+### Pilot Students (v10.6.4)
+- 10 accounts seeded: PINs 1001-1010 (CBSE Class 8, English medium)
+- Auto-seeded on startup via `_seed_pilot_students()` in main.py
+
+### v10.6.7 Fixes
+- Hint loop death spiral fixed (inline eval respects hint progression)
+- "Solution not available" text no longer leaks to students
+- "Aapne poocha"/"You asked" stripped in clean_for_tts()
+
+## 7. FSM Architecture
+
+### Two FSMs Running in Parallel (Tech Debt)
+- **v7.3 FSM** (`app/tutor/state_machine.py`): Returns `Action` objects — drives teaching flow
+- **v8.0 FSM** (`app/fsm/transitions.py`): Side effects only — language storage, empathy tracking
+
+### States: GREETING, TEACHING, WAITING_ANSWER, HINT_1, HINT_2, FULL_SOLUTION, NEXT_QUESTION, SESSION_COMPLETE
+
+### 10 Input Categories: ACK, IDK, REPEAT, ANSWER, LANGUAGE_SWITCH, CONCEPT_REQUEST, COMFORT, STOP, TROLL, GARBLED
 
 ### Key Transitions
 ```
-GREETING → TEACHING
-TEACHING + ACK → WAITING_ANSWER (via NEXT_QUESTION)
-TEACHING + IDK → TEACHING (reteach, cap at 3, then force WAITING_ANSWER)
-TEACHING + REPEAT → TEACHING (reteach, same cap)
-WAITING_ANSWER + ANSWER → evaluate → HINT or NEXT_QUESTION
-WAITING_ANSWER + IDK → HINT (hint 1 → hint 2 → full solution)
-NEXT_QUESTION → TEACHING (next topic) or SESSION_END
+GREETING + ACK → TEACHING
+TEACHING + ACK → WAITING_ANSWER (read_question)
+TEACHING + IDK → TEACHING (reteach, cap at 3)
+WAITING_ANSWER + ANSWER → evaluate → HINT_1 or NEXT_QUESTION
+WAITING_ANSWER + IDK → HINT_1 → HINT_2 → FULL_SOLUTION
+FULL_SOLUTION + any → NEXT_QUESTION (always advance)
+NEXT_QUESTION → WAITING_ANSWER or SESSION_COMPLETE
 ```
 
-### v8.0 Key Features
-1. **Language persistence**: preferred_language set by LANGUAGE_SWITCH, never resets
-2. **Reteach cap**: After 3 IDKs/REPEATs, forces transition to WAITING_ANSWER
-3. **No KeyError**: All 60 combinations defined in transition matrix
-4. **Content Bank injection**: teach_material_index → 0=definition, 1=analogy, 2=vedic_trick
-
-## 7. Voice Pipeline
+## 8. Voice Pipeline
 
 ```
-Student speaks
-  → Sarvam Saarika v2.5 STT (~300ms)
-  → Confidence check (threshold 0.4)
-  → Input Classifier (GPT-4o-mini, 10 categories)
-  → FSM (state + input → action via transitions.py)
-  → Instruction Builder v8 (language-aware LLM prompt)
-  → GPT-5-mini (~800-1200ms)
-  → clean_for_tts()
-  → Sarvam TTS (single call, max 2000 chars)
-  → Audio plays in browser
+Student speaks → Sarvam STT (~300ms) → Preprocessing (meta-Q, language, confusion)
+→ Classifier (GPT-4.1-mini, fast-path 0ms or LLM 500-1800ms)
+→ v7.3 FSM transition → Action object → Instruction builder → GPT-4.1 (500-4200ms)
+→ clean_for_tts → Sarvam TTS (3000-7000ms) → Audio to browser
 ```
 
-### clean_for_tts() Rules
-| Input | Output |
-|-------|--------|
-| `-3/7` | `minus 3 by 7` |
-| `2/3` | `2 by 3` |
-| `+` → `plus`, `-` → `minus`, `×` → `multiplied by`, `=` → `equals` |
-| Strip markdown formatting |
+TTS is 65-88% of total latency. Sarvam WebSocket streaming requested but not yet enabled.
 
-### Hallucination Detection (STT)
-Reject: "Thank you for watching", "Subscribe", "[Music]", "[Applause]",
-"(silence)", only punctuation, text < 2 chars, confidence < 0.4
-
-## 8. Teaching Principles (Embedded in Didi's Personality)
+## 9. Teaching Principles
 
 1. **One idea per turn.** Never teach AND ask a question in the same turn.
-2. **Show, don't tell.** Math: show equations. Science: cause-effect.
-3. **Indian examples.** Roti, cricket, Diwali, monsoon, laddoo, tiles — not Western.
-4. **Respectful Hindi.** "Aap" form, "dekhiye", "sochiye". Never "tum" or casual.
-5. **No false praise.** Never say "Bahut accha!" unless answer is actually correct.
-6. **Sub-step tracking (math).** Once confirmed correct, NEVER re-ask.
-7. **Comfort first.** If frustrated, acknowledge feelings before any teaching.
-8. **Board-appropriate evaluation.** CBSE notation vs state board notation.
-9. **Language respect.** Student sets language once, ALL turns respect it.
-10. **Reteach cap.** Max 3 reteaches per concept. On 4th IDK, advance to question.
-
-## 9. P1 Backlog (ALL FIXED in v8.1.x)
-
-| # | Bug | Fix Version | Status |
-|---|-----|-------------|--------|
-| 1 | Same-Q reload | v8.1.2 | FIXED |
-| 2 | HOMEWORK_HELP trap | v8.1.1 | FIXED |
-| 3 | Devanagari बटा parser | v8.1.1 | FIXED |
-| 4 | Empty TTS sentence | v8.1.1 | FIXED |
-| 5 | Parent split()[0] bug | v8.1.5 | FIXED |
-| 6 | Weakest-skill dead end | v8.1.5 | FIXED |
+2. **Indian examples.** Roti, cricket, Diwali, monsoon, laddoo, tiles.
+3. **Respectful Hindi.** "Aap" form, "dekhiye", "sochiye". Never "tum".
+4. **No false praise.** Never "Bahut accha!" unless answer is actually correct.
+5. **Comfort first.** If frustrated, acknowledge feelings before teaching.
+6. **Language respect.** Student sets language once, ALL turns respect it.
+7. **Reteach cap.** Max 3 reteaches per concept. On 4th IDK, advance.
+8. **Level-appropriate.** Question difficulty matches student's current level.
 
 ## 10. Development Rules
 
 1. **Run tests after every change:** `python -m pytest tests/ -v`
 2. **Run verify.py:** 22/22 checks must pass before commit
 3. **Never change TTS voice.** Sarvam simran only.
-4. **Never rewrite DIDI_PROMPT.** Append rules, don't replace.
+4. **Never rewrite DIDI_BASE.** Append rules, don't replace.
 5. **New board = data insert, zero code change.**
 6. **Alembic for all schema changes.**
 7. **Commit format:** `v{major}.{minor}.{patch}: brief description`
 8. **One change per commit.** Atomic. Tested. Proven.
-9. **Don't edit MEMORY.md mid-session.**
-10. **Don't create app/models/ directory** (shadows app/models.py).
+9. **Never create app/models/ directory** (shadows app/models.py).
+10. **Every `_sys()` call MUST pass `session_context=ctx, question_data=q`.**
 
-## 11. Troubleshooting
+## 11. Known Issues (v10.6.7)
 
-### Sarvam TTS returns empty/silent audio
-1. Check if `clean_for_tts()` output is empty string — P1 bug #4
-2. Verify text length ≤ 2000 chars (Sarvam limit)
-3. Check API key validity in Railway env vars
-4. Never switch to a different TTS provider — fix the input
+| Issue | Severity | Status |
+|-------|----------|--------|
+| TTS latency 3-7s (Sarvam REST API) | HIGH | Waiting for Sarvam streaming access |
+| GPT-4.1 rephrases question text (sq_b04 "square of 8" → "square of 4") | LOW | Needs question text verbatim enforcement |
 
-### Railway deploy fails
-1. Check `railway logs` for Python import errors
-2. Verify `requirements.txt` matches local env
-3. Check PostgreSQL connection string in Railway dashboard
-4. Confirm health endpoint responds: `/health`
-
-### SessionState KeyError
-1. This should NOT happen in v8.0 — all 60 combos are defined
-2. If it does: check `app/fsm/transitions.py` for the missing (state, input) pair
-3. Run `python -m pytest tests/test_integration.py -v` to catch gaps
-
-### STT returns hallucinated text
-1. Check hallucination detection list in `app/voice/stt.py`
-2. Verify confidence threshold is 0.4
-3. Add new hallucination patterns to the reject list, don't lower threshold
-
-### LLM response doesn't follow language preference
-1. Check `preferred_language` in SessionState — it should persist across turns
-2. Verify `instruction_builder_v8.py` injects the language into the prompt
-3. Never reset language mid-session — only LANGUAGE_SWITCH input changes it
-
-## 12. Examples
-
-**Example 1: Fix a voice pipeline bug**
-User: "The TTS is returning empty audio for some responses"
-Claude should:
-1. Check `app/voice/tts.py` for empty string handling
-2. Check `clean_for_tts()` output in the pipeline
-3. Run `python -m pytest tests/ -k tts -v`
-4. Never change TTS voice or provider settings
-
-**Example 2: Add content for a new chapter**
-User: "Create content bank for Chapter 2 Linear Equations"
-Claude should:
-1. Follow the pattern in `app/content/ch1_square_and_cube.py`
-2. Include questions, skills, and teaching material at 3 layers (definition, analogy, vedic_trick)
-3. Use Indian examples (roti, cricket, tiles)
-4. Verify content integrates with FSM content injection
-
-**Example 3: Debug FSM transition**
-User: "Student says IDK 5 times and the session loops forever"
-Claude should:
-1. Check reteach cap logic in `app/fsm/handlers.py`
-2. Verify transition matrix in `app/fsm/transitions.py` for (TEACHING, IDK) after cap
-3. Run integration tests: `python -m pytest tests/test_integration.py -v`
-4. The cap is 3 — on 4th IDK, must force WAITING_ANSWER
-
-**Example 4: Database schema change**
-User: "Add a new column to the students table"
-Claude should:
-1. Create Alembic migration: `alembic revision --autogenerate -m "description"`
-2. Update `app/models.py` (NOT create app/models/ directory)
-3. Run migration: `alembic upgrade head`
-4. Update tests, run verify.py
-5. For v8.1.0 schema plans, consult `references/schema-v81.md`
-
-## 13. Reference Files
-
-For detailed specifications beyond the core skill, consult these references as needed:
+## 12. Reference Files
 
 | File | Contents | When to read |
 |------|----------|--------------|
-| `references/schema-v81.md` | v8.1.0 database schema: boards, textbooks, content_units, student_profiles tables | Schema evolution, multi-board work |
-| `references/bench-spec.md` | IDNA-Bench 7 layers, thresholds, content factory pipeline | Benchmark design, quality gating |
-| `references/roadmap.md` | Phase timeline, board expansion tiers, 22 languages, strategic positioning | Planning, investor context, government partnerships |
-| `references/stack-future.md` | Phase 2-4 tech: PersonaPlex, Milvus, Memory-R1, Ollama, on-device SLM | Future architecture decisions |
+| `references/schema-v81.md` | v8.1.0 database schema plans | Schema evolution, multi-board |
+| `references/bench-spec.md` | IDNA-Bench 7 layers, thresholds | Benchmark design, quality gating |
+| `references/roadmap.md` | Phase timeline, board expansion | Planning, investor context |
+| `references/stack-future.md` | Phase 2-4 tech stack | Future architecture |
+| `references/teaching-flow.md` | 5-level teaching scaffold design | Level system changes |
+| `references/tts-pipeline.md` | TTS optimization notes | Latency work |
