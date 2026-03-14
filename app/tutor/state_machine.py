@@ -289,10 +289,9 @@ def transition(
                 student_text=text,
             )
         if category == "CONCEPT_REQUEST":
-            # Student asking for explanation - teach, then return to question
-            return "TEACHING", Action(
-                "teach_concept", question_id=q_id, student_text=text,
-                extra={"return_to": "HINT_1"},
+            # v10.6.9: Stay in hint chain — give deeper hint instead of escaping to TEACHING
+            return "HINT_2", Action(
+                "give_hint", hint_level=2, question_id=q_id, student_text=text,
             )
         if category == "META_QUESTION":
             # v10.3.0: Answer student's question, stay in HINT_1
@@ -318,10 +317,9 @@ def transition(
                 "show_solution", question_id=q_id, student_text=text,
             )
         if category == "CONCEPT_REQUEST":
-            # Student asking for explanation - teach, then return to question
-            return "TEACHING", Action(
-                "teach_concept", question_id=q_id, student_text=text,
-                extra={"return_to": "HINT_2"},
+            # v10.6.9: Don't escape hint chain — show full solution instead
+            return "FULL_SOLUTION", Action(
+                "show_solution", question_id=q_id, student_text=text,
             )
         if category == "META_QUESTION":
             # v10.3.0: Answer student's question, stay in HINT_2

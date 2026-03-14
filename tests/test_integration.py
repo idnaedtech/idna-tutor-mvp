@@ -672,5 +672,29 @@ class TestConfusionEscalationE2E:
         assert detect_confusion("I don't understand this") is True
 
 
+class TestV1069HintChainFixes:
+    """v10.6.9: CONCEPT_REQUEST in hint states stays in hint chain."""
+
+    def test_hint1_concept_request_goes_to_hint2(self):
+        """HINT_1 + CONCEPT_REQUEST → HINT_2 (not TEACHING)."""
+        from app.tutor.state_machine import transition
+
+        ctx = {"student_text": "teach me properly"}
+        new_state, action = transition("HINT_1", "CONCEPT_REQUEST", ctx)
+
+        assert new_state == "HINT_2", f"Expected HINT_2, got {new_state}"
+        assert action.action_type == "give_hint", f"Expected give_hint, got {action.action_type}"
+
+    def test_hint2_concept_request_goes_to_full_solution(self):
+        """HINT_2 + CONCEPT_REQUEST → FULL_SOLUTION (not TEACHING)."""
+        from app.tutor.state_machine import transition
+
+        ctx = {"student_text": "samjhao na"}
+        new_state, action = transition("HINT_2", "CONCEPT_REQUEST", ctx)
+
+        assert new_state == "FULL_SOLUTION", f"Expected FULL_SOLUTION, got {new_state}"
+        assert action.action_type == "show_solution", f"Expected show_solution, got {action.action_type}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

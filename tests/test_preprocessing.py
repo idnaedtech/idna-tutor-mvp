@@ -519,3 +519,60 @@ class TestApostrophePreservation:
         # Check that we have coverage for common contractions
         assert "didn't understand" in FAST_IDK or "didnt understand" in FAST_IDK
         assert "don't understand" in FAST_IDK or "dont understand" in FAST_IDK
+
+
+class TestV1069TeluguMetaQuestion:
+    """v10.6.9: Telugu meta-question detection for chapter/topic."""
+
+    def test_telugu_meta_question_chapter(self):
+        from app.tutor.preprocessing import detect_meta_question
+        result = detect_meta_question("ఏ చాప్టర్ నేర్పిస్తున్నారు")
+        assert result == "chapter"
+
+    def test_telugu_meta_question_topic(self):
+        from app.tutor.preprocessing import detect_meta_question
+        result = detect_meta_question("ఏమి చదువుతున్నాం")
+        assert result == "topic"
+
+    def test_telugu_chapter_formal(self):
+        from app.tutor.preprocessing import detect_meta_question
+        result = detect_meta_question("ఏ అధ్యాయం చదువుతున్నాం")
+        assert result == "chapter"
+
+
+class TestV1069HelpRequestGuard:
+    """v10.6.9: Help requests with numbers should not be classified as ANSWER."""
+
+    def test_help_indicators_block_digit_fast_path(self):
+        """Help indicators like 'teach me', 'explain', 'samjhao' should prevent
+        digit-based ANSWER classification."""
+        import re
+        _help_indicators = [
+            "teach me", "help me", "explain", "tell me how", "show me how",
+            "samjhao", "batao kaise", "kaise karte", "samajh nahi",
+            "nahi aata", "seekhna", "sikha do", "bata do kaise",
+        ]
+        # These texts contain digits but are help requests
+        help_texts = [
+            "help me find cube root of 729",
+            "teach me how to solve 512",
+            "729 ka cube root kaise karte hain samjhao",
+            "explain how to find square root of 441",
+        ]
+        for text in help_texts:
+            text_lower = text.lower()
+            has_help = any(ind in text_lower for ind in _help_indicators)
+            has_digit = bool(re.search(r'\d', text))
+            assert has_help, f"Expected help indicator in: {text}"
+            assert has_digit, f"Expected digit in: {text}"
+
+    def test_pure_number_no_help_indicator(self):
+        """Pure numbers should NOT match help indicators."""
+        _help_indicators = [
+            "teach me", "help me", "explain", "tell me how", "show me how",
+            "samjhao", "batao kaise", "kaise karte", "samajh nahi",
+        ]
+        pure_answers = ["729", "64", "9", "true", "haan"]
+        for text in pure_answers:
+            has_help = any(ind in text.lower() for ind in _help_indicators)
+            assert not has_help, f"Pure answer '{text}' should not match help indicator"

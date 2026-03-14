@@ -756,7 +756,10 @@ def _build_answer_meta_question(a, ctx, q, sk, prev):
 
     # v7.3.28 Fix 1: Check chapter/topic FIRST since meta_type is always "more_examples"
     student_lower = a.student_text.lower()
-    if "chapter" in student_lower or "topic" in student_lower or "kaunsa" in student_lower or "कौन" in a.student_text or "number" in student_lower:
+    if ("chapter" in student_lower or "topic" in student_lower or "kaunsa" in student_lower or "कौन" in a.student_text or "number" in student_lower or
+            # v10.6.9: Telugu chapter/topic keywords
+            "చాప్టర్" in a.student_text or "పాఠం" in a.student_text or
+            "అధ్యాయం" in a.student_text or "ఏమి" in a.student_text):
         # v10.5.5: Include chapter number in response
         chapter_response = _lang(ctx, f"We are learning {ch}.", f"हम {ch} पढ़ रहे हैं।", f"మనం {ch} నేర్చుకుంటున్నాం.")
         msg = f'Student asked which chapter. Say EXACTLY: "{chapter_response}" Include the chapter NUMBER.{steer_back}'

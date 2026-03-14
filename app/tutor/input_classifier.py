@@ -210,6 +210,20 @@ async def classify(
     if any(hw_word in normalized for hw_word in FAST_HOMEWORK):
         return {"category": "CONCEPT_REQUEST", "confidence": 0.90, "extras": {"is_homework": True}}
 
+    # v10.6.9: Help request guard — must run BEFORE FAST_IDK because "samajh nahi"
+    # contains "nahi" which is in FAST_IDK. Help requests should be CONCEPT_REQUEST, not IDK.
+    if current_state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION"):
+        _help_indicators = [
+            "teach me", "help me", "explain", "tell me how", "show me how",
+            "samjhao", "batao kaise", "kaise karte", "samajh nahi",
+            "nahi aata", "seekhna", "sikha do", "bata do kaise",
+            "నేర్పించు", "చెప్పండి ఎలా",  # Telugu: teach me, tell me how
+            "नहीं आता", "सिखाओ", "बताओ कैसे", "समझाओ",  # Hindi
+        ]
+        text_lower = text.lower()
+        if any(ind in text_lower for ind in _help_indicators):
+            return {"category": "CONCEPT_REQUEST", "confidence": 0.90, "extras": {}}
+
     if len(words) <= FAST_PATH_MAX_WORDS:
         # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
         if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):

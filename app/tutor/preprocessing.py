@@ -213,6 +213,11 @@ META_QUESTION_PATTERNS = {
         r"kaun\s*sa\s+chapter\s+padh",  # kaun sa chapter padh rahe hain
         r"कौन\s*सा\s+chapter",       # mixed Devanagari + English
         r"chapter\s+(kya|kaun|कौन|क्या)",  # chapter kya/kaun hai
+        # v10.6.9: Telugu chapter patterns
+        r"ఏ\s*చాప్టర్",                   # ae chapter (Telugu)
+        r"చాప్టర్\s*(ఏమి|ఏది)",           # chapter emi/edi (Telugu)
+        r"ఏ\s*అధ్యాయం",                   # ae adhyaayam (Telugu formal)
+        r"ఏ\s*పాఠం",                      # ae paatham (Telugu)
     ],
     "topic": [
         r"(what|which)\s+topic",
@@ -230,6 +235,9 @@ META_QUESTION_PATTERNS = {
         r"what\s+(are\s+)?we\s+(reading|studying)",  # what are we reading/studying
         r"kya\s+padh\s+rahe\s+hain",  # kya padh rahe hain (romanized)
         r"konsa\s+topic",              # konsa topic (colloquial)
+        # v10.6.9: Telugu topic patterns
+        r"ఏమి\s*(చదువుతున్నాం|నేర్చుకుంటున్నాం)",  # emi chaduvutunnam/nerchukuntunnam
+        r"ఏ\s*topic",                      # ae topic (Telugu + English)
     ],
     "subject": [
         r"(what|which)\s+subject",
