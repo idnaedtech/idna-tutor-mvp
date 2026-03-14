@@ -616,7 +616,7 @@ def _build_show_solution(a, ctx, q, sk, prev):
     if _content_bank and question_id:
         sol = _content_bank.get_full_solution_tts(question_id)
     if not sol:
-        sol = q.get("solution", "Solution not available.")
+        sol = q.get("solution") or q.get("explanation", "Solution not available.")
 
     # v7.3.24: Language-aware encouragement
     lang_pref = ctx.get("language_pref", "hinglish")
@@ -825,7 +825,7 @@ def build_inline_eval_prompt(session_context, question_data, student_text,
         if _content_bank and question_id:
             sol = _content_bank.get_full_solution_tts(question_id)
         if not sol:
-            sol = question_data.get("solution", "Solution not available.")
+            sol = question_data.get("solution") or question_data.get("explanation", "Solution not available.")
         incorrect_instruction = _lang(session_context,
             f'Show the full solution: "{sol}". Walk through in 2 sentences. '
             f'Be encouraging: "It\'s okay, now you understand."',
