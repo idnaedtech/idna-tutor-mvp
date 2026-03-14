@@ -4,7 +4,7 @@
 > **Last updated:** 2026-03-15
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://didi.idnaedtech.com
-> **Current version:** v10.6.9
+> **Current version:** v10.7.0
 > **Can be modified by CEO only.**
 
 ---
