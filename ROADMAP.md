@@ -177,6 +177,13 @@
       - Turn 4: INCORRECT (20) → HINT_1, hint given ("which number times itself gives 16?")
       - Turn 5: CORRECT after hint → NEXT_QUESTION saved as WAITING_ANSWER, new question
       - Zero double-answers, HINT flow works, state_before always correct
+  - [x] v10.6.5: UX polish — aapne-poocha, Devanagari hints, yes/no strategy, TTS dashes, thinking indicator ✅ 2026-03-14
+    - FIX 1: DIDI_BASE rule 12 — never say "aapne poocha"/"you asked". _build_read_question uses "Here is the question" prefix.
+    - FIX 2: clean_for_tts handles em dash (–) and long dash (—) in addition to regular dash.
+    - FIX 3: Yes/no questions get appropriate hints (not "which number gives X?" for no-answer). sq_b06 has 2 progressive hint levels.
+    - FIX 4: Hint ack Devanagari — "कोई बात नहीं" replaces "Koi baat nahi" in _build_give_hint and build_inline_eval_prompt. Solution path also Devanagari.
+    - FIX 5: Removed duplicate "Didi soch rahi hai..." typing bubble (status dot already shows processing).
+    - 398 tests passing, verify.py 22/22, wiring check 9/9
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
