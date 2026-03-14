@@ -219,6 +219,13 @@
     - BUG 2 (HIGH): CONCEPT_REQUEST at HINT_1/HINT_2 escaped to TEACHING, breaking hint chain. Fix: HINT_1+CONCEPT_REQUEST→HINT_2, HINT_2+CONCEPT_REQUEST→FULL_SOLUTION in state_machine.py
     - BUG 3 (MEDIUM): "help me find cube root of 729" marked CORRECT — digits triggered ANSWER fast-path. Fix: help-request guard runs BEFORE FAST_IDK/digit check in input_classifier.py
     - 405 tests passing (7 new), verify.py 22/22, wiring check clean
+  - [x] v10.7.0: Chapter intro warmup — NCERT-style 2-turn introduction before first question ✅ 2026-03-15
+    - CHAPTER_INTRO dict in ch1_square_and_cube.py — 4 languages (hinglish, english, hindi, telugu), 2 turns each
+    - Turn 0: Tile analogy + 3x3=9 example (concept explanation, no question)
+    - Turn 1: Square root reverse + assessment bridge ("dekhte hain kitna aata hai")
+    - Only fires when questions_attempted == 0 AND teaching_turn <= 1
+    - Returning students (questions_attempted > 0) get normal Content Bank reteach flow
+    - 414 tests passing (9 new), verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
