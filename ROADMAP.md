@@ -191,6 +191,8 @@
       - Turn 3: INCORRECT (12) → HINT_1, "कोई बात नहीं, hint देती हूँ।" (Devanagari confirmed)
       - Turn 4: CORRECT (36) after hint → NEXT_QUESTION saved as WAITING_ANSWER, new question (cb_e01)
       - Turn 5: INCORRECT (100) → HINT_1, state_before=WAITING_ANSWER (transient fix working), Devanagari hint
+    - FIX 7: Startup logger version string fixed (was 10.6.3 → 10.6.5)
+    - **Chapter meta-question smoke test**: "which chapter?" → "हम Chapter 6, Squares and Square Roots, and Chapter 7, Cubes and Cube Roots पढ़ रहे हैं।" (commas, no dashes, no parens, Devanagari)
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
