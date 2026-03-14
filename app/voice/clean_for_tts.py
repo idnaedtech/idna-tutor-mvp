@@ -75,7 +75,10 @@ def clean_for_tts(text: str) -> str:
 
     # ─── Dashes: " - " → ", " (TTS reads "-" as "minus") ─────────────────
     # v10.6.3: "Chapter 6 - Squares" → "Chapter 6, Squares"
+    # v10.6.5: Also handle em dash and long dash
     result = result.replace(" - ", ", ")
+    result = result.replace(" – ", ", ")
+    result = result.replace(" — ", ", ")
 
     # ─── Remove/replace parentheses (TTS reads them literally) ────────────
     # "(a + b)" → "a plus b"

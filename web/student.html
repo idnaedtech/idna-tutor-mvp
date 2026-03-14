@@ -992,8 +992,8 @@
                 return sendAudioNonStreaming(wavBlob);
             }
 
-            // UX: Update typing message now that we're processing
-            showTyping(true, 'Didi soch rahi hai...');
+            // v10.6.5: Removed duplicate — status dot already shows "Didi soch rahi hai..."
+            // Keep typing bubble showing "Sun rahi hoon..." until text arrives
 
             // Process SSE stream with proper buffering for partial chunks
             const eventReader = resp.body.getReader();

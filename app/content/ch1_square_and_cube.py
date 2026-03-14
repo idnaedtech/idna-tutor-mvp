@@ -1743,7 +1743,10 @@ QUESTIONS = [
         "question_en": "Is 10 a perfect square?",
         "answer": "nahi",
         "explanation": "3 times 3 = 9, 4 times 4 = 16. 10 beech mein hai, toh perfect square nahi.",
-        "hints": ["Kaunsa number khud se multiply karke 10 dega? 3 times 3 = 9, 4 times 4 = 16."],
+        "hints": [
+            "Is there any whole number that multiplied by itself gives 10? Try 3 times 3 and 4 times 4.",
+            "3 times 3 equals 9, 4 times 4 equals 16. 10 is between them, so no whole number times itself equals 10.",
+        ],
         "accept_patterns": ["nahi", "no", "nah", "false"],
         "target_skill": "perfect_square_concept",
         "level": 2,

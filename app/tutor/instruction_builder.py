@@ -39,6 +39,7 @@ RULES:
 9. If they ask "which chapter" or session info: answer directly.
 10. Match the student's language exactly.
 11. If the student asks "will you teach me?" or similar direct questions: answer YES warmly first ("Haan bilkul! Main hoon na."), THEN continue with the lesson.
+12. NEVER say "aapne poocha" (आपने पूछा) or "you asked" when presenting a question. YOU are asking the question. Say "बताओ" or "Here's the question".
 
 You are warm, patient, and encouraging. You believe every student can learn math.
 
@@ -515,7 +516,9 @@ def _build_read_question(a, ctx, q, sk, prev):
         "Present this question in English (translate any Hindi).",
         "Read this question naturally.",
         "Present this question in Telugu (తెలుగు). Translate any Hindi to Telugu.")
-    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'{post_comfort_prefix}{d}{lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
+    # v10.6.4 FIX 1: "Here is the question" — never "You asked" or "Aapne poocha"
+    present = _lang(ctx, "Here is the question", "यह question है", "ఇది question")
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'{post_comfort_prefix}{d}{present}. {lang_instruction}: "{q["question_voice"]}". {ask_prompt}'}]
 
 
 def _build_evaluate_answer(a, ctx, q, sk, prev):
@@ -573,21 +576,32 @@ def _build_give_hint(a, ctx, q, sk, prev):
         h = hints[a.hint_level - 1]
     else:
         # No more hints — build contextual hint from question and answer
+        # v10.6.4 FIX 2: Yes/no questions need different hint strategy
+        answer_lower = (q.get("answer", "") or "").lower().strip()
+        is_yes_no = answer_lower in ("haan", "nahi", "yes", "no", "true", "false", "ha", "nah")
         skill = q.get("target_skill", "")
-        if "perfect_square" in skill:
-            h = _lang(ctx, "Think: which number multiplied by itself gives this answer?", "Sochiye: kaunsa number khud se multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని దాని తోనే multiply చేస్తే ఈ answer వస్తుంది?")
+
+        if is_yes_no and "perfect_square" in skill:
+            explanation = q.get("explanation", "")
+            h = _lang(ctx,
+                f"Think about it — is there a whole number that multiplied by itself gives this number? {explanation}",
+                f"सोचिए — क्या कोई whole number खुद से multiply करके यह number दे सकता है? {explanation}",
+                f"ఆలోచించండి — ఏదైనా whole number దాని తోనే multiply చేస్తే ఈ number వస్తుందా? {explanation}")
+        elif "perfect_square" in skill:
+            h = _lang(ctx, "Think: which number multiplied by itself gives this answer?", "सोचिए: कौनसा number खुद से multiply करके यह answer देगा?", "ఆలోచించండి: ఏ number ని దాని తోనే multiply చేస్తే ఈ answer వస్తుంది?")
         elif "cube" in skill:
-            h = _lang(ctx, "Think: which number multiplied three times gives this answer?", "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని మూడు సార్లు multiply చేస్తే ఈ answer వస్తుంది?")
+            h = _lang(ctx, "Think: which number multiplied three times gives this answer?", "सोचिए: कौनसा number तीन बार multiply करके यह answer देगा?", "ఆలోచించండి: ఏ number ని మూడు సార్లు multiply చేస్తే ఈ answer వస్తుంది?")
         elif "fraction" in skill.lower():
-            h = _lang(ctx, "First look at the numerators, then the denominators.", "Pehle numerators ko dekho, phir denominators ko.", "ముందు numerators చూడండి, తర్వాత denominators చూడండి.")
+            h = _lang(ctx, "First look at the numerators, then the denominators.", "पहले numerators को देखो, फिर denominators को.", "ముందు numerators చూడండి, తర్వాత denominators చూడండి.")
         else:
             # Generic hint based on answer type
-            h = _lang(ctx, "The answer is a number. Think step by step.", "Is sawaal ka jawab ek number hai. Sochiye step by step.", "Answer ఒక number. Step by step ఆలోచించండి.")
+            h = _lang(ctx, "The answer is a number. Think step by step.", "जवाब एक number है। Step by step सोचिए।", "Answer ఒక number. Step by step ఆలోచించండి.")
 
     lang_instruction = _lang(ctx, "Say naturally in English.", "Say naturally in Hinglish.", "Say naturally in Telugu (తెలుగు).")
+    # v10.6.4 FIX 4: Devanagari Hindi, not Roman Hindi
     ack = _lang(ctx,
         '"That\'s okay, let me help." ',
-        '"Koi baat nahi, hint deti hoon." ',
+        '"कोई बात नहीं, hint देती हूँ।" ',
         '"పరవాలేదు, hint ఇస్తాను." ')
     return [{"role": "system", "content": _sys("", session_context=ctx, question_data=q)}, {"role": "user", "content": f'Start with {ack} Then give hint #{a.hint_level}: "{h}". {lang_instruction} Ask to try again. 2 sentences.'}]
 
@@ -815,8 +829,8 @@ def build_inline_eval_prompt(session_context, question_data, student_text,
         incorrect_instruction = _lang(session_context,
             f'Show the full solution: "{sol}". Walk through in 2 sentences. '
             f'Be encouraging: "It\'s okay, now you understand."',
-            f'Full solution dikhao: "{sol}". 2 sentences mein samjhao. '
-            f'Encouraging bolo: "Koi baat nahi, ab samajh aa gaya hoga."',
+            f'Full solution दिखाओ: "{sol}". 2 sentences में समझाओ। '
+            f'Encouraging बोलो: "कोई बात नहीं, अब समझ आ गया होगा।"',
             f'Full solution చూపించు: "{sol}". 2 sentences లో explain చేయి. '
             f'Encouraging గా: "పరవాలేదు, ఇప్పుడు అర్థమైంది."'
         )
@@ -828,15 +842,26 @@ def build_inline_eval_prompt(session_context, question_data, student_text,
         elif target_hint_level <= len(q_hints):
             h = q_hints[target_hint_level - 1]
         else:
+            # v10.6.4 FIX 2: Yes/no questions need different hint strategy
+            answer_lower = (question_data.get("answer", "") or "").lower().strip()
+            is_yes_no = answer_lower in ("haan", "nahi", "yes", "no", "true", "false", "ha", "nah")
             skill = question_data.get("target_skill", "")
-            if "perfect_square" in skill:
-                h = _lang(session_context, "Think: which number multiplied by itself gives this answer?", "Sochiye: kaunsa number khud se multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని దాని తోనే multiply చేస్తే ఈ answer వస్తుంది?")
-            elif "cube" in skill:
-                h = _lang(session_context, "Think: which number multiplied three times gives this answer?", "Sochiye: kaunsa number teen baar multiply karke yeh answer dega?", "ఆలోచించండి: ఏ number ని మూడు సార్లు multiply చేస్తే ఈ answer వస్తుంది?")
-            else:
-                h = _lang(session_context, "The answer is a number. Think step by step.", "Is sawaal ka jawab ek number hai. Sochiye step by step.", "Answer ఒక number. Step by step ఆలోచించండి.")
 
-        ack = _lang(session_context, '"That\'s okay, let me help." ', '"Koi baat nahi, hint deti hoon." ', '"పరవాలేదు, hint ఇస్తాను." ')
+            if is_yes_no and "perfect_square" in skill:
+                explanation = question_data.get("explanation", "")
+                h = _lang(session_context,
+                    f"Think about it — is there a whole number that multiplied by itself gives this number? {explanation}",
+                    f"सोचिए — क्या कोई whole number खुद से multiply करके यह number दे सकता है? {explanation}",
+                    f"ఆలోచించండి — ఏదైనా whole number దాని తోనే multiply చేస్తే ఈ number వస్తుందా? {explanation}")
+            elif "perfect_square" in skill:
+                h = _lang(session_context, "Think: which number multiplied by itself gives this answer?", "सोचिए: कौनसा number खुद से multiply करके यह answer देगा?", "ఆలోచించండి: ఏ number ని దాని తోనే multiply చేస్తే ఈ answer వస్తుంది?")
+            elif "cube" in skill:
+                h = _lang(session_context, "Think: which number multiplied three times gives this answer?", "सोचिए: कौनसा number तीन बार multiply करके यह answer देगा?", "ఆలోచించండి: ఏ number ని మూడు సార్లు multiply చేస్తే ఈ answer వస్తుంది?")
+            else:
+                h = _lang(session_context, "The answer is a number. Think step by step.", "जवाब एक number है। Step by step सोचिए।", "Answer ఒక number. Step by step ఆలోచించండి.")
+
+        # v10.6.4 FIX 4: Devanagari Hindi, not Roman Hindi
+        ack = _lang(session_context, '"That\'s okay, let me help." ', '"कोई बात नहीं, hint देती हूँ।" ', '"పరవాలేదు, hint ఇస్తాను." ')
         incorrect_instruction = f'Start with {ack} Then give hint: "{h}". Ask to try again.'
 
     # Build correct path instruction
