@@ -183,6 +183,7 @@
     - FIX 3: Yes/no questions get appropriate hints (not "which number gives X?" for no-answer). sq_b06 has 2 progressive hint levels.
     - FIX 4: Hint ack Devanagari — "कोई बात नहीं" replaces "Koi baat nahi" in _build_give_hint and build_inline_eval_prompt. Solution path also Devanagari.
     - FIX 5: Removed duplicate "Didi soch rahi hai..." typing bubble (status dot already shows processing).
+    - FIX 6: Solution fallback — `_build_show_solution` and `build_inline_eval_prompt` now use `explanation` field when `solution` is missing (45 of 74 questions affected).
     - 398 tests passing, verify.py 22/22, wiring check 9/9
     - **Production smoke test PASSED** (5-turn session):
       - Turn 1: ACK → GREETING→TEACHING, chapter intro
