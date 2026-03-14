@@ -35,6 +35,12 @@ from app.voice.stt import get_stt, is_low_confidence
 from app.voice.tts import get_tts
 from app.voice.clean_for_tts import clean_for_tts, digits_to_english_words
 
+# v10.7.0: Compiled regexes for "You asked" stripping (used in both endpoints)
+import re as _re_mod
+_re_you_asked = _re_mod.compile(r'(?i)you asked[,:]?\s*')
+_re_aapne_poocha = _re_mod.compile(r'(?i)aapne poocha[,:]?\s*')
+_re_aapne_poocha_dev = _re_mod.compile(r'आपने पूछा[,:]?\s*')
+
 from app.tutor.input_classifier import classify
 from openai import AsyncOpenAI
 from app.config import OPENAI_API_KEY
@@ -1010,6 +1016,11 @@ async def process_message(
             logger.warning(f"Enforcer failed {MAX_ENFORCE_RETRIES}x, using fallback for {new_state}")
 
     # v7.3.0: Record Didi's response to conversation history
+    # v10.7.0: Strip "You asked" / "Aapne poocha" from display text too (not just TTS)
+    didi_text = _re_you_asked.sub('', didi_text)
+    didi_text = _re_aapne_poocha.sub('', didi_text)
+    didi_text = _re_aapne_poocha_dev.sub('', didi_text)
+
     session.conversation_history.append({"role": "assistant", "content": didi_text})
     flag_modified(session, "conversation_history")
 
@@ -1731,6 +1742,11 @@ async def process_message_stream(
                 )
                 logger.info(f"INLINE_EVAL_PARSED: verdict={verdict_str}, new_state={new_state}, "
                            f"hint_level={_inline_eval_hint_level}")
+
+            # v10.7.0: Strip "You asked" / "Aapne poocha" from display text
+            display_text_raw = _re_you_asked.sub('', display_text_raw)
+            display_text_raw = _re_aapne_poocha.sub('', display_text_raw)
+            display_text_raw = _re_aapne_poocha_dev.sub('', display_text_raw)
 
             # Enforce on display text (keeps digits for frontend)
             enforce_result = enforce(

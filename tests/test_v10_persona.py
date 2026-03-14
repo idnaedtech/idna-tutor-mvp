@@ -286,9 +286,9 @@ class TestV1052GreetingFlow:
              "question_voice": "What is 5 squared?"}
         msgs = _build_teach_concept(action, ctx, q, None, None)
         user_msg = msgs[-1]["content"]
-        assert "FIRST TIME" in user_msg
+        assert "SAY THIS" in user_msg
         assert "tile" in user_msg.lower()
-        assert "Do NOT ask a math question" in user_msg
+        assert "Do NOT ask a math question" in user_msg or "Do NOT list squares" in user_msg
 
     def test_chapter_intro_hinglish(self):
         """Chapter intro in Hinglish uses tile analogy content."""

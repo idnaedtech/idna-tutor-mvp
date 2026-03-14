@@ -93,7 +93,7 @@ def test_chapter_intro_builder_first_teaching():
     result = build_prompt(action, ctx, q, {}, [])
     user_msg = result[-1]["content"]
     # Should contain chapter intro instructions, not regular teach
-    assert "FIRST TIME" in user_msg or "introducing the chapter" in user_msg, \
+    assert "tiles" in user_msg.lower() or "SAY THIS" in user_msg, \
         f"Expected chapter intro prompt, got: {user_msg[:200]}"
 
 

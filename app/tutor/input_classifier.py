@@ -236,6 +236,12 @@ async def classify(
     if any(p in text_lower for p in _concept_patterns):
         return {"category": "CONCEPT_REQUEST", "confidence": 0.92, "extras": {}}
 
+    # v10.7.0: In GREETING state, check ACK regardless of word count
+    # Greeting responses are naturally longer ("aaj ka din accha tha, theek tha")
+    if current_state == "GREETING":
+        if any(phrase in normalized for phrase in FAST_ACK):
+            return {"category": "ACK", "confidence": 0.95, "extras": {}}
+
     if len(words) <= FAST_PATH_MAX_WORDS:
         # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
         if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):

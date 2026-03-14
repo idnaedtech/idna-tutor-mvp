@@ -319,11 +319,12 @@ def _build_teach_concept(a, ctx, q, sk, prev):
         chapter_text = intro_content.get("turn_0", "")
         msg = (
             f'You are introducing the chapter to the student for the FIRST TIME. '
-            f'Use this content as your guide — rephrase naturally in your warm Didi voice, '
-            f'but keep the tile analogy and the key example (3 times 3 equals 9). '
-            f'Do NOT ask a math question yet. Just explain the concept warmly. '
+            f'Say this content CLOSELY — do NOT rephrase heavily or skip parts. '
+            f'You MUST include: (1) the tiles analogy (3 rows of 3 tiles = 9 tiles), '
+            f'(2) the example 3 times 3 equals 9. '
+            f'Do NOT ask a math question yet. Do NOT list squares. '
             f'4-5 sentences maximum.\n\n'
-            f'CHAPTER CONTENT:\n{chapter_text}'
+            f'SAY THIS:\n{chapter_text}'
         )
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
@@ -453,21 +454,22 @@ def _build_teach_concept(a, ctx, q, sk, prev):
 
         if teaching_turn == 0:
             msg = (
-                f'You are introducing the chapter to the student for the FIRST TIME. '
-                f'Use this content as your guide — rephrase naturally in your warm Didi voice, '
-                f'but keep the tile analogy and the key example (3 times 3 equals 9). '
-                f'Do NOT ask a math question yet. Just explain the concept warmly. '
+                f'Say this content CLOSELY — do NOT rephrase heavily or skip parts. '
+                f'You MUST include: (1) the tiles analogy (3 rows of 3 tiles = 9 tiles), '
+                f'(2) the example 3 times 3 equals 9. '
+                f'Do NOT ask a math question yet. Do NOT list squares. '
                 f'4-5 sentences maximum.\n\n'
-                f'CHAPTER CONTENT:\n{chapter_text}'
+                f'SAY THIS:\n{chapter_text}'
             )
         else:
             msg = (
-                f'You just explained what square numbers are. Now explain square root '
-                f'(the reverse — if area is 9, side is 3). Then tell the student you will '
-                f'ask some easy questions to see what they know. End with encouragement. '
-                f'Do NOT ask a math question — the next turn will do that. '
+                f'Now explain square root (the reverse of square). '
+                f'Say this content CLOSELY — do NOT skip parts. '
+                f'MUST include: if area is 9 tiles, side is 3, that is square root. '
+                f'Then say you will ask some easy questions to see what they know. '
+                f'Do NOT ask a math question yet. Do NOT list any numbers. '
                 f'3-4 sentences maximum.\n\n'
-                f'CHAPTER CONTENT:\n{chapter_text}'
+                f'SAY THIS:\n{chapter_text}'
             )
     elif a.extra.get("forced_transition") and teaching_turn >= 3:
         # Turn 3+: Force to question with gentle transition
