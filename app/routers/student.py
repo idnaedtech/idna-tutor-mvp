@@ -1071,9 +1071,9 @@ async def process_message(
     )
     await run_in_threadpool(lambda: db.add(didi_turn))
 
-    # v7.3.26 Fix: NEXT_QUESTION is transient - after asking, state becomes WAITING_ANSWER
-    # Without this, the next turn would re-read the question instead of evaluating the answer
-    if new_state == "NEXT_QUESTION" and action.action_type == "pick_next_question":
+    # v7.3.26 Fix: NEXT_QUESTION is transient - always becomes WAITING_ANSWER
+    # v10.6.4: Removed action_type check — NEXT_QUESTION is ALWAYS transient
+    if new_state == "NEXT_QUESTION":
         new_state = "WAITING_ANSWER"
 
     session.state = new_state
@@ -1805,8 +1805,10 @@ async def process_message_stream(
             # The original `db` session from FastAPI dependency may be closed by now.
             full_text = full_text.strip()
 
-            # v7.3.26 Fix: NEXT_QUESTION is transient - after asking, state becomes WAITING_ANSWER
-            if new_state == "NEXT_QUESTION" and action.action_type == "pick_next_question":
+            # v7.3.26 Fix: NEXT_QUESTION is transient - always becomes WAITING_ANSWER
+            # v10.6.4: Removed action_type check — NEXT_QUESTION is ALWAYS transient
+            # regardless of whether we got here via pick_next_question or evaluate_answer
+            if new_state == "NEXT_QUESTION":
                 new_state = "WAITING_ANSWER"
 
             # Get fresh DB session for final writes

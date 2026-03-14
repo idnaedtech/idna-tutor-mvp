@@ -72,7 +72,7 @@ CHAPTER_NAMES = {
     "ch1_rational_numbers": "Chapter 1, Rational Numbers",
     # v10.5.5: Include chapter number — students ask "which chapter number?"
     # v10.6.3: Commas not dashes — TTS reads "-" as "minus"
-    "ch1_square_and_cube": "Chapter 6, Squares and Square Roots (and Chapter 7, Cubes and Cube Roots)",
+    "ch1_square_and_cube": "Chapter 6, Squares and Square Roots, and Chapter 7, Cubes and Cube Roots",
     "ch2_linear_equations": "Chapter 2, Linear Equations",
     "ch3_understanding_quadrilaterals": "Chapter 3, Understanding Quadrilaterals",
     "ch4_practical_geometry": "Chapter 4, Practical Geometry",
