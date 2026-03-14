@@ -329,9 +329,9 @@ def _build_teach_concept(a, ctx, q, sk, prev):
 
     # v7.2.0: Phase-based teaching with teaching_turn (BUG 1/3 fix)
     teaching_turn = getattr(a, 'teaching_turn', 0) or a.reteach_count
-    # v10.7.0: Skip reteach framing during chapter intro (first 2 turns, no questions yet)
+    # v10.7.0: Skip reteach framing during chapter intro + first CB teaching (3 turns, no questions yet)
     is_first_teaching = (ctx.get("questions_attempted", 0) or 0) == 0
-    if teaching_turn > 0 and not (is_first_teaching and teaching_turn <= 1):
+    if teaching_turn > 0 and not (is_first_teaching and teaching_turn <= 2):
         extra = f"\nRe-teach #{teaching_turn}. Use COMPLETELY DIFFERENT example. Previous: \"{prev or 'unknown'}\". Do NOT repeat."
 
     # v7.2.0: Anti-repetition context (BUG 3 fix)

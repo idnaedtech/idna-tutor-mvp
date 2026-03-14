@@ -121,6 +121,25 @@ def test_chapter_intro_not_used_after_questions():
         f"Chapter intro should not fire when questions_attempted > 0: {user_msg[:200]}"
 
 
+def test_what_is_classified_as_concept_request():
+    """'What is square' should be CONCEPT_REQUEST, not IDK."""
+    from app.tutor.input_classifier import classify_student_input
+    for phrase in ["what is square", "what is cube root", "what is square root",
+                   "kya hai square", "क्या है square"]:
+        result = classify_student_input(phrase, current_state="TEACHING")
+        assert result == "CONCEPT_REQUEST", \
+            f"'{phrase}' classified as {result}, expected CONCEPT_REQUEST"
+
+
+def test_bare_what_still_idk():
+    """Bare 'what' or 'huh' should still be IDK."""
+    from app.tutor.input_classifier import classify_student_input
+    for phrase in ["what", "huh"]:
+        result = classify_student_input(phrase, current_state="TEACHING")
+        assert result == "IDK", \
+            f"'{phrase}' classified as {result}, expected IDK"
+
+
 def test_fsm_ack_in_teaching_stays_during_chapter_intro():
     """ACK in TEACHING stays in TEACHING when questions_attempted == 0 (chapter intro)."""
     from app.tutor.state_machine import transition
@@ -131,10 +150,20 @@ def test_fsm_ack_in_teaching_stays_during_chapter_intro():
     assert action.teaching_turn == 1
 
 
-def test_fsm_ack_in_teaching_advances_after_chapter_intro():
-    """ACK in TEACHING at turn_1 (after chapter intro turn_0) goes to WAITING_ANSWER."""
+def test_fsm_ack_turn1_stays_in_teaching():
+    """ACK at turn_1 stays in TEACHING for content bank explanation."""
     from app.tutor.state_machine import transition
     ctx = {"student_text": "samajh gaya", "teaching_turn": 1, "questions_attempted": 0}
+    new_state, action = transition("TEACHING", "ACK", ctx)
+    assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
+    assert action.action_type == "teach_concept"
+    assert action.teaching_turn == 2
+
+
+def test_fsm_ack_turn2_advances_to_waiting_answer():
+    """ACK at turn_2 (after intro + CB teaching) goes to WAITING_ANSWER."""
+    from app.tutor.state_machine import transition
+    ctx = {"student_text": "samajh gaya", "teaching_turn": 2, "questions_attempted": 0}
     new_state, action = transition("TEACHING", "ACK", ctx)
     assert new_state == "WAITING_ANSWER", f"Expected WAITING_ANSWER, got {new_state}"
     assert action.action_type == "read_question"

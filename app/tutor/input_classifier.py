@@ -224,6 +224,18 @@ async def classify(
         if any(ind in text_lower for ind in _help_indicators):
             return {"category": "CONCEPT_REQUEST", "confidence": 0.90, "extras": {}}
 
+    # v10.7.0: Concept question guard — "what is X" is CONCEPT_REQUEST, not IDK
+    # Must run BEFORE FAST_IDK because "what" alone is in FAST_IDK
+    _concept_patterns = [
+        "what is", "what are", "what does", "what do",
+        "kya hai", "kya hota", "kya hoti", "kya hote",
+        "क्या है", "क्या होता", "क्या होती", "क्या होते",
+        "ఏమిటి", "అంటే ఏమిటి",  # Telugu: what is
+    ]
+    text_lower = text.lower()
+    if any(p in text_lower for p in _concept_patterns):
+        return {"category": "CONCEPT_REQUEST", "confidence": 0.92, "extras": {}}
+
     if len(words) <= FAST_PATH_MAX_WORDS:
         # Check IDK first (e.g., "nahi samjha" contains "samjha" but is IDK)
         if normalized in FAST_IDK or any(phrase in normalized for phrase in FAST_IDK):
@@ -342,6 +354,17 @@ def classify_student_input(
 
     if normalized == "[silence]" or text.strip().lower() == "[silence]":
         return "SILENCE"
+
+    # v10.7.0: Concept question guard — "what is X" is CONCEPT_REQUEST, not IDK
+    _concept_patterns_sync = [
+        "what is", "what are", "what does", "what do",
+        "kya hai", "kya hota", "kya hoti", "kya hote",
+        "क्या है", "क्या होता", "क्या होती", "क्या होते",
+        "ఏమిటి", "అంటే ఏమిటి",
+    ]
+    text_lower = text.lower()
+    if any(p in text_lower for p in _concept_patterns_sync):
+        return "CONCEPT_REQUEST"
 
     # P0 FIX: Same expanded fast-path as async classify()
     words = normalized.split()
