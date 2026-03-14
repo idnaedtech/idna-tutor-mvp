@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"TTS precache init failed: {e}")
 
-    logger.info("IDNA Didi v10.6.3 ready")
+    logger.info("IDNA Didi v10.6.5 ready")
     yield
     logger.info("Shutting down")
 
