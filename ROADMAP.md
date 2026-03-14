@@ -193,6 +193,15 @@
       - Turn 5: INCORRECT (100) → HINT_1, state_before=WAITING_ANSWER (transient fix working), Devanagari hint
     - FIX 7: Startup logger version string fixed (was 10.6.3 → 10.6.5)
     - **Chapter meta-question smoke test**: "which chapter?" → "हम Chapter 6, Squares and Square Roots, and Chapter 7, Cubes and Cube Roots पढ़ रहे हैं।" (commas, no dashes, no parens, Devanagari)
+  - [x] v10.6.6: Question level audit — 12 questions retagged ✅ 2026-03-14
+    - sq_b03, sq_b06, sq_e03, sq_e04, sq_e05, sq_h03, sq_h06: property/pattern → L4
+    - sq_m02, sq_m03: basic root finding → L3 (were L5)
+    - sq_m06: word problem → L5 (was L3)
+    - cb_m01: cube root of 27000 → L5 (was L3)
+    - cn_04: conceptual relationship → L5 (was L4)
+    - New distribution: L1:10, L2:9, L3:14, L4:22, L5:19
+    - 398 tests passing, verify.py 22/22
+    - **Production smoke test PASSED**: /health → v10.6.6, /health/detail levels: L1:10, L2:9, L3:24(14 active+10 inactive), L4:22, L5:19. `_upsert_questions()` synced all 12 level changes on deploy.
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
