@@ -202,6 +202,11 @@
     - New distribution: L1:10, L2:9, L3:14, L4:22, L5:19
     - 398 tests passing, verify.py 22/22
     - **Production smoke test PASSED**: /health → v10.6.6, /health/detail levels: L1:10, L2:9, L3:24(14 active+10 inactive), L4:22, L5:19. `_upsert_questions()` synced all 12 level changes on deploy.
+  - [x] v10.6.7: Fix hint loop death spiral + solution leak + aapne-poocha stripping ✅ 2026-03-14
+    - BUG 1 (CRITICAL): Inline eval INCORRECT always set state to HINT_1, ignoring hint progression. Student got stuck on cb_e03 for 8 turns. Fix: check current_hint_level post-increment → HINT_1/HINT_2/FULL_SOLUTION.
+    - BUG 2: "Solution not available" text leaked to students when question had no solution/explanation field (29 of 74 questions). Fix: auto-generate from answer + last hint.
+    - BUG 3: "Aapne poocha"/"You asked" framing appeared ~20% of the time despite DIDI_BASE rule. Fix: post-processing regex strip in clean_for_tts().
+    - 398 tests passing, verify.py 22/22, wiring check 0 breaks
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
