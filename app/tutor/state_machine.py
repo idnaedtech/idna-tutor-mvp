@@ -181,10 +181,9 @@ def transition(
             )
 
         if category == "ACK":
-            # v10.7.0: During chapter intro (questions_attempted == 0),
-            # 2-turn intro before first question:
-            #   turn_0 → ACK → stay TEACHING (show turn_1)
-            #   turn_1 → ACK → WAITING_ANSWER (first question)
+            # v10.7.0: During chapter intro (questions_attempted == 0, teaching_turn == 0),
+            # stay in TEACHING for turn_1 (assessment bridge) before first question.
+            # Flow: turn_0 (tiles) → ACK → turn_1 (square root + bridge) → ACK → WAITING_ANSWER
             questions_attempted = ctx.get("questions_attempted", 0) or 0
             if questions_attempted == 0 and teaching_turn == 0:
                 return "TEACHING", Action(
