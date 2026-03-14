@@ -473,7 +473,37 @@ def _build_teach_concept(a, ctx, q, sk, prev):
             msg = f"{translate_instruction}Student didn't understand {ch}. Try roti cutting, cricket scoring, or Diwali sweets. 2 sentences. End: \"{understand_check}\""
     else:
         # Turn 0: Initial teaching
-        if teach_content:
+        # v10.7.0: Chapter introduction for first-time teaching (questions_attempted == 0)
+        is_first_teaching = (ctx.get("questions_attempted", 0) or 0) == 0
+
+        if is_first_teaching and teaching_turn <= 1:
+            # Chapter intro — NCERT-faithful explanation with tile analogy
+            from app.content.ch1_square_and_cube import CHAPTER_INTRO
+            lang_key = "english" if use_english else ("telugu" if use_telugu else ("hindi" if lang_pref == "hindi" else "hinglish"))
+            intro_content = CHAPTER_INTRO.get(lang_key, CHAPTER_INTRO.get("hinglish", {}))
+            turn_key = f"turn_{teaching_turn}"
+            chapter_text = intro_content.get(turn_key, "")
+
+            if teaching_turn == 0:
+                msg = (
+                    f'You are introducing the chapter to the student for the FIRST TIME. '
+                    f'Use this content as your guide — rephrase naturally in your warm Didi voice, '
+                    f'but keep the tile analogy and the key example (3 times 3 equals 9). '
+                    f'Do NOT ask a math question yet. Just explain the concept warmly. '
+                    f'4-5 sentences maximum.\n\n'
+                    f'CHAPTER CONTENT:\n{chapter_text}'
+                )
+            else:
+                msg = (
+                    f'You just explained what square numbers are. Now explain square root '
+                    f'(the reverse — if area is 9, side is 3). Then tell the student you will '
+                    f'ask some easy questions to see what they know. End with encouragement. '
+                    f'Do NOT ask a math question — the next turn will do that. '
+                    f'3-4 sentences maximum.\n\n'
+                    f'CHAPTER CONTENT:\n{chapter_text}'
+                )
+        elif teach_content:
+            # Normal reteach/teach flow (questions already attempted, or teaching_turn >= 2)
             # V10: GPT-4.1 rephrases verified content (teacher), doesn't invent (risk)
             # P0 FIX: Enforce voice-friendly length. Content bank has full solutions
             # but TTS should never read more than 3 sentences.

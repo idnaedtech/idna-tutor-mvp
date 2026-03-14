@@ -20,6 +20,82 @@ Usage:
 from app.content.curriculum import Concept, ChapterGraph
 
 # ============================================================
+# v10.7.0: CHAPTER INTRODUCTION — NCERT-faithful, voice-optimized
+# Used by instruction_builder when questions_attempted == 0
+# ============================================================
+
+CHAPTER_INTRO = {
+    "hinglish": {
+        "turn_0": (
+            "Aaj hum Chapter 6 padhenge, Squares and Square Roots. "
+            "Pehle samajhte hain ki square number kya hota hai. "
+            "Sochiye aapke paas 3 rows mein 3 tiles hain, "
+            "toh total 9 tiles banenge, ek perfect square shape! "
+            "Jab hum kisi number ko khud se multiply karte hain, "
+            "jaise 3 times 3 equals 9, toh 9 ek square number hai."
+        ),
+        "turn_1": (
+            "Aur square root matlab ulta. "
+            "Agar ek square ka area 9 tiles hai, toh ek side kitni tiles hogi? 3! "
+            "Yahi square root hai. "
+            "Bahut accha. Ab dekhte hain aapko kitna aata hai. "
+            "Main kuch easy questions puchungi, phir hum aage badhenge."
+        ),
+    },
+    "english": {
+        "turn_0": (
+            "Today we will study Chapter 6, Squares and Square Roots. "
+            "Let me explain what a square number is. "
+            "Imagine you have tiles on a floor. If you arrange 3 rows of 3 tiles, "
+            "you get 9 tiles in a perfect square shape! "
+            "When you multiply a number by itself, like 3 times 3 equals 9, "
+            "we call 9 a square number."
+        ),
+        "turn_1": (
+            "And square root means the reverse. "
+            "If a square has area 9 tiles, how long is one side? 3! "
+            "That is the square root. "
+            "Great. Now let me see how much you already know. "
+            "I will ask some easy questions first, then we will go deeper."
+        ),
+    },
+    "hindi": {
+        "turn_0": (
+            "आज हम अध्याय 6 पढ़ेंगे, वर्ग और वर्गमूल। "
+            "पहले समझते हैं कि वर्ग संख्या क्या होती है। "
+            "सोचिए आपके पास 3 पंक्तियों में 3 टाइल्स हैं, "
+            "तो कुल 9 टाइल्स बनेंगी, एक perfect square आकार! "
+            "जब हम किसी संख्या को खुद से गुणा करते हैं, "
+            "जैसे 3 गुणा 3 बराबर 9, तो 9 एक वर्ग संख्या है।"
+        ),
+        "turn_1": (
+            "और वर्गमूल का मतलब है उल्टा। "
+            "अगर एक वर्ग का क्षेत्रफल 9 टाइल्स है, तो एक भुजा कितनी होगी? 3! "
+            "यही वर्गमूल है। "
+            "बहुत अच्छा। अब देखते हैं आपको कितना आता है। "
+            "मैं कुछ आसान सवाल पूछूँगी, फिर हम आगे बढ़ेंगे।"
+        ),
+    },
+    "telugu": {
+        "turn_0": (
+            "ఈ రోజు మనం Chapter 6 చదువుదాం, Squares and Square Roots. "
+            "మొదట square number అంటే ఏమిటో అర్థం చేసుకుందాం. "
+            "మీ దగ్గర 3 rows లో 3 tiles ఉన్నాయి అనుకోండి, "
+            "మొత్తం 9 tiles అవుతాయి, ఒక perfect square shape! "
+            "మనం ఒక number ని దాని తోనే multiply చేస్తే, "
+            "ఉదాహరణకు 3 times 3 equals 9, అప్పుడు 9 ఒక square number."
+        ),
+        "turn_1": (
+            "Square root అంటే reverse. "
+            "ఒక square area 9 tiles ఉంటే, ఒక side ఎంత? 3! "
+            "అదే square root. "
+            "చాలా బాగుంది. ఇప్పుడు మీకు ఎంత తెలుసో చూద్దాం. "
+            "నేను కొన్ని easy questions అడుగుతాను, తర్వాత ముందుకు వెళ్దాం."
+        ),
+    },
+}
+
+# ============================================================
 # CHAPTER METADATA
 # ============================================================
 

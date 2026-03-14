@@ -1,10 +1,10 @@
 # CLAUDE.md — IDNA EdTech Operating Rules
 
 > **This file is read by Claude Code on every session start.**
-> **Last updated:** 2026-03-14
+> **Last updated:** 2026-03-15
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://didi.idnaedtech.com
-> **Current version:** v10.6.7
+> **Current version:** v10.6.9
 > **Can be modified by CEO only.**
 
 ---
@@ -106,60 +106,72 @@ These rules are absolute. Violating any of them is a blocking error.
 ```
 app/
 ├── routers/
-│   └── student.py              # 1,469 lines. Main router, both endpoints, session mgmt.
-│                                # THIS IS THE MAIN ORCHESTRATOR.
+│   ├── student.py              # 2,028 lines. Main router, both endpoints, session mgmt.
+│   │                           # THIS IS THE MAIN ORCHESTRATOR.
+│   ├── auth.py                 # Login/PIN authentication
+│   └── review.py               # Session review API (/review?key=idna2026)
 ├── tutor/
-│   ├── instruction_builder.py  # V10 ACTIVE BRAIN — builds ALL LLM prompts
-│   │                           # for streaming endpoint. MOST CRITICAL FILE.
-│   │                           # V10: New DIDI_BASE persona, LANG_INSTRUCTIONS dict
-│   ├── strings.py              # V10: Centralized multilingual strings (4 languages)
-│   ├── instruction_builder_v9.py # v9 brain for non-streaming endpoint.
-│   ├── state_machine.py        # v7.3 FSM — produces Action objects. ACTIVE.
-│   ├── preprocessing.py        # Meta-question, language switch, confusion, language auto-detection.
-│   ├── input_classifier.py     # gpt-4.1-mini classifier. 10 categories.
-│   ├── enforcer.py             # Output safety — length, praise, repetition.
-│   ├── llm.py                  # OpenAI API wrapper (sync + streaming).
-│   ├── answer_checker.py       # Regex-based math answer checking.
-│   ├── answer_evaluator.py     # LLM-based answer evaluation.
-│   └── memory.py               # Question selection, skill tracking.
+│   ├── instruction_builder.py  # 923 lines. V10 ACTIVE BRAIN — builds ALL LLM prompts.
+│   │                           # V10: DIDI_BASE persona, LANG_INSTRUCTIONS dict,
+│   │                           # _lang() helper for Telugu (48 uses).
+│   ├── strings.py              # 88 lines. Centralized multilingual strings (4 languages).
+│   ├── instruction_builder_v9.py # DEAD CODE — kept for reference only.
+│   ├── state_machine.py        # 447 lines. v7.3 FSM — produces Action objects. ACTIVE.
+│   │                           # States: GREETING, TEACHING, WAITING_ANSWER, HINT_1,
+│   │                           # HINT_2, FULL_SOLUTION, NEXT_QUESTION, SESSION_COMPLETE.
+│   ├── preprocessing.py        # 494 lines. Meta-question, language switch, confusion,
+│   │                           # Telugu detection, language auto-detection.
+│   ├── input_classifier.py     # 407 lines. GPT-4.1-mini classifier. 10 categories.
+│   ├── enforcer.py             # 452 lines. Output safety — length, praise, repetition.
+│   ├── answer_checker.py       # 600 lines. Deterministic regex math checker (FALLBACK).
+│   ├── answer_evaluator.py     # 183 lines. LLM-based answer eval (PRIMARY). Inline eval.
+│   │                           # Streaming: eval + response in ONE LLM call.
+│   ├── memory.py               # 298 lines. Level-aware question picker, skill tracking.
+│   │                           # pick_next_question(): strict WHERE level = current_level.
+│   └── llm.py                  # 155 lines. OpenAI API wrapper (sync + streaming).
 ├── fsm/
-│   ├── transitions.py          # 447 lines. v8 FSM. SIDE EFFECTS ONLY (language, empathy).
+│   ├── transitions.py          # v8 FSM. SIDE EFFECTS ONLY (language, empathy).
 │   │                           # Does NOT control teaching flow for streaming endpoint.
-│   └── handlers.py             # 811 lines. v9 handlers for non-streaming only.
+│   └── handlers.py             # v9 handlers. Side effects only.
 ├── state/
-│   └── session.py              # 186 lines. SessionState dataclass (v9 adapter).
+│   └── session.py              # SessionState dataclass (v9 adapter).
 ├── voice/
 │   ├── stt.py                  # 255 lines. Sarvam Saarika v2.5 STT.       [PROTECTED]
-│   ├── tts.py                  # 343 lines. Sarvam Bulbul v3 TTS (simran). [PROTECTED]
-│   ├── clean_for_tts.py        # 176 lines. Math→words conversion.
-│   └── tts_precache.py         # 210 lines. TTS caching.
+│   ├── tts.py                  # 439 lines. Sarvam Bulbul v3 TTS (simran). [PROTECTED]
+│   ├── clean_for_tts.py        # 185 lines. Math→words, dash→comma, TTS cleanup.
+│   └── tts_precache.py         # 210 lines. TTS caching in PostgreSQL.
 ├── content/
-│   ├── seed_questions.py       # 313 lines. 60+ questions, Hinglish only.
-│   ├── ch1_square_and_cube.py  # 1,968 lines. Chapter metadata + concepts.
+│   ├── seed_questions.py       # 323 lines. Merges ch1 + 10 rational number Qs (inactive).
+│   ├── ch1_square_and_cube.py  # 2,373 lines. 84 questions (74 active), 20 skills.
+│   │                           # 5 levels: L1:10, L2:9, L3:14, L4:22, L5:19.
 │   └── curriculum.py           # 144 lines. Concept/ChapterGraph models.
-├── models.py                   # 256 lines. ORM models (Question, Student, Session, etc.)
+├── models.py                   # 265 lines. ORM models (Question, Student, Session, etc.)
 ├── database.py                 # 143 lines. SQLAlchemy + PostgreSQL.
 ├── config.py                   # 131 lines. LLM_MODEL=gpt-4.1 (Railway env var), MAX_WORDS=40.
-└── main.py                     # 270 lines. App setup, migrations, seeding.
+└── main.py                     # 394 lines. App setup, migrations, question upsert, pilot seeds.
 
 content_bank/
 ├── loader.py                   # 258 lines. JSON content bank loader.
 └── math_8_ch6.json             # ~80KB. Content bank data.
 
 web/
-└── student.html                # Student-facing web UI.
+├── student.html                # 1,467 lines. Student UI with SSE streaming, debug output.
+├── login.html                  # PIN-based login.
+├── parent.html                 # Parent dashboard.
+└── index.html                  # Landing page.
 
 tests/
-├── test_core.py                # Answer checking, fractions
-├── test_integration.py         # FSM transitions, language
-├── test_preprocessing.py       # Meta-Q, language, confusion detectors
-├── test_p0_language_persistence.py  # Language detection, TTS
-├── test_p0_regression.py       # P0 regression — prompt trace tests
-├── test_v10_persona.py         # V10: Persona, strings.py, warm teacher identity
-├── test_content_bank.py        # Content bank loader
-├── test_v750_features.py       # Sentence splitter, enforcer
-├── test_p1_fixes.py            # Question picking, memory
-└── test_ch1_square_cube.py     # Question bank validation
+├── test_core.py                # 101 tests — answer checking, fractions
+├── test_preprocessing.py       # 84 tests — meta-Q, language, confusion
+├── test_v10_persona.py         # 75 tests — persona, strings, warm identity
+├── test_integration.py         # 37 tests — FSM transitions, language
+├── test_p0_language_persistence.py  # 21 tests — language detection, TTS
+├── test_v750_features.py       # 20 tests — sentence splitter, enforcer
+├── test_p0_teaching_flow.py    # 20 tests — teaching flow, level system
+├── test_ch1_square_cube.py     # 12 tests — question bank validation
+├── test_p0_regression.py       # 12 tests — P0 regression
+├── test_content_bank.py        # 11 tests — content bank loader
+└── test_p1_fixes.py            # 5 tests — question picking, memory
     # Total: 398 tests across 11 files. ALL must pass before any commit.
 
 alembic/                        # Database migrations
@@ -265,10 +277,50 @@ If you cannot do all 5, you don't understand the code well enough. Read more fir
 ### Prove It Works
 
 No change is "done" without:
-1. All 280 tests passing (paste output)
+1. All 398 tests passing (paste output)
 2. For server changes: curl output showing correct behavior
 3. For production: `curl /health` showing correct version
 4. For instruction_builder changes: verify `LANGUAGE:` appears in build_prompt output (V10 format)
+
+### 5-Level Teaching System (v10.4.0+)
+
+When working on questions, content, or the level system:
+
+| Level | What It Tests | Example |
+|-------|--------------|---------|
+| **L1** | Multiplication recall | "What is 3 times 3?" |
+| **L2** | Square/cube numbers | "What is the square of 8?" |
+| **L3** | Square/cube roots | "What is √49?", "What is ∛512?" |
+| **L4** | Patterns & properties | "Is 50 a perfect square?", "Can a square end in 7?" |
+| **L5** | Application & methods | "Find side of square with area 441", prime factorisation |
+
+- **First question** is always Level 2.
+- **3 correct in a row** → level up (max Level 5).
+- **2 wrong in a row** → level down (min Level 1).
+- Session tracks: `current_level`, `consecutive_correct`, `consecutive_wrong`.
+- Question picker: `memory.py pick_next_question()` — strict `WHERE level = current_level`.
+- Question levels stored in `ch1_square_and_cube.py` AND synced to DB via `_upsert_questions()`.
+- Distribution: L1:10, L2:9, L3:14, L4:22, L5:19 (74 active questions).
+
+### Inline Answer Evaluation (v10.5.1+)
+
+- Streaming endpoint combines answer eval + response in ONE LLM call.
+- LLM outputs `[CORRECT]` or `[INCORRECT]` prefix, parsed in generator finally block.
+- CORRECT → load next question via `_inline_eval_next_q_id`, state = WAITING_ANSWER.
+- INCORRECT → increment `current_hint_level`, state = HINT_1/HINT_2/FULL_SOLUTION.
+- **CRITICAL:** State must match hint level. Do NOT blindly set HINT_1 for all INCORRECT.
+- Fallback to regex `answer_checker.py` if LLM doesn't follow prefix format.
+
+### Hint Progression (v7.3 FSM)
+
+```
+WAITING_ANSWER + wrong → HINT_1 (first hint from question.hints[0])
+HINT_1 + wrong → HINT_2 (second hint or deeper guidance)
+HINT_2 + wrong → FULL_SOLUTION (show answer, explain)
+FULL_SOLUTION + any input → NEXT_QUESTION (ALWAYS advance, never loop back)
+```
+
+**FULL_SOLUTION is terminal for that question.** After showing solution, move on.
 
 ---
 
@@ -440,7 +492,7 @@ All fixed in v10.0.1–v10.0.3. Language auto-detection added in v10.0.3. See RO
 
 | Phase | Goal | Gate Criteria | Status |
 |-------|------|--------------|--------|
-| **P0** | Core tutoring loop works | Full session without crash/loop/language reset | ****PASSED** — real student test March 14, 2026** |
+| **P0** | Core tutoring loop works | Full session without crash/loop/language reset | **PASSED** — real student test March 14, 2026 |
 | **P1** | Schema evolution | Multi-board DB, content migration, API v1 | Blocked on P0 |
 | **P2** | Multi-board MVP | CBSE + Telangana + Maharashtra + ICSE | Blocked on P1 |
 | **P3** | Platform | Content factory, IDNA-Bench, 22 languages | Blocked on P2 |
@@ -528,9 +580,10 @@ If you catch yourself doing any of these, stop immediately:
 21. **Passing content bank material verbatim to LLM for voice** — if teach_content > 200 chars, add "summarize in 2 sentences" instruction
 22. **Setting session fields without db.commit()** — teaching_turn, language_pref, confusion_count MUST be followed by db.commit() or value is lost between requests (P0 Bug #1 root cause in v10.0.2)
 23. **Ignoring student's input language** — if student speaks English 2x consecutively, language_pref must auto-switch via `check_language_auto_switch()`. Don't rely solely on explicit "speak in English" commands.
-24. **Bumping version without updating content** — When updating reference docs, ALL stale facts must change (URLs, test counts, line counts, feature lists). Changing only the version string is a BLOCKING ERROR.
-25. **Setting inline eval state to HINT_1 blindly** — must check current_hint_level and set HINT_1/HINT_2/FULL_SOLUTION accordingly
-26. **Missing solution AND explanation fields on questions** — fallback generates "Solution not available" text that reaches student. Auto-generate from answer + hints.
+24. **Bumping version without updating content** — When updating reference docs, ALL stale facts must change (URLs, test counts, line counts, feature lists). Changing only the version string is a BLOCKING ERROR. Run verification grep commands to prove content was actually updated.
+25. **Setting inline eval state to HINT_1 blindly** — must check `current_hint_level` and set HINT_1/HINT_2/FULL_SOLUTION accordingly. Blind HINT_1 causes death spiral where FULL_SOLUTION loops back.
+26. **Missing solution AND explanation fields on questions** — fallback generates "Solution not available" text that reaches the student. Auto-generate from answer + hints when both fields are empty.
+27. **Letting LLM rephrase question text** — GPT-4.1 may change "square of 8" to "square of 4". Use `question_en` field verbatim when possible.
 
 ---
 
