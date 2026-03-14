@@ -311,25 +311,27 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     use_english = lang_pref == "english"
     use_telugu = lang_pref in ("telugu", "te-IN")
 
-    # v10.5.2: Chapter intro — brief explanation before first question
+    # v10.7.0: Chapter intro — NCERT-style tile analogy (replaces v10.5.2 generic intro)
     if a.extra.get("chapter_intro"):
-        ch_key = ctx.get("chapter", "")
-        ch_name = CHAPTER_NAMES.get(ch_key, ch_key.replace("_", " ").title())
-        msg = _lang(ctx,
-            f'Student just responded to greeting. Give a brief 2-3 sentence chapter introduction about "{ch_name}". '
-            f'Explain what the topic is about in simple terms with one relatable example. '
-            f'Then say "Let\'s try a question!" to transition. Do NOT ask a math question yet.',
-            f'Student ne greeting ka jawab diya. "{ch_name}" ka brief 2-3 sentence introduction do. '
-            f'Simple example ke saath topic samjhao. '
-            f'Phir bolo "Chalo ek question try karte hain!" Math question MAT poocho abhi.',
-            f'Student greeting కి respond చేశారు. "{ch_name}" గురించి brief 2-3 sentence introduction ఇవ్వండి Telugu లో. '
-            f'Simple example తో topic explain చేయండి. '
-            f'తర్వాత "ఒక question try చేద్దామా!" అని transition చేయండి. Math question అడగకండి ఇంకా.')
+        from app.content.ch1_square_and_cube import CHAPTER_INTRO
+        lang_key = "english" if use_english else ("telugu" if use_telugu else ("hindi" if lang_pref == "hindi" else "hinglish"))
+        intro_content = CHAPTER_INTRO.get(lang_key, CHAPTER_INTRO.get("hinglish", {}))
+        chapter_text = intro_content.get("turn_0", "")
+        msg = (
+            f'You are introducing the chapter to the student for the FIRST TIME. '
+            f'Use this content as your guide — rephrase naturally in your warm Didi voice, '
+            f'but keep the tile analogy and the key example (3 times 3 equals 9). '
+            f'Do NOT ask a math question yet. Just explain the concept warmly. '
+            f'4-5 sentences maximum.\n\n'
+            f'CHAPTER CONTENT:\n{chapter_text}'
+        )
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": msg}]
 
     # v7.2.0: Phase-based teaching with teaching_turn (BUG 1/3 fix)
     teaching_turn = getattr(a, 'teaching_turn', 0) or a.reteach_count
-    if teaching_turn > 0:
+    # v10.7.0: Skip reteach framing during chapter intro (first 2 turns, no questions yet)
+    is_first_teaching = (ctx.get("questions_attempted", 0) or 0) == 0
+    if teaching_turn > 0 and not (is_first_teaching and teaching_turn <= 1):
         extra = f"\nRe-teach #{teaching_turn}. Use COMPLETELY DIFFERENT example. Previous: \"{prev or 'unknown'}\". Do NOT repeat."
 
     # v7.2.0: Anti-repetition context (BUG 3 fix)
@@ -474,8 +476,6 @@ def _build_teach_concept(a, ctx, q, sk, prev):
     else:
         # Turn 0: Initial teaching
         # v10.7.0: Chapter introduction for first-time teaching (questions_attempted == 0)
-        is_first_teaching = (ctx.get("questions_attempted", 0) or 0) == 0
-
         if is_first_teaching and teaching_turn <= 1:
             # Chapter intro — NCERT-faithful explanation with tile analogy
             from app.content.ch1_square_and_cube import CHAPTER_INTRO

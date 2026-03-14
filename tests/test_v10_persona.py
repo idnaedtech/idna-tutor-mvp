@@ -274,7 +274,7 @@ class TestV1052GreetingFlow:
         assert action.extra.get("chapter_intro") is True
 
     def test_chapter_intro_before_first_question(self):
-        """chapter_intro flag produces intro prompt, NOT a math question."""
+        """chapter_intro flag produces NCERT-style intro with tile analogy."""
         from app.tutor.instruction_builder import _build_teach_concept
         from app.tutor.state_machine import Action
         action = Action("teach_concept", student_text="accha tha",
@@ -286,11 +286,12 @@ class TestV1052GreetingFlow:
              "question_voice": "What is 5 squared?"}
         msgs = _build_teach_concept(action, ctx, q, None, None)
         user_msg = msgs[-1]["content"]
-        assert "introduction" in user_msg.lower() or "intro" in user_msg.lower()
-        assert "NOT ask a math question" in user_msg or "MAT poocho" in user_msg
+        assert "FIRST TIME" in user_msg
+        assert "tile" in user_msg.lower()
+        assert "Do NOT ask a math question" in user_msg
 
     def test_chapter_intro_hinglish(self):
-        """Chapter intro in Hinglish also doesn't ask question."""
+        """Chapter intro in Hinglish uses tile analogy content."""
         from app.tutor.instruction_builder import _build_teach_concept
         from app.tutor.state_machine import Action
         action = Action("teach_concept", student_text="haan",
@@ -300,7 +301,8 @@ class TestV1052GreetingFlow:
                "confusion_count": 0, "state": "TEACHING", "current_level": 2}
         msgs = _build_teach_concept(action, ctx, None, None, None)
         user_msg = msgs[-1]["content"]
-        assert "MAT poocho" in user_msg
+        assert "tiles" in user_msg.lower()
+        assert "3 times 3 equals 9" in user_msg
 
     def test_greeting_no_school_reference(self):
         """Greeting should say 'how was your day' not 'how was school'."""

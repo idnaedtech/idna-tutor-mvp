@@ -132,7 +132,7 @@ def test_fsm_ack_in_teaching_stays_during_chapter_intro():
 
 
 def test_fsm_ack_in_teaching_advances_after_chapter_intro():
-    """ACK in TEACHING at turn_1 (after chapter intro) goes to WAITING_ANSWER."""
+    """ACK in TEACHING at turn_1 (after chapter intro turn_0) goes to WAITING_ANSWER."""
     from app.tutor.state_machine import transition
     ctx = {"student_text": "samajh gaya", "teaching_turn": 1, "questions_attempted": 0}
     new_state, action = transition("TEACHING", "ACK", ctx)
