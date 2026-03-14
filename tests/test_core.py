@@ -362,8 +362,8 @@ class TestStateMachine:
         self.transition = transition
 
     def test_ack_in_teaching_transitions_to_waiting_answer(self):
-        """BUG 1: ACK in TEACHING should transition to WAITING_ANSWER."""
-        ctx = {"student_text": "ab samajh aaya", "teaching_turn": 0}
+        """BUG 1: ACK in TEACHING should transition to WAITING_ANSWER (after questions attempted)."""
+        ctx = {"student_text": "ab samajh aaya", "teaching_turn": 0, "questions_attempted": 1}
         new_state, action = self.transition("TEACHING", "ACK", ctx)
         assert new_state == "WAITING_ANSWER"
         assert action.action_type == "read_question"

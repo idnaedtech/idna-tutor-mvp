@@ -181,6 +181,13 @@ def transition(
             )
 
         if category == "ACK":
+            # v10.7.0: During chapter intro (questions_attempted == 0, teaching_turn <= 0),
+            # stay in TEACHING for turn_1 (assessment bridge) before first question
+            questions_attempted = ctx.get("questions_attempted", 0) or 0
+            if questions_attempted == 0 and teaching_turn <= 0:
+                return "TEACHING", Action(
+                    "teach_concept", teaching_turn=1, student_text=text,
+                )
             # v7.2.0: ACK in TEACHING → reset teaching_turn, transition to WAITING_ANSWER
             return "WAITING_ANSWER", Action(
                 "read_question", student_text=text,
