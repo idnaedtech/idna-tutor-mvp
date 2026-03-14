@@ -616,7 +616,7 @@ QUESTIONS = [
         "accept_patterns": ["nahi", "no", "nah", "galat", "false", "nahi ho sakta"],
         "common_mistakes": ["Student thinks 2048 is a square because 2^11 = 2048"],
         "target_skill": "square_units_digit",
-        "level": 3,
+        "level": 4,
     },
     {
         "id": "sq_e04",
@@ -634,7 +634,7 @@ QUESTIONS = [
         "accept_patterns": ["2032", "2048", "1027", "2032 2048 1027", "pehle teen"],
         "common_mistakes": ["Student includes 1089 (it IS a square: 33²)"],
         "target_skill": "square_units_digit",
-        "level": 3,
+        "level": 4,
     },
     {
         "id": "sq_e05",
@@ -652,7 +652,7 @@ QUESTIONS = [
         "accept_patterns": ["32", "battis", "thirty two"],
         "common_mistakes": ["Says 33 (forgets to subtract 1)", "Says 256 or 289"],
         "target_skill": "perfect_square_concept",
-        "level": 3,
+        "level": 4,
     },
     {
         "id": "sq_e06",
@@ -714,7 +714,7 @@ QUESTIONS = [
         "accept_patterns": ["21", "21 m", "21 meter", "ekkees", "twenty one"],
         "common_mistakes": ["Says 22 or 20 from guessing"],
         "target_skill": "sqrt_prime_factorisation",
-        "level": 5,
+        "level": 3,
     },
     {
         "id": "sq_m03",
@@ -732,7 +732,7 @@ QUESTIONS = [
         "accept_patterns": ["18", "haan 18", "yes 18", "athaara"],
         "common_mistakes": ["Gets factors wrong", "Says 16 or 20"],
         "target_skill": "sqrt_prime_factorisation",
-        "level": 5,
+        "level": 3,
     },
     {
         "id": "sq_m04",
@@ -789,7 +789,7 @@ QUESTIONS = [
         "accept_patterns": ["11", "11 cm", "gyarah", "eleven"],
         "common_mistakes": ["Says 12 (12²=144 > 125)", "Says 62 or 63 (divides by 2)"],
         "target_skill": "sqrt_estimation",
-        "level": 3,
+        "level": 5,
     },
 
     # ========================================
@@ -864,7 +864,7 @@ QUESTIONS = [
         "accept_patterns": ["90 91", "90 aur 91", "90 and 91"],
         "common_mistakes": ["Can't identify the n(n+1) pattern"],
         "target_skill": "square_odd_pattern",
-        "level": 5,
+        "level": 4,
     },
     {
         "id": "sq_h04",
@@ -1035,7 +1035,7 @@ QUESTIONS = [
         "accept_patterns": ["30", "tees", "thirty"],
         "common_mistakes": ["Says 300 (extra zero)", "Says 3000"],
         "target_skill": "cbrt_prime_factorisation",
-        "level": 3,
+        "level": 5,
     },
     {
         "id": "cb_m02",
@@ -1315,7 +1315,7 @@ QUESTIONS = [
             "add triangular", "triangular plus next triangular",
         ],
         "target_skill": "triangular_square_relation",
-        "level": 4,
+        "level": 5,
     },
     {
         "id": "cn_05",
@@ -1438,7 +1438,7 @@ QUESTIONS = [
         "accept_patterns": ["34 46 56 74", "34, 46, 56, 74"],
         "common_mistakes": ["Includes 38 or 82"],
         "target_skill": "square_units_digit",
-        "level": 5,
+        "level": 4,
     },
     {
         "id": "cb_e07",
@@ -1706,7 +1706,7 @@ QUESTIONS = [
         "hints": ["Kaunsa number khud se multiply karke 16 dega?"],
         "accept_patterns": ["haan", "yes", "ha", "true", "4 ka square"],
         "target_skill": "perfect_square_concept",
-        "level": 2,
+        "level": 4,
     },
     {
         "id": "sq_b04",
@@ -1749,7 +1749,7 @@ QUESTIONS = [
         ],
         "accept_patterns": ["nahi", "no", "nah", "false"],
         "target_skill": "perfect_square_concept",
-        "level": 2,
+        "level": 4,
     },
     {
         "id": "sq_b07",
