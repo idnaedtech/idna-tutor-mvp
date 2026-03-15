@@ -2,7 +2,7 @@
 
 > **Read by Claude Code at every session start (via CLAUDE.md protocol).**
 > **Updated by:** Claude Code (task status) + CEO (priorities/scope)
-> **Last updated:** 2026-03-15
+> **Last updated:** 2026-03-16
 
 ---
 
@@ -233,6 +233,29 @@
     - BUG 4 (MEDIUM): "What is square" classified IDK — concept question guard runs before FAST_IDK in both classifiers
     - BUG 5 (MEDIUM): Extended intro to 3 teaching turns (turn_0 intro, turn_1 intro, turn_2 CB teaching) before first question
     - 419 tests passing, verify.py 22/22
+  - [x] v10.8.0: Teaching quality overhaul (first pass) ✅ 2026-03-15
+    - Raised global limits: LLM_MAX_TOKENS 100→250, MAX_RESPONSE_WORDS 40→80, MAX_RESPONSE_SENTENCES 2→5
+    - DIDI_BASE rules updated: teaching 4-5 sentences, feedback 2-3 sentences
+    - Greeting strings: English fully English, Hindi fully Devanagari, Telugu fully Telugu script
+    - Classifier fix: question phrase guard before number word ANSWER fast-path ("How do you find cube root of 729" no longer classified as ANSWER)
+    - TTS limits raised: TEACHING 350→600, FULL_SOLUTION 200→400, HINT 200→300
+    - Removed redundant 500-char hardcoded TTS truncation (was shadowing state-dependent limits)
+    - 419 tests passing, verify.py 22/22
+  - [x] v10.7.1-cleanup: Delete dead worktree, rewrite stale references ✅ 2026-03-15
+    - Deleted .claude/worktrees/vigilant-gould (2.2MB dead v5 code)
+    - Deleted .claude/IDNA_SKILL_AUDIT.md (stale Feb audit)
+    - Rewrote teaching-flow.md, tts-pipeline.md, question-bank-format.md to v10.6.x
+    - Appended LANGUAGE_SWITCH, GARBLED, UNCLEAR, META_QUESTION, Fast-Path to classifier-phrases.md
+    - Fixed auto_review_gate.sh: 14 checks → 22 checks
+  - [x] v10.7.1: Teaching quality overhaul — remove all four brevity locks ✅ 2026-03-16
+    - Root cause: four independent systems enforced brevity (DIDI_BASE, config limits, enforcer, TTS chars). Raising one was always overridden by another.
+    - config.py: Split limits — MAX_TEACHING_WORDS=120/MAX_TEACHING_SENTENCES=6 for teaching, MAX_RESPONSE_WORDS=40/MAX_RESPONSE_SENTENCES=2 for hints/acks
+    - enforcer.py: State-aware `_check_length(text, is_teaching)` — teaching responses no longer truncated at 40 words
+    - student.py: `is_teaching` flag passed to enforcer in BOTH endpoints. TEACHING TTS raised to 800 chars. Non-streaming TTS now state-dependent (was flat 150).
+    - instruction_builder.py: DIDI_BASE rules 4-6 sentences for teaching, 1-2 for hints. All reteach prompts use step-by-step with real examples.
+    - _build_show_solution: step-by-step method working ("3 times 3 equals 9, then 9 times 3 equals 27"), not just the answer
+    - Hints, correct/incorrect ack, greeting, comfort all UNCHANGED (stay brief)
+    - 419 tests passing, verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
   - [x] Change 1: 24 new questions (10 L1 multiplication, 8 L2 basic squares, 6 L3 basic roots) + level field on all 74 questions
@@ -257,7 +280,7 @@
 - Student says "कौन सा चैप्टर" → gets direct chapter answer
 - Language stays English for ALL turns after switch (including nudges, including auto-detection)
 - Student says "मैं उदास हूं" → Didi acknowledges emotion FIRST
-- No response exceeds 3 sentences via TTS
+- TEACHING responses: 4-6 sentences with examples. HINTS/ACKS: max 2 sentences via TTS.
 
 ---
 
@@ -268,7 +291,7 @@
 - [ ] Class 7 content bank — 15 chapters
 - [ ] Telugu live test with real student
 - [ ] PWA manifest for Android "Add to Home Screen"
-- [ ] Warm-up conversation flow (2-turn warmup before teaching)
+- [x] Warm-up conversation flow (3-turn chapter intro before first question) ✅ v10.7.0
 - [ ] Structured questions with sub-step evaluation
 - [ ] P1 bug backlog (same-Q reload, HOMEWORK_HELP, Devanagari parser, empty TTS)
 
