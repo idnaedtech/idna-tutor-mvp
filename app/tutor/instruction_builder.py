@@ -538,13 +538,13 @@ def _build_read_question(a, ctx, q, sk, prev):
         nudge_lang = _lang(ctx, "Present in English.", "", "Present in Telugu (తెలుగు).")
         return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'Student hasn\'t answered. Question: "{q["question_voice"]}". {nudge_lang} Gently nudge them to try.'}]
     # v10.5.3: Post-comfort transition — acknowledge student's willingness before question
+    # v10.7.1 FIX: Keep ack to ONE short phrase so question doesn't get truncated by enforcer
     post_comfort_prefix = ""
     if a.extra.get("post_comfort"):
-        student_said = a.student_text or ""
         post_comfort_prefix = _lang(ctx,
-            f'Student said: "{student_said}" after being comforted. First warmly acknowledge: "Of course! I\'m here to help. Let\'s try together." Then read the question. ',
-            f'Student ne comfort ke baad kaha: "{student_said}". Pehle warmly acknowledge karo: "Haan bilkul! Main hoon na, saath mein seekhenge." Phir question padhao. ',
-            f'Student comfort తర్వాత చెప్పారు: "{student_said}". Telugu లో warmly acknowledge చేయండి: "అవును! నేను ఉన్నాను, కలిసి నేర్చుకుందాం." తర్వాత question చదవండి. ')
+            'Say "Of course, let\'s continue!" then smoothly read the question. ',
+            '"Haan bilkul, chalo aage!" bolke question padhao. ',
+            '"అవును, చాలు!" అని చెప్పి question చదవండి. ')
     d = "This is an easier question. " if a.extra.get("difficulty") == "easy" else ""
     ask_prompt = _lang(ctx,
         'End: "Tell me, what is the answer?"',

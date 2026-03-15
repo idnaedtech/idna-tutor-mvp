@@ -462,7 +462,7 @@ class TestV1053Fixes:
                         extra={"post_comfort": True, "question_first": True})
         msgs = build_prompt(action, ctx, question_data=q)
         user_msg = msgs[-1]["content"]
-        assert "acknowledge" in user_msg.lower() or "comfort" in user_msg.lower()
+        assert "continue" in user_msg.lower() or "acknowledge" in user_msg.lower() or "of course" in user_msg.lower()
 
     def test_post_comfort_acknowledgment_hindi(self):
         """Post-comfort Hindi response includes acknowledgment."""

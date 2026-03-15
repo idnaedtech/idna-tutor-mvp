@@ -997,7 +997,7 @@ async def process_message(
     didi_text = llm_result.text
 
     # ── Step 8: Enforce ──────────────────────────────────────────────────
-    _is_teaching = (state_before == "TEACHING" or action.action_type in ("teach_concept", "answer_meta_question"))
+    _is_teaching = (state_before == "TEACHING" or action.action_type in ("teach_concept", "answer_meta_question") or action.extra.get("post_comfort"))
     for attempt in range(MAX_ENFORCE_RETRIES):
         enforce_result = enforce(
             didi_text, new_state,
@@ -1758,7 +1758,7 @@ async def process_message_stream(
             display_text_raw = _re_aapne_poocha_dev.sub('', display_text_raw)
 
             # Enforce on display text (keeps digits for frontend)
-            _is_teaching_s = (state_before == "TEACHING" or action.action_type in ("teach_concept", "answer_meta_question"))
+            _is_teaching_s = (state_before == "TEACHING" or action.action_type in ("teach_concept", "answer_meta_question") or action.extra.get("post_comfort"))
             enforce_result = enforce(
                 display_text_raw, new_state,
                 verdict=verdict_str,
