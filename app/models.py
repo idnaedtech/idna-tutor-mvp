@@ -35,6 +35,7 @@ class Student(Base):
     pin: Mapped[str] = mapped_column(String(4), unique=True, index=True)
     class_level: Mapped[int] = mapped_column(Integer, default=8)
     preferred_language: Mapped[str] = mapped_column(String(10), default="hi-IN")
+    gender: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # 'male', 'female', or None
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 

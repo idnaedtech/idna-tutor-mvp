@@ -110,6 +110,21 @@ def run_migrations():
                 except Exception as e:
                     logger.warning(f"Migration: column '{col_name}' may already exist: {e}")
 
+    # v10.7.2: Students table migrations
+    if 'students' in inspector.get_table_names():
+        student_columns = {col['name'] for col in inspector.get_columns('students')}
+        student_migrations = {
+            'gender': "ALTER TABLE students ADD COLUMN gender VARCHAR(10)",
+        }
+        with engine.begin() as conn:
+            for col_name, sql in student_migrations.items():
+                if col_name not in student_columns:
+                    try:
+                        conn.execute(text(sql))
+                        logger.info(f"Migration: added column '{col_name}' to students table")
+                    except Exception as e:
+                        logger.warning(f"Migration: column '{col_name}' may already exist: {e}")
+
 
 def init_db():
     """Create all tables. Called once at startup."""

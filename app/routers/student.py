@@ -647,12 +647,10 @@ async def process_message(
 
     # Handle SILENCE without LLM — just give a gentle nudge
     if category == "SILENCE":
-        # P0 FIX: Nudge must respect language preference (was hardcoded Hindi)
+        # v10.7.2: Use friendlier idle prompt — "take your time" not "are you there?"
+        from app.tutor.strings import get_text
         pref = session.language_pref or "hinglish"
-        if pref == "english":
-            nudge = "Are you there? Feel free to ask any question."
-        else:
-            nudge = "Aap wahan ho? Koi sawaal hai toh puchiye."
+        nudge = get_text("idle_prompt", pref)
         return _quick_response(
             db, session, nudge,
             student_text="[silence]",
@@ -1447,7 +1445,9 @@ async def process_message_stream(
     # Handle silence without LLM
     if category == "SILENCE":
         pref = session.language_pref or "hinglish"
-        nudge = "Are you there? Feel free to ask any question." if pref == "english" else "Aap wahan ho? Koi sawaal hai toh puchiye."
+        # v10.7.2: Use friendlier idle prompt
+        from app.tutor.strings import get_text
+        nudge = get_text("idle_prompt", pref)
         tts = get_tts()
         tts_result = tts.synthesize(nudge, get_tts_language(session))
         audio_chunk = base64.b64encode(tts_result.audio_bytes).decode()

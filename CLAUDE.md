@@ -4,7 +4,7 @@
 > **Last updated:** 2026-03-15
 > **Repo:** github.com/idnaedtech/idna-tutor-mvp
 > **Live:** https://didi.idnaedtech.com
-> **Current version:** v10.7.0
+> **Current version:** v10.7.2
 > **Can be modified by CEO only.**
 
 ---
@@ -106,22 +106,22 @@ These rules are absolute. Violating any of them is a blocking error.
 ```
 app/
 ├── routers/
-│   ├── student.py              # 2,028 lines. Main router, both endpoints, session mgmt.
+│   ├── student.py              # 2,050 lines. Main router, both endpoints, session mgmt.
 │   │                           # THIS IS THE MAIN ORCHESTRATOR.
 │   ├── auth.py                 # Login/PIN authentication
 │   └── review.py               # Session review API (/review?key=idna2026)
 ├── tutor/
-│   ├── instruction_builder.py  # 923 lines. V10 ACTIVE BRAIN — builds ALL LLM prompts.
+│   ├── instruction_builder.py  # 975 lines. V10 ACTIVE BRAIN — builds ALL LLM prompts.
 │   │                           # V10: DIDI_BASE persona, LANG_INSTRUCTIONS dict,
 │   │                           # _lang() helper for Telugu (48 uses).
 │   ├── strings.py              # 88 lines. Centralized multilingual strings (4 languages).
 │   ├── instruction_builder_v9.py # DEAD CODE — kept for reference only.
-│   ├── state_machine.py        # 447 lines. v7.3 FSM — produces Action objects. ACTIVE.
+│   ├── state_machine.py        # 453 lines. v7.3 FSM — produces Action objects. ACTIVE.
 │   │                           # States: GREETING, TEACHING, WAITING_ANSWER, HINT_1,
 │   │                           # HINT_2, FULL_SOLUTION, NEXT_QUESTION, SESSION_COMPLETE.
-│   ├── preprocessing.py        # 494 lines. Meta-question, language switch, confusion,
+│   ├── preprocessing.py        # 502 lines. Meta-question, language switch, confusion,
 │   │                           # Telugu detection, language auto-detection.
-│   ├── input_classifier.py     # 407 lines. GPT-4.1-mini classifier. 10 categories.
+│   ├── input_classifier.py     # 464 lines. GPT-4.1-mini classifier. 10 categories.
 │   ├── enforcer.py             # 452 lines. Output safety — length, praise, repetition.
 │   ├── answer_checker.py       # 600 lines. Deterministic regex math checker (FALLBACK).
 │   ├── answer_evaluator.py     # 183 lines. LLM-based answer eval (PRIMARY). Inline eval.
@@ -142,7 +142,7 @@ app/
 │   └── tts_precache.py         # 210 lines. TTS caching in PostgreSQL.
 ├── content/
 │   ├── seed_questions.py       # 323 lines. Merges ch1 + 10 rational number Qs (inactive).
-│   ├── ch1_square_and_cube.py  # 2,373 lines. 84 questions (74 active), 20 skills.
+│   ├── ch1_square_and_cube.py  # 2,449 lines. 84 questions (74 active), 20 skills.
 │   │                           # 5 levels: L1:10, L2:9, L3:14, L4:22, L5:19.
 │   └── curriculum.py           # 144 lines. Concept/ChapterGraph models.
 ├── models.py                   # 265 lines. ORM models (Question, Student, Session, etc.)
@@ -162,17 +162,18 @@ web/
 
 tests/
 ├── test_core.py                # 101 tests — answer checking, fractions
-├── test_preprocessing.py       # 84 tests — meta-Q, language, confusion
+├── test_preprocessing.py       # 89 tests — meta-Q, language, confusion
 ├── test_v10_persona.py         # 75 tests — persona, strings, warm identity
-├── test_integration.py         # 37 tests — FSM transitions, language
+├── test_integration.py         # 39 tests — FSM transitions, language
 ├── test_p0_language_persistence.py  # 21 tests — language detection, TTS
 ├── test_v750_features.py       # 20 tests — sentence splitter, enforcer
 ├── test_p0_teaching_flow.py    # 20 tests — teaching flow, level system
+├── test_chapter_intro.py         # 14 tests — chapter introduction (v10.7.0)
 ├── test_ch1_square_cube.py     # 12 tests — question bank validation
 ├── test_p0_regression.py       # 12 tests — P0 regression
 ├── test_content_bank.py        # 11 tests — content bank loader
 └── test_p1_fixes.py            # 5 tests — question picking, memory
-    # Total: 398 tests across 11 files. ALL must pass before any commit.
+    # Total: 419 tests across 12 files. ALL must pass before any commit.
 
 alembic/                        # Database migrations
 ```
@@ -277,7 +278,7 @@ If you cannot do all 5, you don't understand the code well enough. Read more fir
 ### Prove It Works
 
 No change is "done" without:
-1. All 398 tests passing (paste output)
+1. All 419 tests passing (paste output)
 2. For server changes: curl output showing correct behavior
 3. For production: `curl /health` showing correct version
 4. For instruction_builder changes: verify `LANGUAGE:` appears in build_prompt output (V10 format)
@@ -321,6 +322,36 @@ FULL_SOLUTION + any input → NEXT_QUESTION (ALWAYS advance, never loop back)
 ```
 
 **FULL_SOLUTION is terminal for that question.** After showing solution, move on.
+
+### Chapter Introduction (v10.7.0)
+
+When `questions_attempted == 0`, TEACHING uses CHAPTER_INTRO content:
+- **turn_0:** NCERT tile analogy ("3 rows of 3 tiles = 9, a square!")
+- **turn_1:** Square root + assessment bridge ("Let's see what you know")
+- First question prefers square-type via `prefer_square_first=True` (not cube)
+- Content in `ch1_square_and_cube.py` CHAPTER_INTRO dict (4 languages: hinglish, english, hindi, telugu)
+- No new FSM state — content-driven logic, not state-driven
+
+### Teaching Quality (v10.7.1)
+
+Four brevity locks removed simultaneously — ALL FOUR must change together:
+- **config.py:** `MAX_TEACHING_WORDS=120`, `MAX_TEACHING_SENTENCES=6` (hints stay 40/2)
+- **enforcer.py:** `is_teaching` parameter — teaching responses not truncated at 40 words
+- **student.py:** TEACHING TTS raised to 800 chars (hints stay 300), `is_teaching` flag passed to enforcer
+- **instruction_builder.py:** DIDI_BASE says 4-6 sentences for teaching, 1-2 for hints
+- **Railway env:** `LLM_MAX_TOKENS=250` (was 100)
+
+### Gender-Aware Greetings (v10.7.2)
+
+- Student model has `gender` field ('M' or 'F')
+- Greeting: "Kaise ho" for boys, "Kaisi ho" for girls
+- Debug output hidden behind `?debug=true` URL param
+
+### Code Freeze (Active)
+
+No code changes until pilot students have used Didi for 2+ days. Only allowed:
+- Updating PILOT_STUDENTS names (data only)
+- Emergency crash fixes
 
 ---
 
@@ -584,6 +615,8 @@ If you catch yourself doing any of these, stop immediately:
 25. **Setting inline eval state to HINT_1 blindly** — must check `current_hint_level` and set HINT_1/HINT_2/FULL_SOLUTION accordingly. Blind HINT_1 causes death spiral where FULL_SOLUTION loops back.
 26. **Missing solution AND explanation fields on questions** — fallback generates "Solution not available" text that reaches the student. Auto-generate from answer + hints when both fields are empty.
 27. **Letting LLM rephrase question text** — GPT-4.1 may change "square of 8" to "square of 4". Use `question_en` field verbatim when possible.
+28. **Changing only one brevity lock** — config.py, enforcer.py, student.py TTS limits, and instruction_builder.py prompts ALL enforce length. Changing one gets overridden by the other three. Always change all four together.
+29. **Missing meta-question keywords** — `_build_answer_meta_question()` checks keywords in student text. Missing "ncert", "textbook", "book", "kitab", Telugu equivalents → falls to `meta_type=="more_examples"` → gives laddoo examples instead of answering. Add keywords for every language when adding support.
 
 ---
 

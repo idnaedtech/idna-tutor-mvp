@@ -150,20 +150,10 @@ def test_fsm_ack_in_teaching_stays_during_chapter_intro():
     assert action.teaching_turn == 1
 
 
-def test_fsm_ack_turn1_stays_in_teaching():
-    """ACK at turn_1 stays in TEACHING for content bank explanation."""
+def test_fsm_ack_turn1_advances_to_waiting_answer():
+    """ACK at turn_1 advances to WAITING_ANSWER (v10.7.2: max 2 teaching turns)."""
     from app.tutor.state_machine import transition
     ctx = {"student_text": "samajh gaya", "teaching_turn": 1, "questions_attempted": 0}
-    new_state, action = transition("TEACHING", "ACK", ctx)
-    assert new_state == "TEACHING", f"Expected TEACHING, got {new_state}"
-    assert action.action_type == "teach_concept"
-    assert action.teaching_turn == 2
-
-
-def test_fsm_ack_turn2_advances_to_waiting_answer():
-    """ACK at turn_2 (after intro + CB teaching) goes to WAITING_ANSWER."""
-    from app.tutor.state_machine import transition
-    ctx = {"student_text": "samajh gaya", "teaching_turn": 2, "questions_attempted": 0}
     new_state, action = transition("TEACHING", "ACK", ctx)
     assert new_state == "WAITING_ANSWER", f"Expected WAITING_ANSWER, got {new_state}"
     assert action.action_type == "read_question"

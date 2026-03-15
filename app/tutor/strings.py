@@ -10,8 +10,8 @@ STRINGS = {
     # ── Session Start ──────────────────────────────────────────────
     "warmup_greeting": {
         "english": "Hello {name}! Welcome! How are you doing today? How was your day?",
-        "hindi": "नमस्ते {name}! कैसी हो आज? आज का दिन कैसा रहा?",
-        "hinglish": "Hey {name}! कैसी हो आज? आज का दिन कैसा रहा?",
+        "hindi": "नमस्ते {name}! कैसे हो आज? आज का दिन कैसा रहा?",
+        "hinglish": "Hey {name}! कैसे हो आज? आज का दिन कैसा रहा?",
         "telugu": "హలో {name}! ఎలా ఉన్నావు? ఈ రోజు ఎలా జరిగింది?",
     },
     "warmup_transition": {

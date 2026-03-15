@@ -507,6 +507,8 @@
     const API = window.location.origin;
     const token = localStorage.getItem('idna_token');
     const studentName = localStorage.getItem('idna_name') || 'Student';
+    // v10.7.2: Debug output hidden unless ?debug=true in URL
+    const debugMode = new URLSearchParams(window.location.search).get('debug') === 'true';
 
     if (!token) window.location.href = '/';
 
@@ -1391,8 +1393,8 @@
                      now.getMinutes().toString().padStart(2,'0');
         html += `<div class="timestamp">${time}</div>`;
 
-        // v10.3.0: Debug line for Didi messages (temporary)
-        if (who === 'didi' && debugInfo) {
+        // v10.3.0: Debug line for Didi messages (hidden unless ?debug=true)
+        if (who === 'didi' && debugInfo && debugMode) {
             const cls = debugInfo.classifier || '?';
             const vrd = debugInfo.verdict || 'none';
             const sb = debugInfo.state_before || '?';
