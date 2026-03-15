@@ -839,7 +839,15 @@ async def process_message(
     # ── Step 5: Pick next question (if needed) ────────────────────────────
     question_data = None
     if action.action_type in ("read_question", "pick_next_question"):
-        if session.current_question_id and action.action_type != "pick_next_question":
+        # v10.7.1: Student asked for easier question after comfort — level down and pick new
+        if action.extra.get("wants_easier") and session.current_level and session.current_level > 1:
+            session.current_level = max(1, session.current_level - 1)
+            session.consecutive_wrong = 0
+            session.consecutive_correct = 0
+            db.commit()
+            logger.info(f"WANTS_EASIER: level down to {session.current_level}")
+        _pick_new = action.extra.get("wants_easier") or action.action_type == "pick_next_question"
+        if session.current_question_id and not _pick_new:
             # Re-read current question
             question_data = _load_question(db, session.current_question_id)
         else:
@@ -1563,7 +1571,15 @@ async def process_message_stream(
     # v7.3.26: Pick next question (if needed) — for non-eval actions
     if not _use_inline_eval:
         if action.action_type in ("read_question", "pick_next_question"):
-            if session.current_question_id and action.action_type != "pick_next_question":
+            # v10.7.1: Student asked for easier question after comfort — level down and pick new
+            if action.extra.get("wants_easier") and session.current_level and session.current_level > 1:
+                session.current_level = max(1, session.current_level - 1)
+                session.consecutive_wrong = 0
+                session.consecutive_correct = 0
+                await run_in_threadpool(lambda: db.commit())
+                logger.info(f"WANTS_EASIER (stream): level down to {session.current_level}")
+            _pick_new_s = action.extra.get("wants_easier") or action.action_type == "pick_next_question"
+            if session.current_question_id and not _pick_new_s:
                 # Re-read current question
                 question_data = _load_question(db, session.current_question_id)
             else:

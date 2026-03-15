@@ -396,9 +396,14 @@ def transition(
         ])
 
         if category == "ACK" or learning_intent:
-            # v10.1: Go to question-first mode (skip teaching monologue)
+            # v10.7.1: Detect if student wants an easier question
+            wants_easier = any(w in student_lower for w in [
+                "simple", "simpler", "easy", "easier", "aasan", "aasaan",
+                "आसान", "सरल", "chhota", "छोटा",
+            ])
             return "WAITING_ANSWER", Action("read_question", student_text=text,
-                extra={"post_comfort": True, "question_first": True})
+                extra={"post_comfort": True, "question_first": True,
+                       "wants_easier": wants_easier})
         if category == "STOP":
             return "SESSION_COMPLETE", Action("end_session", student_text=text)
         # Still upset — pass comfort_count to builder
