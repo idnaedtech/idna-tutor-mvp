@@ -259,6 +259,7 @@
   - [x] v10.7.1: Fix 2 smoke test bugs ✅ 2026-03-16
     - BUG 1 (HIGH): Post-comfort ACK → "Of course. I'm here to help." but NO question read. Enforcer 2-sentence limit truncated question after warm ack. Fix: tighter prompt ("Of course, let's continue!" one phrase) + post_comfort flagged as is_teaching in both endpoints.
     - BUG 2 (HIGH): "Is it from NCERT textbook?" asked 3x → got laddoo examples each time. No ncert/textbook/book/kitab keywords in meta-question check, AND meta_type=="more_examples" catch-all swallowed all unrecognized meta questions. Fix: added 8 keywords (ncert, textbook, book, kitab, किताब, पुस्तक, syllabus) + removed catch-all. Chapter response now confirms NCERT.
+    - BUG 3 (HIGH): Student stuck on hard question after comfort. Got 4 correct → leveled to L5 → cb_m03 (cube root 1331) too hard → asked "simpler question" 3x → same question each time. Root cause: COMFORT+ACK re-reads current question, no mechanism to level down. Fix: detect "simple/easier/aasan" keywords in COMFORT exit → level down (current_level -= 1), reset streaks, pick NEW easier question. Both endpoints.
     - 419 tests passing, verify.py 22/22
   - [ ] Contact Sarvam to enable WebSocket streaming access, or evaluate alternative TTS providers
 - [x] v10.4.0 5-Level Teaching Scaffold ✅ 2026-03-11
