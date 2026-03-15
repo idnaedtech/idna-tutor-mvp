@@ -445,9 +445,9 @@ class TestEnforcer:
         assert not r.passed or "FALSE_PRAISE" in r.violations or "shabash" not in r.text.lower()
 
     def test_catches_long_response(self):
-        long_text = " ".join(["word"] * 70)
+        long_text = " ".join(["word"] * 100)
         r = self.enforce(long_text, "TEACHING")
-        assert len(r.text.split()) <= 55
+        assert len(r.text.split()) <= 80
 
     def test_catches_repetition(self):
         prev = "Chalo agle question pe chalte hain."

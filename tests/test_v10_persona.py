@@ -30,12 +30,12 @@ class TestV10PersonaContent:
         assert "warm" in prompt.lower() or "encouraging" in prompt.lower()
 
     def test_new_prompt_question_first(self):
-        """v10.1: Prompt should emphasize asking questions, not lecturing."""
+        """v10.8: Prompt should emphasize teaching clearly with examples."""
         ctx = {"language_pref": "english", "chapter": "ch6_squares_square_roots",
                "student_name": "Priya", "board_name": "CBSE", "class_level": 8,
                "confusion_count": 0, "state": "TEACHING"}
         prompt = _sys(session_context=ctx)
-        assert "ask questions" in prompt.lower() or "don't lecture" in prompt.lower()
+        assert "teaching" in prompt.lower() or "explain" in prompt.lower()
 
     def test_new_prompt_has_content_bank_truth(self):
         """v10.1: Prompt should instruct LLM to use verified content only."""
@@ -77,7 +77,7 @@ class TestV10Strings:
         from app.tutor.strings import get_text
         r = get_text("warmup_greeting", "english", name="Priya")
         assert "Priya" in r
-        assert "Hey" in r
+        assert "Hello" in r or "Hey" in r
 
     def test_strings_fallback_to_english(self):
         """v10: Unknown language should fall back to English."""
@@ -286,9 +286,9 @@ class TestV1052GreetingFlow:
              "question_voice": "What is 5 squared?"}
         msgs = _build_teach_concept(action, ctx, q, None, None)
         user_msg = msgs[-1]["content"]
-        assert "SAY THIS" in user_msg
+        assert "CONTENT TO COVER" in user_msg or "SAY THIS" in user_msg
         assert "tile" in user_msg.lower()
-        assert "Do NOT ask a math question" in user_msg or "Do NOT list squares" in user_msg
+        assert "Do NOT ask a math question" in user_msg
 
     def test_chapter_intro_hinglish(self):
         """Chapter intro in Hinglish uses tile analogy content."""

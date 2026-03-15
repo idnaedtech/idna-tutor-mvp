@@ -259,25 +259,37 @@ async def classify(
     # ─── Fast Path: obvious answers in answer-expecting states ─────────────────
     # v10.2.0 Fix 1a: Expanded from WAITING_ANSWER to include HINT states
     if current_state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION"):
-        # Contains digits → likely an answer
-        if re.search(r'\d', text):
+        # v10.8.0: Question phrase guard — "how do you", "what do you", "can you"
+        # must NOT be classified as ANSWER even though they contain number words like "do"
+        _question_phrases = [
+            "how do", "how can", "how to", "what do", "what does", "what is",
+            "can you", "could you", "will you", "would you", "tell me",
+            "kaise", "kya hai", "बताओ", "कैसे", "ক্যারে",
+        ]
+        text_lower = text.lower()
+        is_question = any(p in text_lower for p in _question_phrases)
+
+        # Contains digits → likely an answer (unless it's a question)
+        if not is_question and re.search(r'\d', text):
             return {"category": "ANSWER", "confidence": 0.95, "extras": {"raw_answer": text}}
 
         # v10.2.0 Fix 1b: Catch number words as answers (e.g., "eight", "false", "nahi")
-        number_words = {
-            "one", "two", "three", "four", "five", "six", "seven",
-            "eight", "nine", "ten", "eleven", "twelve", "thirteen",
-            "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-            "nineteen", "twenty", "thirty", "forty", "fifty",
-            "sixty", "seventy", "eighty", "ninety", "hundred",
-            "true", "false", "yes", "no", "sahi", "galat",
-            "haan", "nahi", "wrong", "right", "correct",
-            "ek", "do", "teen", "char", "paanch", "chhe", "saat",
-            "aath", "nau", "das",
-        }
-        text_words = set(normalized.split())
-        if text_words.intersection(number_words):
-            return {"category": "ANSWER", "confidence": 0.90, "extras": {"raw_answer": text}}
+        # v10.8.0: Skip if the input is a question phrase
+        if not is_question:
+            number_words = {
+                "one", "two", "three", "four", "five", "six", "seven",
+                "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+                "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+                "nineteen", "twenty", "thirty", "forty", "fifty",
+                "sixty", "seventy", "eighty", "ninety", "hundred",
+                "true", "false", "yes", "no", "sahi", "galat",
+                "haan", "nahi", "wrong", "right", "correct",
+                "ek", "do", "teen", "char", "paanch", "chhe", "saat",
+                "aath", "nau", "das",
+            }
+            text_words = set(normalized.split())
+            if text_words.intersection(number_words):
+                return {"category": "ANSWER", "confidence": 0.90, "extras": {"raw_answer": text}}
 
     # ─── LLM Classification ───────────────────────────────────────────────────
     if client is None:
@@ -388,8 +400,10 @@ def classify_student_input(
             return "ACK"
 
     # For backward compatibility, check for obvious answers in WAITING_ANSWER
+    # v10.8.0: Question phrase guard — "how do you" should not be ANSWER
     if current_state == "WAITING_ANSWER":
-        if re.search(r'\d', text):
+        _q_phrases = ["how do", "how can", "how to", "what do", "can you", "tell me", "kaise", "कैसे"]
+        if not any(p in text.lower() for p in _q_phrases) and re.search(r'\d', text):
             return "ANSWER"
 
     # Cannot classify without LLM - return UNCLEAR

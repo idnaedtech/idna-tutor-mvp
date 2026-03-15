@@ -1691,14 +1691,16 @@ async def process_message_stream(
             tts_lang = _tts_language  # Pre-loaded — avoids DetachedInstanceError
             tts_inst = get_tts()
 
-            # v10.5.2: State-dependent TTS char limits
-            # TEACHING needs room to explain, GREETING should be short
+            # v10.8.0: State-dependent TTS char limits
+            # TEACHING needs room to explain concepts properly (4-5 sentences)
             if state_before == "TEACHING":
-                MAX_TTS_CHARS = 350
-            elif state_before in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION"):
-                MAX_TTS_CHARS = 200
+                MAX_TTS_CHARS = 600
+            elif state_before == "FULL_SOLUTION":
+                MAX_TTS_CHARS = 400
+            elif state_before in ("WAITING_ANSWER", "HINT_1", "HINT_2"):
+                MAX_TTS_CHARS = 300
             else:
-                MAX_TTS_CHARS = 150
+                MAX_TTS_CHARS = 200
 
             async for sentence in llm.generate_streaming(messages):
                 display_text_raw += " " + sentence
@@ -1768,12 +1770,7 @@ async def process_message_stream(
             final_tts_text = clean_for_tts(display_text_final)
             if _session_language_for_tts == 'english':
                 final_tts_text = digits_to_english_words(final_tts_text)
-            # Apply 500 char TTS truncation (same logic as prepare_for_tts)
-            if len(final_tts_text) > 500:
-                _trunc = final_tts_text[:500]
-                _last_p = max(_trunc.rfind('. '), _trunc.rfind('। '), _trunc.rfind('? '), _trunc.rfind('! '))
-                if _last_p > 250:
-                    final_tts_text = _trunc[:_last_p + 1].strip()
+            # v10.8.0: Single state-dependent TTS truncation (removed redundant 500-char block)
             if len(final_tts_text) > MAX_TTS_CHARS:
                 trunc = final_tts_text[:MAX_TTS_CHARS]
                 last_end = max(

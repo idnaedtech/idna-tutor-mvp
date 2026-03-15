@@ -119,7 +119,7 @@ VARIED_FALLBACKS_EN = {
 # ─── Enforcement Rules ───────────────────────────────────────────────────────
 
 def _check_length(text: str) -> tuple[bool, str]:
-    """Rule 1: Max 55 words, max 2 sentences."""
+    """Rule 1: Max words and sentences (config: MAX_RESPONSE_WORDS, MAX_RESPONSE_SENTENCES)."""
     words = text.split()
     sentences = re.split(r'[.!?।]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]

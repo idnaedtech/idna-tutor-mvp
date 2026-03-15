@@ -76,7 +76,7 @@ STT_DEFAULT_LANGUAGE = "unknown"
 # ─── LLM Settings ────────────────────────────────────────────────────────────
 # Didi tutor LLM - gpt-4.1-mini for better instruction following
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1-mini")
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "100"))
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "250"))
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 
 # ─── Session Settings ────────────────────────────────────────────────────────
@@ -87,8 +87,8 @@ SILENCE_TIMEOUT_SECONDS = 15
 MAX_HINT_LEVELS = 3  # hint_1 → hint_2 → full_solution
 
 # ─── Response Enforcer Limits ────────────────────────────────────────────────
-MAX_RESPONSE_WORDS = 40  # Reduced from 55 for faster TTS
-MAX_RESPONSE_SENTENCES = 2
+MAX_RESPONSE_WORDS = 80  # Increased from 40 — teaching needs room to explain
+MAX_RESPONSE_SENTENCES = 5  # Increased from 2 — teaching needs 4-5 sentences
 MAX_ENFORCE_RETRIES = 3  # Re-prompt LLM this many times before falling back
 
 # ─── Answer Checker ──────────────────────────────────────────────────────────
