@@ -1,54 +1,61 @@
-# Question Bank — Format & Schema
+# Question Bank — v10.6.x Format
 
-## Question JSON Schema
+## Current Chapter: ch1_square_and_cube.py (Squares, Cubes & Roots)
+
+84 questions total, 74 active. 5 levels: L1:10, L2:9, L3:14, L4:22, L5:19.
+
+## Question Schema
 
 ```python
 {
-    "id": str,                    # Unique ID: "rat_add_1", "rat_mul_3"
-    "chapter": str,               # "ch1_rational_numbers"
-    "type": str,                  # Question type (see types below)
-    "question": str,              # The question text (read by Didi)
-    "answer": str,                # Correct answer (exact)
-    "simplified_answer": str,     # Simplified form (optional)
-    "hints": list[str],           # Progressive hints (1st attempt, 2nd attempt)
-    "target_skill": str,          # Maps to SKILL_LESSONS key
-    "pre_teach": str,             # Concept explanation before question (optional)
-    "difficulty": int,            # 1-3 (easy/medium/hard)
+    "id": str,                  # e.g., "sq_b02", "cb_e01", "mult_05"
+    "chapter": str,             # "ch1_square_and_cube"
+    "type": str,                # "compute", "identify", "cube_root", etc.
+    "difficulty": str,          # "easy", "medium", "hard"
+    "question": str,            # Hindi/Hinglish question text
+    "question_en": str,         # English question text
+    "answer": str,              # Correct answer (exact)
+    "hints": list[str],         # Progressive hints [hint1, hint2]
+    "accept_patterns": list[str],  # Alternate accepted answers ["8", "aath", "eight"]
+    "common_mistakes": list[str],  # Known wrong answers for feedback
+    "target_skill": str,        # Maps to SKILL_TEACHING key
+    "level": int,               # 1-5 (see 5-Level System)
+    "explanation": str,         # Optional — step-by-step solution text
+    "solution": str,            # Optional — brief solution
+    "active": bool,             # True = served to students, False = hidden
 }
 ```
 
-## Question Types
+## Level Rules
 
-| Type | SubStepTracker Steps | Example |
-|------|---------------------|---------|
-| `fraction_add_same_denom` | Add numerators → Keep denominator → Simplify | -3/7 + 2/7 |
-| `fraction_add_diff_denom` | Find LCM → Convert → Add → Simplify | 1/3 + 1/4 |
-| `fraction_subtract` | Same as add (with subtraction) | 5/6 - 1/6 |
-| `fraction_multiply` | Multiply numerators → Multiply denominators → Combine → Simplify | 2/3 × -3/4 |
-| `fraction_divide` | Flip divisor → Multiply → Simplify | 2/3 ÷ 4/5 |
-| `additive_inverse` | Identify number → Change sign | Additive inverse of 5/8 |
-| `multiplicative_inverse` | Flip numerator/denominator | Multiplicative inverse of -3/7 |
-| `property_identify` | Single step — identify property | Is addition commutative for rationals? |
+| Level | Question Type | ID Prefix |
+|-------|--------------|-----------|
+| L1 | Multiplication recall ("What is 3 times 3?") | mult_ |
+| L2 | Square/cube compute ("What is 5²?") | sq_b, cb_b |
+| L3 | Root finding ("What is √49?", "What is ∛512?") | sq_e, cb_e, rt_ |
+| L4 | Patterns ("Is 50 a perfect square?", "Can a square end in 7?") | sq_h, cb_m |
+| L5 | Application (word problems, prime factorisation) | sq_m, sq_a |
 
-## SKILL_LESSONS Dict
+## Question Picker (memory.py)
 
-Maps `target_skill` → teaching text used for reteaching:
-
-```python
-SKILL_LESSONS = {
-    "addition_same_denom": "When denominators are same, just add numerators. Denominator stays.",
-    "addition_diff_denom": "Find LCM of denominators, convert both fractions, then add.",
-    "subtraction": "Same as addition, but subtract numerators instead.",
-    "multiplication": "Multiply numerator × numerator, denominator × denominator. Simplify.",
-    "division": "Flip the second fraction (reciprocal), then multiply.",
-    "additive_inverse": "The number you add to get zero. Just change the sign.",
-    "multiplicative_inverse": "The number you multiply to get 1. Flip the fraction.",
-}
+```
+pick_next_question(db, student_id, subject, chapter, asked_ids, current_level)
+  1. WHERE level = current_level AND id NOT IN asked_ids
+  2. If exhausted → reuse same-level (excluding current)
+  3. If empty → try adjacent levels (up first, then down)
+  4. prefer_square_first=True on first question (matches chapter intro)
 ```
 
 ## Adding New Questions
 
-1. Add to `questions.py` following the schema above
-2. If new `target_skill`, add entry to `SKILL_LESSONS`
-3. If new `type`, add to `SubStepTracker.init_for_question()`
-4. Run tests: `python -m pytest tests/test_answer_checker.py -v`
+1. Add to QUESTIONS list in ch1_square_and_cube.py following schema above
+2. Include: id, question, question_en, answer, hints, accept_patterns, level, target_skill
+3. Run startup — _upsert_questions() syncs to DB automatically
+4. Verify: /health/detail shows updated counts per level
+5. Run: python -m pytest tests/test_ch1_square_cube.py -v
+
+## Known Gaps (29 of 74 questions)
+
+29 questions have no solution or explanation field. v10.6.7 auto-generates
+from answer + last hint when these fields are missing. Long-term fix:
+add solution/explanation to all questions.

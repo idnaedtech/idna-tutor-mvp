@@ -1,78 +1,64 @@
-# TTS Pipeline — Architecture Reference (v6.2.4)
+# TTS Pipeline — v10.6.x Reference
 
 ## Current Pipeline
 
 ```
-Student speaks
-  → Groq Whisper STT (~300ms, language="hi")
+Student speaks into browser mic
+  → Frontend sends audio to /api/student/session/message-stream
+  → Sarvam Saarika v2.5 STT (~300ms)
   → Confidence check (threshold 0.4)
-  → [if low confidence: "Ek baar phir boliye?" → re-listen]
-  → Input Classifier
-  → State Machine → Instruction Builder
-  → GPT-4o (~800-1200ms)
-  → clean_for_tts()
-  → Sarvam TTS (single API call, full text)
-  → Audio plays in browser
+  → Preprocessing (meta-question, language switch, confusion, Telugu detection)
+  → Input Classifier (GPT-4.1-mini, fast-path 0ms or LLM 500-1800ms)
+  → v7.3 FSM transition → Action object
+  → Instruction builder → build_prompt()
+  → GPT-4.1 streaming (500-4200ms)
+  → Enforcer checks (length, praise, language)
+  → clean_for_tts() → math symbols to words
+  → Sarvam Bulbul v3 TTS (3000-7000ms)
+  → SSE stream to frontend → audio plays
 ```
 
-## Latency Breakdown
+## Latency Breakdown (Production, March 2026)
 
-| Step | Before v6.2.4 | After v6.2.4 |
-|------|--------------|-------------|
-| STT | ~500ms (OpenAI) | ~300ms (Groq) |
-| LLM | ~1200ms | ~1200ms (unchanged) |
-| TTS | ~800ms (full text) | ~800ms (single call) |
-| **Total to first audio** | **~2500ms** | **~2300ms** |
+| Step | Latency | Notes |
+|------|---------|-------|
+| STT | ~300ms | Sarvam Saarika v2.5 |
+| Classifier | 0-1800ms | Fast-path 0-3ms, LLM 500-1800ms |
+| Answer eval | 0-2000ms | Only on ANSWER category (inline eval) |
+| LLM response | 500-4200ms | GPT-4.1 streaming |
+| TTS | 3000-7000ms | **THE BOTTLENECK** (65-88% of total) |
+| **Total** | **5000-14000ms** | |
 
-Note: Sentence-level chunking was removed in v6.2.4 because concatenating
-multiple MP3 files produces invalid audio that browsers can't play. The single
-Sarvam call handles long text (up to 2500 chars) and returns one valid MP3.
-
-## Sarvam Bulbul v3 Config
+## Sarvam Config
 
 ```python
-SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"
-SARVAM_SPEAKER = "simran"       # v6.2 change — DO NOT CHANGE without approval
-SARVAM_LANGUAGE = "hi-IN"       # DO NOT CHANGE
-SARVAM_MODEL = "bulbul:v3"
-SARVAM_PACE = 0.90              # Tunable: 0.85-1.0
-SARVAM_TEMPERATURE = 0.7        # Tunable: 0.5-0.9
+STT: Sarvam Saarika v2.5 (not Groq Whisper — changed in v10.x)
+TTS: Sarvam Bulbul v3
+  Speaker: simran          # NEVER CHANGE
+  Language: hi-IN          # Default (te-IN for Telugu)
+  Pace: 0.90
+  Temperature: 0.7
 ```
 
-No OpenAI TTS fallback. No Google Cloud TTS. One voice, always.
+## TTS Char Limits (State-Dependent)
+
+| State | Max TTS Chars | Rationale |
+|-------|--------------|-----------|
+| TEACHING | 350 | Needs room to explain |
+| HINT / WAITING_ANSWER / FULL_SOLUTION | 200 | Hints stay brief |
+| GREETING / other | 150 | Keep greetings short |
 
 ## clean_for_tts() Rules
 
-| Input | Output |
-|-------|--------|
-| `-3/7` | `minus 3 by 7` |
-| `2/3` | `2 by 3` |
-| ` + ` | ` plus ` |
-| ` - ` | ` minus ` |
-| ` × ` | ` multiplied by ` |
-| ` = ` | ` equals ` |
-| `**bold**` | `bold` (strip markdown) |
+- Dashes → commas: `" - "` → `", "`
+- Fractions: `-3/7` → `minus 3 by 7`
+- Operators: `+` → plus, `-` → minus, `×` → multiplied by, `=` → equals
+- Strip markdown formatting
+- Strip "You asked" / "Aapne poocha" / "आपने पूछा" framing (v10.6.7)
+- Em dash and long dash also replaced (v10.6.5)
 
-## Text Length Limit
+## TTS Latency — Known Blocker
 
-Sarvam v3 REST API handles up to 2500 chars. The `sarvam_tts()` function
-truncates at 2000 chars (at sentence boundary) as a safety margin.
-If text exceeds limit, it retries with first 500 chars.
+Sarvam REST API takes 3-7s per call. WebSocket streaming (`wss://api.sarvam.ai/text-to-speech/stream`) returns HTTP 403 — not enabled on current API plan. Email sent to Sarvam requesting access.
 
-## Groq Whisper Config
-
-```python
-GROQ_WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
-GROQ_WHISPER_MODEL = "whisper-large-v3-turbo"
-language = "hi"  # ALWAYS forced for Hindi-medium students
-response_format = "verbose_json"  # Needed for confidence scores
-```
-
-## Hallucination Detection
-
-Reject transcriptions matching:
-- `Thank you for watching`, `Subscribe`, `Like and subscribe`
-- `[Music]`, `[Applause]`, `(silence)`
-- Only punctuation/symbols
-- Text shorter than 2 characters
-- Confidence < 0.4
+Text appears on screen immediately (~1-2s) before audio plays. Perceived latency is lower than actual.

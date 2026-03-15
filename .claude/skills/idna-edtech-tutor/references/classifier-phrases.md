@@ -46,3 +46,32 @@ bahut tez bol rahe ho, I give up, too hard hai
 
 Detection: No mathematical content + no classifier match + not an emotional signal.
 **Action:** Brief acknowledgment + gentle redirect: "Accha! Chalo wapas math pe aate hain?"
+
+## LANGUAGE_SWITCH (Change language)
+
+**English:** speak in English, English please, switch to English
+**Hindi:** इंग्लिश में बोलो, हिंदी में बताओ, अंग्रेजी में
+**Telugu:** తెలుగులో చెప్పండి, తెలుగులో, telugu lo
+**Hinglish:** english mein bolo, hindi mein batao
+
+## GARBLED (Unintelligible input)
+
+STT confidence < 0.4, or text matches hallucination patterns:
+"Thank you for watching", "Subscribe", "[Music]", only punctuation, < 2 chars.
+
+## UNCLEAR (Ambiguous — doesn't match any category)
+
+Fallback when LLM classifier is uncertain. Default handling:
+ask student to repeat in the appropriate language.
+
+## META_QUESTION (Session info questions)
+
+**English:** which chapter, what topic, what are we studying
+**Hindi:** कौन सा चैप्टर, क्या पढ़ रहे हैं, कौनसा topic
+**Telugu:** ఏ చాప్టర్, ఏమి నేర్పిస్తున్నారు, ఏ పాఠం
+
+## Fast-Path Sets (bypass LLM classifier)
+
+FAST_ACK: "okay", "ok", "haan", "ha", "theek hai", "accha", "ठीक है", "हां"
+FAST_IDK: "I don't know", "pata nahi", "samajh nahi aaya", "नहीं पता"
+FAST_ANSWER: any text containing digits in WAITING_ANSWER/HINT states

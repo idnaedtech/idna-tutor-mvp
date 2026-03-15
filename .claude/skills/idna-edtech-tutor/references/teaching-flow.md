@@ -1,92 +1,86 @@
-# Teaching Flow — State Machine Reference
+# Teaching Flow — v10.7.0 Reference
 
-## States and Transitions
+## FSM States (v7.3)
+
+GREETING, TEACHING, WAITING_ANSWER, HINT_1, HINT_2, FULL_SOLUTION, NEXT_QUESTION, SESSION_COMPLETE
+
+## Session Flow
 
 ```
 GREETING
-  ├── (auto) → TEACHING
-  │
-TEACHING
-  ├── Student says ACK → ASKING_QUESTION
-  ├── Student says IDK → RETEACHING (different example)
-  ├── Student says CONCEPT_REQUEST → TEACHING (deeper)
-  ├── Student says COMFORT → COMFORTING (stay in state)
-  │
-ASKING_QUESTION
-  ├── (reads question, auto) → WAITING_ANSWER
-  │
+  → Student responds → ACK → TEACHING (chapter intro if questions_attempted == 0)
+
+TEACHING (turn 0, first time)
+  → Chapter intro: NCERT-style explanation with tile analogy
+  → Student ACKs → TEACHING (turn 1: assessment bridge)
+  → Student ACKs → WAITING_ANSWER (first L2 question, prefers square-type)
+
+TEACHING (reteach, questions_attempted > 0)
+  → turn 0: Content Bank L1 definition
+  → turn 1: Content Bank L2 analogy/example
+  → turn 2: Content Bank L3 vedic trick
+  → turn 3: Guided question (stop explaining)
+  → turn 4+: Offer break
+
 WAITING_ANSWER
-  ├── Student gives ANSWER → EVALUATING
-  ├── Student says IDK → HINTING
-  ├── Student says CONCEPT_REQUEST → TEACHING (re-explain concept)
-  ├── Student says COMFORT → COMFORTING (stay in state)
-  │
-EVALUATING
-  ├── Correct → CORRECT_FEEDBACK → NEXT_QUESTION or ASKING_QUESTION
-  ├── Wrong (1st attempt) → HINTING → WAITING_ANSWER
-  ├── Wrong (2nd attempt) → EXPLAINING_SOLUTION → NEXT_QUESTION
-  ├── Partial → GUIDING_SUBSTEP → WAITING_ANSWER
-  │
-HINTING
-  ├── (gives hint, auto) → WAITING_ANSWER
-  │
-EXPLAINING_SOLUTION
-  ├── (shows solution, auto) → NEXT_QUESTION
-  │
-COMFORTING
-  ├── (comforts student, auto) → returns to previous state
-  │
+  → ANSWER (correct) → NEXT_QUESTION → WAITING_ANSWER
+  → ANSWER (incorrect) → HINT_1
+  → IDK → HINT_1
+  → CONCEPT_REQUEST → TEACHING (reteach)
+  → META_QUESTION → answer, stay in WAITING_ANSWER
+
+HINT_1
+  → ANSWER (correct) → NEXT_QUESTION
+  → ANSWER (incorrect) → HINT_2
+  → IDK → HINT_2
+  → CONCEPT_REQUEST → HINT_2 (don't escape to TEACHING)
+
+HINT_2
+  → ANSWER (correct) → NEXT_QUESTION
+  → ANSWER (incorrect) → FULL_SOLUTION
+  → IDK → FULL_SOLUTION
+  → CONCEPT_REQUEST → FULL_SOLUTION (don't escape to TEACHING)
+
+FULL_SOLUTION
+  → ANY input → NEXT_QUESTION (always advance, never loop back)
+
 NEXT_QUESTION
-  ├── Has more questions → ASKING_QUESTION
-  ├── No more questions → SESSION_COMPLETE
+  → Transient — immediately becomes WAITING_ANSWER
+  → If max questions reached → SESSION_COMPLETE
 ```
 
-## needs_first_question Flag
+## 5-Level System (v10.4.0)
 
-After TEACHING, when student says ACK, the `needs_first_question` flag triggers
-reading the first question. This prevents Didi from teaching AND asking in one turn.
+| Level | Type | Example |
+|-------|------|---------|
+| L1 | Multiplication recall | "What is 3 times 3?" |
+| L2 | Square/cube numbers | "What is the square of 8?" |
+| L3 | Square/cube roots | "What is √49?" |
+| L4 | Patterns/properties | "Is 50 a perfect square?" |
+| L5 | Application/methods | "Find side of square with area 441" |
 
-```python
-# In process_input, before normal flow:
-if self.session.get("needs_first_question"):
-    self.session["needs_first_question"] = False
-    category = classifier.classify(student_input)["category"]
-    if category in ("ACK", "ANSWER"):
-        # Read the first question
-        q_text = self._current_question_text()
-        speech = f"Bahut accha! Ab ek question try karte hain: {q_text}"
-    elif category in ("IDK", "CONCEPT_REQUEST"):
-        # Student needs more teaching — use DIFFERENT example
-        speech = reteach_with_different_example()
-```
+- First question: Level 2 (prefer square-type, not cube)
+- 3 correct in a row → level up
+- 2 wrong in a row → level down
+- Question picker: memory.py pick_next_question() — strict WHERE level = current_level
 
-## SubStepTracker Integration
+## Key Functions
 
-For multi-step problems (fraction multiplication, etc.):
+| Action | Function | File |
+|--------|----------|------|
+| Build any prompt | build_prompt() | instruction_builder.py |
+| Teach concept | _build_teach_concept() | instruction_builder.py |
+| Read question | _build_read_question() | instruction_builder.py |
+| Evaluate answer | _build_evaluate_answer() | instruction_builder.py |
+| Give hint | _build_give_hint() | instruction_builder.py |
+| Show solution | _build_show_solution() | instruction_builder.py |
+| Answer meta-Q | _build_answer_meta_question() | instruction_builder.py |
+| Pick next question | pick_next_question() | memory.py |
+| Inline eval | build_inline_eval_prompt() | instruction_builder.py |
 
-```python
-tracker = self.session["substep_tracker"]
-tracker.init_for_question(question_type, question_data)
+## Chapter Introduction (v10.7.0)
 
-# When student answers a sub-step correctly:
-tracker.mark_current_done(student_answer)
-next_step = tracker.get_current_step()
-
-# Include in LLM instruction:
-f"Steps completed (DO NOT re-ask): {tracker.get_completed_summary()}"
-f"Ask ONLY about: {next_step['description']}"
-```
-
-## Instruction Builder Quick Reference
-
-| Action | Builder Function | Max Words |
-|--------|-----------------|-----------|
-| Greet | `build_greet_instruction()` | 15-20 |
-| Teach new concept | `build_teach_instruction()` | 50-60 |
-| Reteach | `build_reteach_instruction()` | 40-50 |
-| Read question | `build_question_instruction()` | 15-20 |
-| Correct answer | `build_correct_instruction()` | 20-25 |
-| Wrong (1st) | `build_wrong_instruction(attempt=1)` | 20-30 |
-| Wrong (2nd) | `build_wrong_instruction(attempt=2)` | 50-60 |
-| Comfort | `build_comfort_instruction()` | 20-25 |
-| Repeat request | `build_repeat_instruction()` | 15 |
+When questions_attempted == 0, TEACHING uses CHAPTER_INTRO content:
+- turn_0: NCERT tile analogy ("3 rows of 3 tiles = 9, a square!")
+- turn_1: Square root + assessment bridge ("Let's see what you know")
+- Content in ch1_square_and_cube.py CHAPTER_INTRO dict (4 languages)

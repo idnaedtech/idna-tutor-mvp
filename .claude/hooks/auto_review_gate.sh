@@ -26,5 +26,5 @@ printf "%s\n" "${files[@]}" > .claude/_state/modified_files.unique
 
 # Files were modified → block until verify.py proof shown
 cat <<'EOF'
-{"decision":"block","reason":"You modified files. Run python verify.py and show ALL 14 checks passing before completing."}
+{"decision":"block","reason":"You modified files. Run python verify.py and show ALL 22 checks passing before completing."}
 EOF
