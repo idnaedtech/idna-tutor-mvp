@@ -997,6 +997,7 @@ async def process_message(
     didi_text = llm_result.text
 
     # ── Step 8: Enforce ──────────────────────────────────────────────────
+    _is_teaching = (state_before == "TEACHING" or action.action_type in ("teach_concept", "answer_meta_question"))
     for attempt in range(MAX_ENFORCE_RETRIES):
         enforce_result = enforce(
             didi_text, new_state,
@@ -1004,6 +1005,7 @@ async def process_message(
             student_answer=student_text,
             language=get_tts_language(session),
             previous_response=prev_response,
+            is_teaching=_is_teaching,
         )
         if enforce_result.passed:
             didi_text = enforce_result.text
@@ -1027,8 +1029,13 @@ async def process_message(
     # ── Step 9: Clean for TTS ────────────────────────────────────────────
     cleaned_text = prepare_for_tts(didi_text, session)
 
-    # v10.3.1: Hard truncate TTS text to reduce latency (display keeps full text)
-    MAX_TTS_CHARS = 150
+    # v10.7.1: State-dependent TTS limits (non-streaming mirrors streaming)
+    if session.state == "TEACHING":
+        MAX_TTS_CHARS = 800
+    elif session.state in ("WAITING_ANSWER", "HINT_1", "HINT_2", "FULL_SOLUTION"):
+        MAX_TTS_CHARS = 300
+    else:
+        MAX_TTS_CHARS = 200
     if len(cleaned_text) > MAX_TTS_CHARS:
         truncated = cleaned_text[:MAX_TTS_CHARS]
         last_end = max(
@@ -1691,10 +1698,10 @@ async def process_message_stream(
             tts_lang = _tts_language  # Pre-loaded — avoids DetachedInstanceError
             tts_inst = get_tts()
 
-            # v10.8.0: State-dependent TTS char limits
-            # TEACHING needs room to explain concepts properly (4-5 sentences)
+            # v10.7.1: State-dependent TTS char limits
+            # TEACHING needs room to explain concepts properly (4-6 sentences)
             if state_before == "TEACHING":
-                MAX_TTS_CHARS = 600
+                MAX_TTS_CHARS = 800
             elif state_before == "FULL_SOLUTION":
                 MAX_TTS_CHARS = 400
             elif state_before in ("WAITING_ANSWER", "HINT_1", "HINT_2"):
@@ -1751,12 +1758,14 @@ async def process_message_stream(
             display_text_raw = _re_aapne_poocha_dev.sub('', display_text_raw)
 
             # Enforce on display text (keeps digits for frontend)
+            _is_teaching_s = (state_before == "TEACHING" or action.action_type in ("teach_concept", "answer_meta_question"))
             enforce_result = enforce(
                 display_text_raw, new_state,
                 verdict=verdict_str,
                 student_answer=student_text,
                 language=tts_lang,
                 previous_response=prev_response,
+                is_teaching=_is_teaching_s,
             )
             display_text_final = enforce_result.text
             display_text = format_for_display(display_text_final)

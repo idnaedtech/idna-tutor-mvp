@@ -87,8 +87,11 @@ SILENCE_TIMEOUT_SECONDS = 15
 MAX_HINT_LEVELS = 3  # hint_1 → hint_2 → full_solution
 
 # ─── Response Enforcer Limits ────────────────────────────────────────────────
-MAX_RESPONSE_WORDS = 80  # Increased from 40 — teaching needs room to explain
-MAX_RESPONSE_SENTENCES = 5  # Increased from 2 — teaching needs 4-5 sentences
+MAX_RESPONSE_WORDS = 40  # For hints, acks, greetings
+MAX_RESPONSE_SENTENCES = 2  # For hints, acks, greetings
+# v10.7.1: Teaching gets more room to actually explain concepts
+MAX_TEACHING_WORDS = 120
+MAX_TEACHING_SENTENCES = 6
 MAX_ENFORCE_RETRIES = 3  # Re-prompt LLM this many times before falling back
 
 # ─── Answer Checker ──────────────────────────────────────────────────────────

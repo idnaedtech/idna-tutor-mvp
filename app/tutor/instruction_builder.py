@@ -4,7 +4,7 @@ Builds the exact LLM prompt for each state+action combination.
 Didi's personality, tone, and rules are embedded here.
 
 CRITICAL RULES (enforced in every prompt):
-1. Teaching: 4-5 sentences with examples. Feedback: 2-3 sentences.
+1. Teaching/explanations: 4-6 sentences, 120 words. Hints/acks: 2 sentences, 40 words.
 2. Hinglish with "aap" form
 3. Indian examples (roti, cricket, Diwali, monsoon)
 4. One idea per turn
@@ -28,13 +28,14 @@ DIDI_BASE = """You are Didi, a friendly math practice partner for Indian school 
 You help them learn by DOING problems, not by listening to lectures.
 
 RULES:
-1. When TEACHING a concept or introducing a chapter: explain clearly in 4-5 sentences with examples. Students need to UNDERSTAND, not just hear one line. Use analogies, examples, and build up the idea step by step.
+1. When TEACHING a concept or introducing a chapter: explain clearly in 4-6 sentences with examples. Students need to UNDERSTAND, not just hear one line. Use analogies, examples, and build up the idea step by step.
 2. If they get it right: brief praise (1 sentence), then next question.
-3. If they get it wrong: give ONE hint (2 sentences — acknowledge their answer, then guide).
-4. If still wrong after hint: show solution clearly (3 sentences max), then move on.
+3. If they get it wrong: give ONE hint (1-2 sentences).
+4. If still wrong after hint: show solution with step-by-step working (3-4 sentences), then move on.
 5. NEVER repeat the same explanation twice. If you already said it, try something different.
-6. For FEEDBACK (correct/incorrect, hints): keep it to 2-3 sentences. For TEACHING: use 4-5 sentences to explain properly.
-7. If they ask you to explain a concept: give a proper explanation with examples (3-4 sentences), then ask a practice question.
+6. For HINTS and ANSWERS: keep response under 2 sentences. Short is better for these.
+   For TEACHING and EXPLANATIONS: use 4-6 sentences. Explain with examples, analogies, and step-by-step reasoning. Students need to UNDERSTAND, not just hear a label.
+7. If they ask you to explain a concept: give a REAL explanation — what it is, why it matters, one concrete example worked step by step. 4-6 sentences. Do NOT rush to a question. The student asked to learn, so TEACH them.
 8. If they express frustration or tiredness: acknowledge warmly, offer to stop or try easier question. Do NOT keep teaching.
 9. If they ask "which chapter" or session info: answer directly.
 10. Match the student's language exactly.
@@ -481,18 +482,18 @@ def _build_teach_concept(a, ctx, q, sk, prev):
         # Turn 3+: Force to question with gentle transition
         msg = f'Say: "{transition_phrase}" Then read the question.'
     elif approach == "answer_question":
-        msg = f'{translate_instruction}Student asked: "{a.student_text}". Answer their question about {ch} clearly with an example. {teach_content if teach_content else "Use simple example."} 3-4 sentences.'
+        msg = f'{translate_instruction}Student asked: "{a.student_text}". Answer their question about {ch} with a REAL explanation. What is the concept? Why does it work that way? Give ONE worked example step by step. {teach_content if teach_content else "Use a simple Indian example like tiles, laddoos, or cricket."} 4-6 sentences.'
     elif approach == "different_example" or teaching_turn > 0:
         # v7.4.2: Reteach with progressive examples - ALWAYS end with samajh aaya?
         # Do NOT transition to question until student gives ACK
         if teaching_turn == 1:
             # P0 FIX: Length guard for reteach
             if len(teach_content) > 200:
-                msg = f'{translate_instruction}Student didn\'t understand. Take the SIMPLEST part of this: "{teach_content}" and explain it clearly with an example. 3-4 sentences. MUST end: "{understand_check}"'
+                msg = f'{translate_instruction}Student didn\'t understand. Explain this concept step by step using a DIFFERENT approach: "{teach_content}". Use a real-life example (tiles on a floor, laddoos in a box, rows of chairs). Show the math working: "3 times 3 equals 9, so 9 is a square number." 4-5 sentences. MUST end: "{understand_check}"'
             else:
-                msg = f'{translate_instruction}Student didn\'t understand. Explain using this DIFFERENT example: "{teach_content}". Make it clear with step-by-step reasoning. 3-4 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
+                msg = f'{translate_instruction}Student didn\'t understand. Explain this concept step by step using a DIFFERENT approach: "{teach_content}". Use a real-life example (tiles on a floor, laddoos in a box, rows of chairs). Show the math working: "3 times 3 equals 9, so 9 is a square number." 4-5 sentences. MUST end: "{understand_check}" Wait for their response before continuing.'
         elif teaching_turn == 2:
-            msg = f'{translate_instruction}Student still confused. Try this simpler approach: "{teach_content}". Break it down step by step with a concrete example. 3-4 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
+            msg = f'{translate_instruction}Student still confused. Start from the VERY BASICS. What is the simplest version of this concept? Use the smallest numbers: "2 times 2 equals 4, that means 4 is a square number." Build up from there. Use: "{teach_content}". 4-5 sentences. MUST end: "{understand_check}" Do NOT move to question yet.'
         elif teaching_turn >= 4:
             # P0 FIX: OFFER BREAK - Student has been struggling too long
             msg = _lang(ctx,
@@ -506,7 +507,7 @@ def _build_teach_concept(a, ctx, q, sk, prev):
                 'EXPLAINING BAND KARO. Student ne 3 baar sun liya, samajh nahi aaya. Aur explanation MAT do. Ek simple sawaal pucho: "Chalo ek simple sawaal - 2 into 2 kitna hota hai?" Jawab ka intezaar karo. 1 sentence only.',
                 'EXPLAIN చేయడం ఆపండి. Student 3 సార్లు విన్నారు, అర్థం కాలేదు. మరో explanation ఇవ్వకండి. ఒక simple question అడగండి: "ఒక simple question — 2 times 2 ఎంత?" Answer కోసం wait చేయండి. 1 sentence only.')
         else:
-            msg = f"{translate_instruction}Student didn't understand {ch}. Explain using a real-life Indian example — roti cutting, cricket scoring, or Diwali sweets. Make it relatable and clear. 3-4 sentences. End: \"{understand_check}\""
+            msg = f"{translate_instruction}Student didn't understand {ch}. Explain using a real-life Indian example — roti cutting, cricket scoring, or Diwali sweets. Walk through the math step by step with actual numbers. Make it relatable and clear. 4-5 sentences. End: \"{understand_check}\""
     else:
         # Turn 0: Initial teaching (normal — after questions attempted, or chapter intro already done)
         if teach_content:
@@ -515,9 +516,9 @@ def _build_teach_concept(a, ctx, q, sk, prev):
             # P0 FIX: Enforce voice-friendly length. Content bank has full solutions
             # but TTS should never read more than 3 sentences.
             if len(teach_content) > 200:
-                msg = f'The concept is: "{teach_content}". IMPORTANT: Do NOT read this word-for-word. Explain the KEY IDEA clearly in 3-4 sentences using a simple example the student can relate to. Then offer: "Would you like me to explain more, or shall we try a question?"'
+                msg = f'The concept is: "{teach_content}". IMPORTANT: Do NOT read this word-for-word. Explain the KEY IDEA clearly in 4-6 sentences using a simple example the student can relate to. Walk through the math step by step with actual numbers. Then offer: "Would you like me to explain more, or shall we try a question?"'
             else:
-                msg = f'Explain this concept to the student: "{teach_content}". Use a clear example to illustrate. 3-4 sentences. Then offer: "Would you like an example, or shall we try a question?"'
+                msg = f'Explain this concept to the student: "{teach_content}". Give a REAL explanation — what it is, why it works, and one worked example with actual numbers step by step. 4-6 sentences. Then offer: "Would you like an example, or shall we try a question?"'
         else:
             # V10: Log content gap instead of improvising
             import logging
@@ -665,7 +666,7 @@ def _build_show_solution(a, ctx, q, sk, prev):
     lang_pref = ctx.get("language_pref", "hinglish")
     encouragement = _lang(ctx, "It's okay, now you understand.", "Koi baat nahi, ab samajh aa gaya hoga.", "పరవాలేదు, ఇప్పుడు అర్థమైంది.")
     lang_note = _lang(ctx, "Present in English.", "", "Present in Telugu (తెలుగు).")
-    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'3rd wrong. Show the solution step by step: "{sol}". {lang_note} Explain clearly so the student understands the method. 3-4 sentences. Be encouraging: "{encouragement}" No new question.'}]
+    return [{"role": "system", "content": _sys(session_context=ctx, question_data=q)}, {"role": "user", "content": f'3rd wrong. Show the student HOW to solve this step by step. Not just the answer — the method. Solution: "{sol}". For example: "The cube of 3 means 3 times 3 times 3. First, 3 times 3 equals 9. Then, 9 times 3 equals 27. So the answer is 27." {lang_note} 3-4 sentences with actual number working. Be encouraging: "{encouragement}" No new question.'}]
 
 
 def _build_pick_next_question(a, ctx, q, sk, prev):

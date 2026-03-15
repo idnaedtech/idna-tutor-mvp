@@ -11,9 +11,6 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from app.config import MAX_RESPONSE_WORDS, MAX_RESPONSE_SENTENCES
-
-
 @dataclass
 class EnforceResult:
     """Result of enforcement check."""
@@ -118,8 +115,12 @@ VARIED_FALLBACKS_EN = {
 
 # ─── Enforcement Rules ───────────────────────────────────────────────────────
 
-def _check_length(text: str) -> tuple[bool, str]:
-    """Rule 1: Max words and sentences (config: MAX_RESPONSE_WORDS, MAX_RESPONSE_SENTENCES)."""
+def _check_length(text: str, is_teaching: bool = False) -> tuple[bool, str]:
+    """Rule 1: Length limits. Teaching gets more room to explain."""
+    from app.config import MAX_RESPONSE_WORDS, MAX_RESPONSE_SENTENCES, MAX_TEACHING_WORDS, MAX_TEACHING_SENTENCES
+    max_words = MAX_TEACHING_WORDS if is_teaching else MAX_RESPONSE_WORDS
+    max_sentences = MAX_TEACHING_SENTENCES if is_teaching else MAX_RESPONSE_SENTENCES
+
     words = text.split()
     sentences = re.split(r'[.!?।]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
@@ -127,13 +128,13 @@ def _check_length(text: str) -> tuple[bool, str]:
     violations = []
     result = text
 
-    if len(words) > MAX_RESPONSE_WORDS:
+    if len(words) > max_words:
         # Truncate at last complete sentence within limit, or hard cut
         truncated = []
         word_count = 0
         for sentence in sentences:
             s_words = sentence.split()
-            if word_count + len(s_words) <= MAX_RESPONSE_WORDS:
+            if word_count + len(s_words) <= max_words:
                 truncated.append(sentence)
                 word_count += len(s_words)
             else:
@@ -144,12 +145,11 @@ def _check_length(text: str) -> tuple[bool, str]:
                 result += '.'
         else:
             # No sentence boundary found — hard cut at word limit
-            result = ' '.join(words[:MAX_RESPONSE_WORDS])
+            result = ' '.join(words[:max_words])
         violations.append(f"length:{len(words)} words")
 
-    if len(sentences) > MAX_RESPONSE_SENTENCES:
-        # Keep only first 2 sentences
-        result = '. '.join(sentences[:MAX_RESPONSE_SENTENCES])
+    if len(sentences) > max_sentences:
+        result = '. '.join(sentences[:max_sentences])
         if not result.endswith(('.', '!', '?', '।')):
             result += '.'
         violations.append(f"sentences:{len(sentences)}")
@@ -367,6 +367,7 @@ def enforce(
     student_answer: Optional[str] = None,
     language: str = "hi-IN",
     previous_response: Optional[str] = None,
+    is_teaching: bool = False,
 ) -> EnforceResult:
     """
     Run all 7 enforcement rules on a LLM response.
@@ -386,7 +387,7 @@ def enforce(
     current_text = text
 
     # Rule 1: Length
-    passed, current_text = _check_length(current_text)
+    passed, current_text = _check_length(current_text, is_teaching=is_teaching)
     if not passed:
         violations.append("LENGTH")
 
